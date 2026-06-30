@@ -35,6 +35,7 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `defender.html` | [Try it](https://ahmedh00.github.io/name-pickers/defender.html) | Inspired by Defender - last survivor wins |
 | `galaxians.html` | [Try it](https://ahmedh00.github.io/name-pickers/galaxians.html) | Inspired by Galaxians - last alien ship wins |
 | `pong.html` | [Try it](https://ahmedh00.github.io/name-pickers/pong.html) | Inspired by Atari Pong - last ball wins |
+| `pick-man.html` | [Try it](https://ahmedh00.github.io/name-pickers/pick-man.html) | Inspired by Pacman - first ghost to capture Pacman wins |
 
 
 ## Contributing
