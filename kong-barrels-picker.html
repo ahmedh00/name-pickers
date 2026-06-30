@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kong's Barrels: The Physics Drop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: #000;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body {
+  background: radial-gradient(ellipse at top, #2a0050 0%, #0a0020 50%, #000 100%);
+  padding: 20px 16px;
+}
+.container {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: flex-start;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.stage {
+  position: relative;
+  border: 4px solid #ff2280;
+  background: #000022;
+  box-shadow: 0 0 0 4px #000, 0 0 0 8px #ff2280, 0 0 40px rgba(255, 34, 128, 0.6);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.panel {
+  width: 330px;
+  border: 4px solid #ffce00;
+  background: #110022;
+  padding: 16px;
+  box-shadow: 0 0 0 4px #000, 0 0 0 8px #ffce00, 0 0 40px rgba(255, 206, 0, 0.5);
+  flex-shrink: 0;
+}
+h1 {
+  font-size: 18px;
+  color: #ffce00;
+  text-align: center;
+  text-shadow: 4px 4px 0 #ff2280, 4px 4px 0 #000;
+  letter-spacing: 2px;
+  line-height: 1.4;
+}
+.subtitle {
+  font-size: 8px;
+  color: #00e5ff;
+  text-align: center;
+  margin: 12px 0 18px;
+  letter-spacing: 2px;
+}
+.section { margin-bottom: 14px; }
+label {
+  display: block;
+  font-size: 8px;
+  color: #00e5ff;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+textarea {
+  width: 100%;
+  height: 88px;
+  background: #000;
+  color: #f0ff80;
+  border: 3px solid #00e5ff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  padding: 8px;
+  resize: none;
+  outline: none;
+  line-height: 1.4;
+}
+textarea:focus { border-color: #ffce00; }
+button {
+  width: 100%;
+  background: #ff2280;
+  color: #fff;
+  border: none;
+  padding: 10px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  box-shadow: inset -3px -3px 0 #8a0040, inset 3px 3px 0 #ff6db0;
+  margin-top: 6px;
+  transition: transform 0.05s;
+}
+button:hover { background: #ff4d9a; }
+button:active {
+  transform: translate(2px, 2px);
+  box-shadow: inset -1px -1px 0 #8a0040, inset 1px 1px 0 #ff6db0;
+}
+button.secondary {
+  background: #3a0066;
+  color: #00e5ff;
+  box-shadow: inset -3px -3px 0 #1a0033, inset 3px 3px 0 #6a30aa;
+  font-size: 8px;
+  padding: 6px;
+  margin-top: 4px;
+}
+button.secondary:hover { background: #4a1080; }
+.row { display: flex; gap: 6px; margin-top: 4px; }
+.row button { margin-top: 0; }
+button.big {
+  background: #00ff66;
+  color: #002200;
+  font-size: 14px;
+  padding: 18px;
+  box-shadow: inset -4px -4px 0 #006633, inset 4px 4px 0 #66ff99;
+  margin: 8px 0 14px;
+  animation: pulse 1.5s infinite;
+}
+button.big:hover { background: #33ff88; }
+button.big:disabled {
+  background: #444; color: #888;
+  box-shadow: inset -3px -3px 0 #222, inset 3px 3px 0 #666;
+  cursor: not-allowed; animation: none;
+}
+@keyframes pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 #00ff66); }
+  50% { filter: drop-shadow(0 0 14px #00ff66); }
+}
+#queue {
+  background: #000;
+  border: 3px solid #00e5ff;
+  min-height: 60px;
+  max-height: 88px;
+  overflow-y: auto;
+  padding: 6px;
+  font-size: 9px;
+  color: #f0ff80;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-content: flex-start;
+}
+.tag {
+  background: #220033;
+  border: 2px solid #ff2280;
+  padding: 3px 6px;
+  font-size: 8px;
+  color: #fff;
+}
+.tag .x { color: #ff6db0; margin-left: 4px; cursor: pointer; }
+.tag .x:hover { color: #fff; }
+.pick {
+  background: #000;
+  border: 3px solid #ffce00;
+  padding: 14px 8px;
+  text-align: center;
+  font-size: 14px;
+  color: #ffce00;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 10px rgba(255, 206, 0, 0.6);
+  letter-spacing: 1px;
+  word-break: break-all;
+}
+.pick.win {
+  color: #00ff66;
+  text-shadow: 0 0 14px #00ff66;
+  animation: blink 0.45s infinite;
+  border-color: #00ff66;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.footer {
+  text-align: center;
+  font-size: 7px;
+  color: #555;
+  margin-top: 14px;
+  letter-spacing: 1px;
+}
+.empty { color: #444; font-size: 8px; padding: 4px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="stage">
+    <canvas id="game" width="700" height="780"></canvas>
+  </div>
+  <div class="panel">
+    <h1>KONG'S<br>BARRELS</h1>
+    <div class="subtitle">&#9733; THE PHYSICS DROP &#9733;</div>
+
+    <div class="section">
+      <label>&#9654; ENTER NAMES (1 PER LINE)</label>
+      <textarea id="namesInput" placeholder="ALICE&#10;BOB&#10;CHRIS"></textarea>
+      <button id="addBtn">ADD NAMES</button>
+    </div>
+
+    <div class="section">
+      <label>&#9654; QUEUE (<span id="queueCount">0</span>)</label>
+      <div id="queue"></div>
+      <div class="row">
+        <button id="clearBtn" class="secondary">CLEAR QUEUE</button>
+        <button id="muteBtn" class="secondary">SOUND: ON</button>
+      </div>
+    </div>
+
+    <button id="dropBtn" class="big">&#9660; TRIGGER DROP! &#9660;</button>
+
+    <div class="section">
+      <label>&#9654; CURRENT PICK</label>
+      <div id="pick" class="pick">- - -</div>
+    </div>
+
+    <div class="footer">&copy; 198X KONG INDUSTRIES</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+<script>
+(() => {
+const { Engine, World, Bodies, Body, Composite, Events } = Matter;
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+
+const engine = Engine.create({ gravity: { x: 0, y: 1 } });
+engine.positionIterations = 8;
+engine.velocityIterations = 8;
+const world = engine.world;
+
+const state = {
+  queue: [],
+  barrels: [],
+  girders: [],
+  ladders: [],
+  winner: null,
+  running: false,
+  flashTimer: 0,
+  stuckTimer: 0,
+  chestBeatTimer: 0,
+};
+
+// ============================================================
+// AUDIO  (Web Audio API, synthesized 8-bit sounds)
+// ============================================================
+const AudioCls = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+let masterGain = null;
+let muted = false;
+
+function ensureAudio() {
+  if (!audioCtx && AudioCls) {
+    audioCtx = new AudioCls();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.35;
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function tone(freq, dur, type = 'square', vol = 0.18, when = 0) {
+  if (!audioCtx || muted) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  const t = audioCtx.currentTime + when;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  g.connect(masterGain);
+  o.start(t);
+  o.stop(t + dur);
+}
+
+function slide(freqStart, freqEnd, dur, type = 'square', vol = 0.18) {
+  if (!audioCtx || muted) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type;
+  const t = audioCtx.currentTime;
+  o.frequency.setValueAtTime(freqStart, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), t + dur);
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g);
+  g.connect(masterGain);
+  o.start(t);
+  o.stop(t + dur);
+}
+
+function noiseBurst(dur = 0.05, vol = 0.15, cutoff = 700) {
+  if (!audioCtx || muted) return;
+  const buf = audioCtx.createBuffer(1, Math.max(1, audioCtx.sampleRate * dur), audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  }
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = cutoff;
+  const g = audioCtx.createGain();
+  g.gain.value = vol;
+  src.connect(lp); lp.connect(g); g.connect(masterGain);
+  src.start();
+}
+
+function playRoar() {
+  if (!audioCtx || muted) return;
+  const dur = 0.45;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass';
+  const t = audioCtx.currentTime;
+  bp.frequency.setValueAtTime(220, t);
+  bp.frequency.exponentialRampToValueAtTime(80, t + dur);
+  bp.Q.value = 6;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(0.35, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(bp); bp.connect(g); g.connect(masterGain);
+  src.start();
+}
+
+function playDropSound() {
+  // Kong "throw" sequence: roar + descending three-tone
+  playRoar();
+  tone(880, 0.08, 'square', 0.18, 0.05);
+  tone(660, 0.08, 'square', 0.18, 0.13);
+  tone(440, 0.12, 'square', 0.18, 0.21);
+  tone(220, 0.18, 'sawtooth', 0.12, 0.32);
+}
+
+let lastBonk = 0;
+function playBonk(intensity = 1) {
+  const now = performance.now();
+  if (now - lastBonk < 45) return;
+  lastBonk = now;
+  noiseBurst(0.04 + Math.min(0.05, intensity * 0.02), 0.12 * Math.min(1.5, intensity), 500 + intensity * 80);
+  tone(70 + Math.random() * 30, 0.05, 'square', 0.08 * Math.min(1.5, intensity));
+}
+
+function playWinJingle() {
+  if (!audioCtx || muted) return;
+  // Classic mario-ish victory
+  const seq = [
+    [659, 0.12], [659, 0.12], [0, 0.06],
+    [659, 0.12], [0, 0.06],
+    [523, 0.12], [659, 0.12], [0, 0.06],
+    [784, 0.3], [0, 0.2], [523, 0.4],
+  ];
+  let t = 0;
+  for (const [f, d] of seq) {
+    if (f > 0) tone(f, d, 'square', 0.2, t);
+    t += d;
+  }
+  // bass hit
+  tone(130, 0.4, 'triangle', 0.18, 0);
+  tone(196, 0.4, 'triangle', 0.18, 0.4);
+}
+
+function playAdd() {
+  tone(880, 0.06, 'square', 0.12);
+  tone(1320, 0.06, 'square', 0.12, 0.06);
+}
+
+// ============================================================
+// STAGE
+// ============================================================
+function addGirder(x1, y1, x2, y2, opts = {}) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx);
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  const thickness = 14;
+  const body = Bodies.rectangle(cx, cy, len, thickness, {
+    isStatic: true, angle,
+    friction: 0.08, frictionStatic: 0.1, restitution: 0.2,
+    label: 'girder', ...opts,
+  });
+  Composite.add(world, body);
+  state.girders.push({ body, x1, y1, x2, y2, len, angle, thickness });
+}
+
+// Walls + ceiling
+Composite.add(world, [
+  Bodies.rectangle(-30, H / 2, 60, H * 2.5, { isStatic: true, label: 'wall' }),
+  Bodies.rectangle(W + 30, H / 2, 60, H * 2.5, { isStatic: true, label: 'wall' }),
+  Bodies.rectangle(W / 2, -300, W * 2, 40, { isStatic: true, label: 'ceiling' }),
+]);
+
+// NOTE: No ape-floor physics body. Ape and perch are visual only.
+// Tilted girders. Tier 0 slopes right (low right). Alternate down.
+// Girders are shortened on their "low" end (shrink) so each one ends
+// well short of the girder below, leaving a gap taller than a barrel
+// (44px) for barrels to fall through to the next tier.
+const margin = 30;
+const tilt = 50;
+const shrink = 180;
+const tiers = [220, 340, 460, 580, 685];
+tiers.forEach((y, i) => {
+  // The "high" end of each girder runs flush to the screen edge so
+  // barrels can't get trapped in a gap between the girder and the wall.
+  // Only the "low" end (where barrels roll off) is shortened, leaving
+  // a gap large enough for a barrel to fall through to the tier below.
+  if (i % 2 === 0) addGirder(0, y - tilt, W - margin - 60 - shrink, y + tilt);
+  else             addGirder(margin + 60 + shrink, y + tilt, W, y - tilt);
+});
+
+// Ladders (cosmetic) - aligned with the new gaps between tiers
+state.ladders.push({ x: 430, yTop: 270, yBottom: 364 });
+state.ladders.push({ x: 270, yTop: 390, yBottom: 484 });
+state.ladders.push({ x: 430, yTop: 510, yBottom: 604 });
+state.ladders.push({ x: 270, yTop: 630, yBottom: 709 });
+
+// Goal floor + sensor
+addGirder(0, H - 30, W, H - 30, { label: 'goalFloor' });
+const finishSensor = Bodies.rectangle(W / 2, H - 60, W - 40, 18, {
+  isStatic: true, isSensor: true, label: 'finish',
+});
+Composite.add(world, finishSensor);
+
+// ============================================================
+// BARRELS
+// ============================================================
+const BARREL_PALETTES = [
+  ['#e07a00', '#7a3a00'],
+  ['#ff5e00', '#682200'],
+  ['#d24a00', '#5a1d00'],
+  ['#c08010', '#5b2e00'],
+  ['#ff8c1a', '#80350a'],
+  ['#b85a08', '#4a2a05'],
+];
+
+function createBarrel(name, i, total) {
+  const r = 22;
+  const spacing = Math.min(72, Math.max(46, (W - 180) / Math.max(total, 1)));
+  const startX = W / 2 - (total - 1) * spacing / 2 + i * spacing;
+  const startY = 165 + Math.random() * 10;
+  const pal = BARREL_PALETTES[i % BARREL_PALETTES.length];
+  const body = Bodies.circle(startX, startY, r, {
+    restitution: 0.34,
+    friction: 0.05,
+    frictionAir: 0.006,
+    density: 0.0018,
+    label: 'barrel',
+  });
+  body.meta = {
+    name: name.toUpperCase().slice(0, 9),
+    color: pal[0],
+    band: pal[1],
+  };
+  Composite.add(world, body);
+  Body.setAngularVelocity(body, (Math.random() - 0.5) * 0.2);
+  Body.setVelocity(body, { x: (Math.random() - 0.5) * 3, y: 1 });
+  state.barrels.push(body);
+  // little drop pop sound for each barrel
+  tone(660 - i * 40, 0.05, 'square', 0.08);
+}
+
+// ============================================================
+// COLLISIONS
+// ============================================================
+Events.on(engine, 'collisionStart', evt => {
+  for (const pair of evt.pairs) {
+    const { bodyA, bodyB } = pair;
+    const aIsBarrel = bodyA.label === 'barrel';
+    const bIsBarrel = bodyB.label === 'barrel';
+    // bonk on girder/wall/goal
+    if ((aIsBarrel && (bodyB.label === 'girder' || bodyB.label === 'wall' || bodyB.label === 'goalFloor')) ||
+        (bIsBarrel && (bodyA.label === 'girder' || bodyA.label === 'wall' || bodyA.label === 'goalFloor'))) {
+      const barrel = aIsBarrel ? bodyA : bodyB;
+      const speed = Math.hypot(barrel.velocity.x, barrel.velocity.y);
+      if (speed > 1.5) playBonk(speed / 4);
+    }
+    // barrel-to-barrel click
+    if (aIsBarrel && bIsBarrel) {
+      const speed = Math.hypot(bodyA.velocity.x - bodyB.velocity.x, bodyA.velocity.y - bodyB.velocity.y);
+      if (speed > 2) {
+        tone(1200 + Math.random() * 300, 0.03, 'square', 0.08);
+      }
+    }
+    // winner
+    if (state.winner) continue;
+    let winnerBarrel = null;
+    if (aIsBarrel && bodyB.label === 'finish') winnerBarrel = bodyA;
+    else if (bIsBarrel && bodyA.label === 'finish') winnerBarrel = bodyB;
+    if (winnerBarrel) declareWinner(winnerBarrel);
+  }
+});
+
+function declareWinner(barrel) {
+  if (state.winner) return;
+  state.winner = barrel;
+  state.flashTimer = 60 * 3;
+  const pickEl = document.getElementById('pick');
+  pickEl.textContent = '★ ' + barrel.meta.name + ' ★';
+  pickEl.classList.add('win');
+  state.barrels.forEach(b => {
+    if (b !== barrel) Body.setVelocity(b, { x: b.velocity.x * 0.2, y: b.velocity.y * 0.2 });
+  });
+  const dropBtn = document.getElementById('dropBtn');
+  dropBtn.disabled = false;
+  dropBtn.textContent = '▼ DROP AGAIN ▼';
+  playWinJingle();
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+const STARS = [];
+for (let i = 0; i < 70; i++) {
+  STARS.push({ x: (Math.random() * W) | 0, y: (Math.random() * H * 0.5) | 0, p: Math.random() * 6.28 });
+}
+
+function drawBackground() {
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, '#1a0033');
+  grd.addColorStop(0.45, '#08001a');
+  grd.addColorStop(1, '#000000');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+}
+
+function drawStars(now) {
+  for (const s of STARS) {
+    ctx.globalAlpha = Math.sin(now * 0.002 + s.p) > 0 ? 0.9 : 0.35;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(s.x, s.y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGirder(g) {
+  const cx = (g.x1 + g.x2) / 2;
+  const cy = (g.y1 + g.y2) / 2;
+  const len = g.len, h = g.thickness;
+  ctx.save();
+  ctx.translate(cx, cy); ctx.rotate(g.angle);
+  ctx.fillStyle = '#5a0026'; ctx.fillRect(-len / 2, -h / 2 + 4, len, h);
+  ctx.fillStyle = '#ff2e88'; ctx.fillRect(-len / 2, -h / 2, len, h);
+  ctx.fillStyle = '#ff6db0'; ctx.fillRect(-len / 2, -h / 2, len, 3);
+  ctx.fillStyle = '#a00050'; ctx.fillRect(-len / 2, h / 2 - 3, len, 3);
+  ctx.strokeStyle = '#a00050'; ctx.lineWidth = 1;
+  for (let x = -len / 2 + 14; x < len / 2 - 6; x += 22) {
+    ctx.beginPath();
+    ctx.moveTo(x, -h / 2 + 4); ctx.lineTo(x + 8, h / 2 - 4); ctx.stroke();
+  }
+  ctx.fillStyle = '#4a0022';
+  ctx.beginPath(); ctx.arc(-len / 2 + 5, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(len / 2 - 5, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff8db8';
+  ctx.fillRect(-len / 2 + 4, -1, 1, 1); ctx.fillRect(len / 2 - 6, -1, 1, 1);
+  ctx.restore();
+}
+
+function drawLadder(l) {
+  const x = l.x, w = 24;
+  ctx.fillStyle = '#ffd000';
+  ctx.fillRect(x - w / 2, l.yTop, 3, l.yBottom - l.yTop);
+  ctx.fillRect(x + w / 2 - 3, l.yTop, 3, l.yBottom - l.yTop);
+  ctx.fillStyle = '#ff9500';
+  for (let yy = l.yTop + 4; yy < l.yBottom - 2; yy += 9) {
+    ctx.fillRect(x - w / 2 + 3, yy, w - 6, 3);
+  }
+}
+
+function drawApePerch() {
+  const y = 142;
+  const w = 280;
+  const x = W / 2 - w / 2;
+  ctx.fillStyle = '#5a0026'; ctx.fillRect(x, y + 10, w, 6);
+  ctx.fillStyle = '#ff2e88'; ctx.fillRect(x, y, w, 14);
+  ctx.fillStyle = '#ff6db0'; ctx.fillRect(x, y, w, 3);
+  ctx.fillStyle = '#a00050'; ctx.fillRect(x, y + 11, w, 3);
+  ctx.fillStyle = '#4a0022';
+  for (let xx = x + 8; xx < x + w; xx += 22) {
+    ctx.beginPath(); ctx.arc(xx, y + 7, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// Big pixel-art DK-style ape
+function drawApe(now) {
+  const cx = W / 2;
+  const sway = state.running ? Math.sin(now * 0.012) * 3 : Math.sin(now * 0.003) * 1.5;
+  const beat = Math.sin(now * 0.005);
+  const baseY = 75;
+  ctx.save();
+  ctx.translate(cx + sway, baseY);
+  const px = 5;
+  const p = (gx, gy, gw, gh) => ctx.fillRect(gx * px, gy * px, gw * px, gh * px);
+
+  // ---- palette ----
+  const C_OUT       = '#1a0d04';
+  const C_FUR       = '#5a2e10';
+  const C_FUR_LIGHT = '#8a4d22';
+  const C_FUR_HI    = '#b87a3a';
+  const C_FACE      = '#f4c896';
+  const C_FACE_SH   = '#c89868';
+  const C_FACE_HI   = '#fadbb0';
+  const C_TIE       = '#cc2230';
+  const C_TIE_DK    = '#8a1020';
+  const C_TIE_HI    = '#ee5060';
+  const C_WHITE     = '#ffffff';
+  const C_BLACK     = '#000000';
+  const C_YELLOW    = '#ffd000';
+
+  // ============ BODY (drawn before head so head sits on top) ============
+  // chest beat anim
+  const chest = state.running ? Math.round(Math.sin(now * 0.015) * 0.3) : 0;
+  ctx.fillStyle = C_OUT; p(-12, 1 + chest, 24, 11);
+  ctx.fillStyle = C_FUR; p(-11, 1 + chest, 22, 10);
+  ctx.fillStyle = C_FUR_LIGHT; p(-10, 2 + chest, 20, 1);
+  ctx.fillStyle = C_FUR_HI; p(-9, 2 + chest, 18, 1);
+  // tan belly patch
+  ctx.fillStyle = C_FACE; p(-5, 4 + chest, 10, 6);
+  ctx.fillStyle = C_FACE_SH; p(-5, 9 + chest, 10, 1);
+  ctx.fillStyle = C_FACE_HI; p(-5, 4 + chest, 10, 1);
+
+  // ---- red tie with DK ----
+  ctx.fillStyle = C_TIE_DK; p(-4, 2 + chest, 8, 1);
+  ctx.fillStyle = C_TIE; p(-3, 2 + chest, 6, 1); p(-2, 3 + chest, 4, 1);
+  ctx.fillStyle = C_TIE_DK; p(-3, 4 + chest, 6, 6);
+  ctx.fillStyle = C_TIE; p(-3, 4 + chest, 5, 5);
+  ctx.fillStyle = C_TIE_HI; p(-3, 4 + chest, 1, 5);
+  // 'D'
+  ctx.fillStyle = C_YELLOW;
+  p(-2, 5 + chest, 1, 3); p(-1, 5 + chest, 1, 1); p(-1, 7 + chest, 1, 1);
+  // 'K'
+  p(1, 5 + chest, 1, 3); p(2, 5 + chest, 1, 1); p(2, 7 + chest, 1, 1);
+
+  // ============ ARMS (long & heavy, gorilla-style) ============
+  const armUp = (state.queue.length > 0 && !state.running) ? -3 : 0;
+  const armPump = state.running ? Math.round(Math.sin(now * 0.02) * 1.5) : 0;
+  // left arm
+  ctx.fillStyle = C_OUT;       p(-16, 1 + armUp + armPump, 5, 9);
+  ctx.fillStyle = C_FUR;        p(-15, 1 + armUp + armPump, 4, 8);
+  ctx.fillStyle = C_FUR_LIGHT;  p(-15, 1 + armUp + armPump, 1, 7);
+  // left fist
+  ctx.fillStyle = C_OUT;        p(-16, -2 + armUp + armPump, 5, 4);
+  ctx.fillStyle = C_FACE;       p(-15, -1 + armUp + armPump, 4, 2);
+  ctx.fillStyle = C_FACE_SH;    p(-15, 0 + armUp + armPump, 4, 1);
+
+  // right arm
+  ctx.fillStyle = C_OUT;        p(11, 1 + armUp - armPump, 5, 9);
+  ctx.fillStyle = C_FUR;        p(11, 1 + armUp - armPump, 4, 8);
+  ctx.fillStyle = C_FUR_LIGHT;  p(14, 1 + armUp - armPump, 1, 7);
+  // right fist
+  ctx.fillStyle = C_OUT;        p(11, -2 + armUp - armPump, 5, 4);
+  ctx.fillStyle = C_FACE;       p(12, -1 + armUp - armPump, 4, 2);
+  ctx.fillStyle = C_FACE_SH;    p(12, 0 + armUp - armPump, 4, 1);
+
+  // ============ HEAD (taller dome, gorilla-style cranium) ============
+  ctx.fillStyle = C_OUT;        p(-10, -12, 20, 14);
+  ctx.fillStyle = C_FUR;        p(-9, -12, 18, 13);
+  ctx.fillStyle = C_FUR_LIGHT;  p(-8, -12, 16, 1);
+  ctx.fillStyle = C_FUR_HI;     p(-7, -12, 14, 1);
+
+  // face (lighter peach inset)
+  ctx.fillStyle = C_FACE;       p(-7, -6, 14, 8);
+  ctx.fillStyle = C_FACE_SH;    p(-7, 1, 14, 1);
+  ctx.fillStyle = C_FACE_HI;    p(-6, -6, 12, 1);
+
+  // brow ridge (heavy, full-width gorilla brow overhanging the eyes)
+  ctx.fillStyle = C_OUT;        p(-9, -9, 18, 3);
+  ctx.fillStyle = C_FUR;        p(-9, -9, 18, 2);
+  ctx.fillStyle = C_FUR_LIGHT;  p(-8, -9, 16, 1);
+  ctx.fillStyle = C_FUR_HI;     p(-7, -9, 1, 1); p(6, -9, 1, 1);
+
+  // eyes
+  ctx.fillStyle = C_WHITE;      p(-6, -6, 4, 3); p(2, -6, 4, 3);
+  ctx.fillStyle = C_BLACK;
+  const eyeS = state.running ? 1 : 0;
+  p(-4 + eyeS, -5, 1, 2);
+  p(4 + eyeS, -5, 1, 2);
+
+  // muzzle (broad, flat gorilla nose/mouth area)
+  ctx.fillStyle = C_FACE_SH;    p(-5, -3, 10, 4);
+  ctx.fillStyle = C_FACE;       p(-5, -3, 10, 1);
+  // wide flat nostrils
+  ctx.fillStyle = C_BLACK;      p(-3, -2, 2, 1); p(1, -2, 2, 1);
+
+  // mouth
+  ctx.fillStyle = C_BLACK;
+  if (state.running) {
+    p(-5, 0, 10, 2);
+    ctx.fillStyle = C_WHITE;
+    p(-4, 0, 1, 1); p(-2, 0, 1, 1); p(0, 0, 1, 1); p(2, 0, 1, 1); p(4, 0, 1, 1);
+    ctx.fillStyle = '#8a1010';
+    p(-3, 1, 6, 1);
+  } else {
+    p(-5, 0, 10, 1);
+    ctx.fillStyle = C_WHITE;
+    p(-4, 0, 1, 1); p(0, 0, 1, 1); p(4, 0, 1, 1);
+  }
+
+  // ears
+  ctx.fillStyle = C_OUT;        p(-11, -5, 2, 4); p(9, -5, 2, 4);
+  ctx.fillStyle = C_FUR;        p(-11, -4, 1, 2); p(10, -4, 1, 2);
+  ctx.fillStyle = C_FACE;       p(-10, -3, 1, 1); p(10, -3, 1, 1);
+
+  // ============ LEGS ============
+  ctx.fillStyle = C_OUT;        p(-7, 11 + chest, 6, 3); p(1, 11 + chest, 6, 3);
+  ctx.fillStyle = C_FUR;        p(-7, 11 + chest, 5, 2); p(1, 11 + chest, 5, 2);
+  // feet (tan soles)
+  ctx.fillStyle = C_OUT;        p(-9, 13 + chest, 8, 2); p(1, 13 + chest, 8, 2);
+  ctx.fillStyle = C_FACE;       p(-8, 14 + chest, 6, 1); p(2, 14 + chest, 6, 1);
+
+  // ============ BARREL ABOVE HEAD ============
+  if (state.queue.length > 0 && !state.running) {
+    const bx = 0;
+    const by = -15 + beat * 0.6;
+    ctx.fillStyle = C_BLACK; p(bx - 6, by - 4, 12, 7);
+    ctx.fillStyle = '#c87f0a'; p(bx - 5, by - 3, 10, 5);
+    ctx.fillStyle = '#e09000'; p(bx - 5, by - 3, 10, 1);
+    ctx.fillStyle = '#7a3a00';
+    p(bx - 5, by - 2, 10, 1); p(bx - 5, by, 10, 1); p(bx - 5, by + 2, 10, 1);
+  }
+
+  ctx.restore();
+}
+
+function drawBarrel(body) {
+  const r = body.circleRadius;
+  ctx.save();
+  ctx.translate(body.position.x, body.position.y);
+  ctx.save();
+  ctx.rotate(body.angle);
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(0, 0, r + 1.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = body.meta.color;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = body.meta.band;
+  for (const yy of [-r * 0.58, r * 0.58]) {
+    const xx = Math.sqrt(Math.max(0, r * r - yy * yy));
+    ctx.fillRect(-xx, yy - 2.5, xx * 2, 5);
+  }
+  ctx.fillStyle = body.meta.band;
+  ctx.fillRect(-r, -1, r * 2, 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+  for (let yy = -r * 0.4; yy <= r * 0.4; yy += 6) {
+    const xx = Math.sqrt(Math.max(0, r * r - yy * yy)) - 2;
+    ctx.beginPath(); ctx.moveTo(-xx, yy); ctx.lineTo(xx, yy); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.beginPath(); ctx.arc(-r * 0.4, -r * 0.4, r * 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // upright name
+  const name = body.meta.name;
+  const isWin = state.winner === body;
+  let fs = 9;
+  if (name.length > 4) fs = 8;
+  if (name.length > 6) fs = 7;
+  if (name.length > 8) fs = 6;
+  ctx.font = 'bold ' + fs + 'px "Press Start 2P", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 4; ctx.strokeStyle = '#000';
+  ctx.strokeText(name, 0, 0);
+  ctx.fillStyle = isWin ? '#00ff66' : '#fff';
+  ctx.fillText(name, 0, 0);
+  ctx.restore();
+}
+
+function drawFinishZone() {
+  const y = H - 70;
+  const sq = 11;
+  for (let x = 0; x < W; x += sq) {
+    for (let r = 0; r < 2; r++) {
+      const odd = ((Math.floor(x / sq)) + r) % 2 === 0;
+      ctx.fillStyle = odd ? '#ffce00' : '#000';
+      ctx.fillRect(x, y + r * sq, sq, sq);
+    }
+  }
+  ctx.fillStyle = '#00ff66';
+  ctx.font = 'bold 14px "Press Start 2P", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 4;
+  ctx.strokeText('★ GOAL ★', W / 2, y + 44);
+  ctx.fillText('★ GOAL ★', W / 2, y + 44);
+}
+
+function drawHUD() {
+  ctx.save();
+  ctx.font = 'bold 9px "Press Start 2P", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#00e5ff'; ctx.fillText('1UP', 14, 22);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(String(state.barrels.length).padStart(6, '0'), 14, 38);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ff2280'; ctx.fillText('HIGH', W - 14, 22);
+  ctx.fillStyle = '#fff'; ctx.fillText('999999', W - 14, 38);
+  ctx.restore();
+}
+
+function drawWinBanner() {
+  const flash = Math.floor(state.flashTimer / 6) % 2 === 0;
+  ctx.save();
+  ctx.fillStyle = flash ? '#ffce00' : '#ff2280';
+  ctx.fillRect(0, H / 2 - 54, W, 108);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, H / 2 - 54, W, 4);
+  ctx.fillRect(0, H / 2 + 50, W, 4);
+  ctx.fillStyle = '#000';
+  ctx.font = 'bold 28px "Press Start 2P", monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('WINNER!', W / 2, H / 2 - 18);
+  ctx.font = 'bold 18px "Press Start 2P", monospace';
+  ctx.fillText(state.winner.meta.name, W / 2, H / 2 + 18);
+  ctx.restore();
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+function render(now) {
+  drawBackground();
+  drawStars(now);
+  drawHUD();
+  state.ladders.forEach(drawLadder);
+  state.girders.forEach(drawGirder);
+  drawApePerch();
+  drawApe(now);
+  drawFinishZone();
+  state.barrels.forEach(drawBarrel);
+  if (state.winner && state.flashTimer > 0) {
+    drawWinBanner();
+    state.flashTimer--;
+  }
+}
+
+function updatePhysicsState() {
+  if (!state.running || state.winner) return;
+  if (state.barrels.length > 0) {
+    let lowest = state.barrels[0];
+    for (const b of state.barrels) if (b.position.y > lowest.position.y) lowest = b;
+    if (lowest.position.y > H - 50) { declareWinner(lowest); return; }
+  }
+  const moving = state.barrels.some(b => Math.abs(b.velocity.x) + Math.abs(b.velocity.y) > 0.25);
+  if (!moving) {
+    state.stuckTimer++;
+    if (state.stuckTimer > 90) {
+      state.barrels.forEach(b => {
+        Body.applyForce(b, b.position, { x: (Math.random() - 0.5) * 0.04, y: -0.012 });
+        Body.setAngularVelocity(b, (Math.random() - 0.5) * 0.3);
+      });
+      tone(180, 0.08, 'square', 0.1);
+      state.stuckTimer = 0;
+    }
+  } else { state.stuckTimer = 0; }
+}
+
+let lastTime = performance.now();
+function loop(now) {
+  lastTime = now;
+  Engine.update(engine, 1000 / 60);
+  updatePhysicsState();
+  render(now);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ============================================================
+// UI
+// ============================================================
+const namesInput = document.getElementById('namesInput');
+const addBtn = document.getElementById('addBtn');
+const dropBtn = document.getElementById('dropBtn');
+const clearBtn = document.getElementById('clearBtn');
+const muteBtn = document.getElementById('muteBtn');
+const queueEl = document.getElementById('queue');
+const queueCountEl = document.getElementById('queueCount');
+const pickEl = document.getElementById('pick');
+
+function renderQueue() {
+  queueEl.innerHTML = '';
+  queueCountEl.textContent = state.queue.length;
+  if (state.queue.length === 0) {
+    const e = document.createElement('span');
+    e.className = 'empty'; e.textContent = 'No names yet...';
+    queueEl.appendChild(e); return;
+  }
+  state.queue.forEach((n, idx) => {
+    const tag = document.createElement('span');
+    tag.className = 'tag'; tag.textContent = n;
+    const x = document.createElement('span');
+    x.className = 'x'; x.textContent = 'X'; x.title = 'Remove';
+    x.addEventListener('click', () => {
+      state.queue.splice(idx, 1); renderQueue();
+      tone(440, 0.04, 'square', 0.1);
+    });
+    tag.appendChild(x);
+    queueEl.appendChild(tag);
+  });
+}
+
+function addNames() {
+  ensureAudio();
+  const lines = namesInput.value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).map(s => s.toUpperCase());
+  let added = 0;
+  for (const n of lines) {
+    if (state.queue.length >= 24) break;
+    state.queue.push(n); added++;
+  }
+  namesInput.value = ''; renderQueue();
+  if (added > 0) playAdd();
+}
+
+addBtn.addEventListener('click', addNames);
+namesInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); addNames(); }
+});
+
+clearBtn.addEventListener('click', () => {
+  ensureAudio();
+  state.queue = []; renderQueue();
+  tone(220, 0.12, 'sawtooth', 0.12);
+});
+
+muteBtn.addEventListener('click', () => {
+  ensureAudio();
+  muted = !muted;
+  muteBtn.textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  if (!muted) tone(880, 0.08, 'square', 0.15);
+});
+
+dropBtn.addEventListener('click', () => {
+  ensureAudio();
+  if (state.queue.length === 0) {
+    pickEl.textContent = 'ADD NAMES FIRST!';
+    pickEl.classList.remove('win');
+    tone(150, 0.2, 'sawtooth', 0.15);
+    return;
+  }
+  state.barrels.forEach(b => Composite.remove(world, b));
+  state.barrels = [];
+  state.winner = null; state.running = true;
+  state.flashTimer = 0; state.stuckTimer = 0;
+  pickEl.classList.remove('win');
+  pickEl.textContent = 'DROPPING...';
+  dropBtn.disabled = true; dropBtn.textContent = '★ DROPPING ★';
+
+  playDropSound();
+  const names = state.queue.slice();
+  // Shuffle which barrel starts in which drop slot, so the same
+  // starting position (and thus the same queue entry) doesn't always
+  // get a head-start to the goal.
+  for (let i = names.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [names[i], names[j]] = [names[j], names[i]];
+  }
+  names.forEach((n, i) => {
+    setTimeout(() => createBarrel(n, i, names.length), i * 100);
+  });
+});
+
+// Seed queue with demo names
+state.queue = ['ALICE', 'BOB', 'CHRIS', 'DANA', 'EVE'];
+renderQueue();
+
+})();
+</script>
+</body>
+</html>
