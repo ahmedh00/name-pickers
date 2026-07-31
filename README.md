@@ -38,6 +38,8 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `pick-man.html` | [Try it](https://ahmedh00.github.io/name-pickers/pick-man.html) | Inspired by Pacman - first ghost to capture Pacman wins |
 | `frogger.html` | [Try it](https://ahmedh00.github.io/name-pickers/frogger.html) | Inspired by Frogger - first frog to the end wins |
 | `super-kart.html` | [Try it](https://ahmedh00.github.io/name-pickers/super-kart.html) | Inspired by Super Mario Kart - last kart to finish wins |
+| `crossy-picker-3d.html` | [Try it](https://ahmedh00.github.io/name-pickers/crossy-picker-3d.html) | Inspired by Crossy Road - last survivor wins |
+| `mosquito.html` | [Try it](https://ahmedh00.github.io/name-pickers/mosquito.html) | Avoid getting swatted to win |
 
 
 ## Contributing

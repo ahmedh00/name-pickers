@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MOSQUITO SWAT: Jungle Standup Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg1:#0d1b0f;
+    --bg2:#132417;
+    --neon:#7CFF6B;
+    --neon2:#FFD84A;
+    --red:#FF4D4D;
+    --panel:#0f2013;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:radial-gradient(ellipse at center, var(--bg2) 0%, var(--bg1) 100%);
+    font-family:'Press Start 2P', monospace;
+    color:var(--neon);
+    user-select:none;
+  }
+  #scanlines{
+    position:fixed; inset:0; pointer-events:none; z-index:999;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.13) 3px,
+      rgba(0,0,0,0.13) 4px
+    );
+    mix-blend-mode:multiply;
+  }
+  #vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:998;
+    box-shadow: inset 0 0 150px 40px rgba(0,0,0,0.65);
+  }
+
+  .screen{
+    position:fixed; inset:0;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    padding:24px 16px;
+  }
+  .screen.active{display:flex;}
+
+  h1.title{
+    font-size:clamp(14px,3vw,26px);
+    color:var(--neon2);
+    text-shadow:0 0 6px var(--neon2), 0 0 14px rgba(255,216,74,0.5);
+    text-align:center;
+    margin:8px 0 4px 0;
+    letter-spacing:1px;
+  }
+  .subtitle{
+    font-size:10px;
+    color:var(--neon);
+    opacity:0.8;
+    margin-bottom:18px;
+    text-align:center;
+  }
+
+  /* ---- SETUP SCREEN ---- */
+  #setup-panel{
+    background:rgba(15,32,19,0.9);
+    border:3px solid var(--neon);
+    box-shadow:0 0 18px rgba(124,255,107,0.35), inset 0 0 20px rgba(124,255,107,0.08);
+    border-radius:6px;
+    padding:20px;
+    width:min(560px,92vw);
+    max-height:78vh;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .row{display:flex; gap:8px;}
+  #nameInput{
+    flex:1;
+    font-family:'Press Start 2P', monospace;
+    font-size:11px;
+    background:#081109;
+    border:2px solid var(--neon);
+    color:var(--neon2);
+    padding:10px 8px;
+    outline:none;
+    border-radius:3px;
+  }
+  #nameInput::placeholder{color:#4a7a45;}
+  button{
+    font-family:'Press Start 2P', monospace;
+    cursor:pointer;
+    border-radius:3px;
+    border:2px solid var(--neon);
+    background:#123018;
+    color:var(--neon);
+    padding:10px 12px;
+    font-size:10px;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  button:hover:not(:disabled){
+    transform:translateY(-2px);
+    box-shadow:0 4px 0 rgba(0,0,0,0.4), 0 0 10px rgba(124,255,107,0.5);
+  }
+  button:active:not(:disabled){transform:translateY(1px); box-shadow:none;}
+  button:disabled{opacity:0.35; cursor:not-allowed;}
+  #addBtn{border-color:var(--neon2); color:var(--neon2);}
+
+  #nameCount{font-size:10px; opacity:0.85; text-align:right;}
+
+  #nameList{
+    list-style:none; margin:0; padding:0;
+    display:flex; flex-wrap:wrap; gap:8px;
+    overflow-y:auto;
+    max-height:220px;
+    padding:4px 2px;
+  }
+  #nameList li{
+    display:flex; align-items:center; gap:8px;
+    background:#0b1c0e;
+    border:1px solid var(--neon);
+    padding:7px 10px;
+    font-size:10px;
+    border-radius:14px;
+    color:var(--neon2);
+    animation:pop .15s ease;
+  }
+  @keyframes pop{from{transform:scale(0.6); opacity:0;} to{transform:scale(1); opacity:1;}}
+  #nameList li .rm{
+    cursor:pointer; color:var(--red); font-weight:bold; font-size:11px;
+    line-height:1;
+  }
+  #startBtn{
+    font-size:13px; padding:14px; border-color:var(--red); color:var(--red);
+    box-shadow:0 0 10px rgba(255,77,77,0.3);
+  }
+  #startBtn:hover:not(:disabled){box-shadow:0 4px 0 rgba(0,0,0,0.4), 0 0 16px rgba(255,77,77,0.6);}
+  .hint{font-size:8px; opacity:0.6; text-align:center; line-height:1.6;}
+
+  /* ---- GAME SCREEN ---- */
+  #game-screen{padding:0; overflow:hidden;}
+  #jungle{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse at 15% 0%, rgba(255,244,180,0.35) 0%, rgba(255,244,180,0) 40%),
+      linear-gradient(to bottom, #d8f2c0 0%, #a9e08a 22%, #6fbf5e 55%, #4a9e4a 78%, #357a3a 100%);
+    overflow:hidden;
+  }
+  #canopy{
+    position:absolute; top:0; left:0; right:0; height:70px;
+    background:
+      radial-gradient(circle at 8% 30%, #1f5c28 0 34px, transparent 35px),
+      radial-gradient(circle at 22% 15%, #256a2f 0 40px, transparent 41px),
+      radial-gradient(circle at 38% 35%, #1f5c28 0 30px, transparent 31px),
+      radial-gradient(circle at 55% 10%, #2a7536 0 42px, transparent 43px),
+      radial-gradient(circle at 70% 30%, #1f5c28 0 34px, transparent 35px),
+      radial-gradient(circle at 85% 12%, #256a2f 0 38px, transparent 39px),
+      radial-gradient(circle at 97% 32%, #1f5c28 0 30px, transparent 31px);
+    z-index:6;
+  }
+  .vine{
+    position:absolute; top:-10px;
+    width:6px;
+    background:linear-gradient(#2f7d32,#1f5c28);
+    transform-origin:top center;
+    animation:sway 4s ease-in-out infinite;
+    z-index:6;
+    border-radius:3px;
+  }
+  .vine::after{
+    content:'🍃';
+    position:absolute; bottom:-14px; left:50%;
+    transform:translateX(-50%) rotate(-20deg);
+    font-size:16px;
+  }
+  @keyframes sway{
+    0%,100%{transform:rotate(-4deg);}
+    50%{transform:rotate(4deg);}
+  }
+  .palm{
+    position:absolute; bottom:78px;
+    z-index:4;
+    opacity:0.95;
+    filter:drop-shadow(0 6px 6px rgba(0,0,0,0.25));
+  }
+  .firefly{
+    position:absolute;
+    width:5px; height:5px;
+    border-radius:50%;
+    background:#fff6b0;
+    box-shadow:0 0 6px 2px rgba(255,246,176,0.9), 0 0 14px 5px rgba(255,216,74,0.4);
+    z-index:8;
+    animation:flicker 2.4s ease-in-out infinite;
+  }
+  @keyframes flicker{
+    0%,100%{opacity:0.15; transform:translateY(0);}
+    50%{opacity:1; transform:translateY(-14px);}
+  }
+  #ground{
+    position:absolute; left:0; right:0; bottom:0; height:78px;
+    background:linear-gradient(to bottom, #3f7a34 0%, #2d5c26 40%, #4a3620 100%);
+    border-top:3px solid rgba(0,0,0,0.15);
+    z-index:10;
+  }
+
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; justify-content:space-between; align-items:center;
+    padding:12px 16px;
+    font-size:9px;
+    z-index:60;
+  }
+  #hudLeft{display:flex; flex-direction:column; gap:6px;}
+  #hud .pill{
+    background:rgba(0,0,0,0.4); padding:5px 9px; border-radius:12px;
+    border:1px solid rgba(124,255,107,0.5);
+    color:var(--neon2);
+  }
+  #roundMsg{
+    background:rgba(0,0,0,0.45);
+    padding:8px 14px;
+    border-radius:14px;
+    border:1px solid rgba(255,216,74,0.6);
+    color:#fff;
+    max-width:60vw;
+    text-align:center;
+  }
+  #hudRight{display:flex; gap:6px;}
+  #hudRight button{
+    font-size:13px;
+    padding:8px 10px;
+    background:rgba(0,0,0,0.45);
+  }
+
+  #arena{
+    position:absolute; inset:0;
+    overflow:hidden;
+    z-index:15;
+  }
+  .mosquito{
+    position:absolute;
+    font-size:30px;
+    line-height:1;
+    filter:drop-shadow(0 0 4px rgba(0,0,0,0.5));
+    transition:opacity .25s ease;
+    pointer-events:none;
+    will-change:transform;
+    z-index:15;
+  }
+  .mosquito .tag{
+    position:absolute;
+    top:32px; left:50%;
+    transform:translateX(-50%);
+    font-size:8px;
+    white-space:nowrap;
+    background:rgba(0,0,0,0.6);
+    padding:3px 6px;
+    border-radius:3px;
+    color:#fff;
+    border:1px solid rgba(124,255,107,0.6);
+  }
+  .mosquito.splat{
+    animation:splatAnim .4s ease forwards;
+  }
+  @keyframes splatAnim{
+    0%{transform:scale(1) rotate(0deg); opacity:1;}
+    40%{transform:scale(1.6) rotate(25deg); opacity:1;}
+    100%{transform:scale(0.2) rotate(70deg); opacity:0;}
+  }
+
+  .splatMark{
+    position:absolute;
+    width:28px; height:28px;
+    background:radial-gradient(circle, #7a1010 0%, rgba(122,16,16,0) 70%);
+    border-radius:50%;
+    pointer-events:none;
+    animation:markFade 1.2s ease forwards;
+    z-index:20;
+  }
+  @keyframes markFade{0%{opacity:0.85;} 100%{opacity:0;}}
+
+  .popText{
+    position:absolute;
+    font-size:13px;
+    color:#fff;
+    text-shadow:2px 2px 0 #d63b3b, -1px -1px 0 #d63b3b, 1px -1px 0 #d63b3b, -1px 1px 0 #d63b3b;
+    z-index:70;
+    pointer-events:none;
+    animation:popUp .8s ease forwards;
+  }
+  @keyframes popUp{
+    0%{transform:translateY(0) scale(0.5); opacity:0;}
+    25%{transform:translateY(-10px) scale(1.15); opacity:1;}
+    75%{transform:translateY(-30px) scale(1); opacity:1;}
+    100%{transform:translateY(-46px) scale(0.9); opacity:0;}
+  }
+
+  /* ---- CARTOON CHARACTER ---- */
+  #character{
+    position:absolute;
+    bottom:60px;
+    width:100px; height:150px;
+    z-index:50;
+    transition:left .45s cubic-bezier(.4,0,.2,1);
+    animation:idleBob 2s ease-in-out infinite;
+  }
+  @keyframes idleBob{
+    0%,100%{transform:translateY(0) scaleX(var(--face,1));}
+    50%{transform:translateY(-4px) scaleX(var(--face,1));}
+  }
+  #swatArm{
+    transform-box: view-box;
+    transform-origin: 76px 62px;
+    transition:transform .12s ease-out;
+  }
+  #swatArm.swing{
+    animation:armSwing .32s ease-out;
+  }
+  @keyframes armSwing{
+    0%{transform:rotate(0deg);}
+    35%{transform:rotate(-95deg);}
+    65%{transform:rotate(25deg);}
+    100%{transform:rotate(0deg);}
+  }
+  #character.hop{ animation:hop .32s ease-out; }
+  @keyframes hop{
+    0%{transform:translateY(0) scaleX(var(--face,1));}
+    40%{transform:translateY(-16px) scaleX(var(--face,1));}
+    100%{transform:translateY(0) scaleX(var(--face,1));}
+  }
+
+  #eliminatedBar{
+    position:absolute; bottom:0; left:0; right:0;
+    padding:8px 14px;
+    font-size:8px;
+    color:#eafbe4;
+    background:linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+    display:flex; gap:6px; flex-wrap:wrap;
+    z-index:40;
+    pointer-events:none;
+    max-height:60px;
+    overflow:hidden;
+  }
+  #eliminatedBar .dead{
+    text-decoration:line-through;
+    color:#3a2b2b;
+    background:rgba(255,255,255,0.55);
+    padding:2px 6px;
+    border-radius:3px;
+  }
+
+  #skipHint{
+    position:absolute; top:52px; right:16px;
+    font-size:7px; opacity:0.6; color:#fff; z-index:60;
+    text-align:right;
+  }
+
+  /* ---- WIN SCREEN ---- */
+  #win-screen{
+    background:radial-gradient(ellipse at center, #1a2f16 0%, #060c07 100%);
+  }
+  #winCanvas{position:absolute; inset:0; z-index:1;}
+  #winBox{
+    position:relative; z-index:5;
+    text-align:center;
+    background:rgba(10,25,12,0.85);
+    border:3px solid var(--neon2);
+    box-shadow:0 0 30px rgba(255,216,74,0.5);
+    padding:36px 28px;
+    border-radius:8px;
+    max-width:90vw;
+  }
+  #winTrophy{font-size:56px; margin-bottom:10px;}
+  #winName{
+    font-size:clamp(16px,4vw,30px);
+    color:var(--neon2);
+    text-shadow:0 0 10px var(--neon2);
+    margin:10px 0 6px 0;
+    word-break:break-word;
+  }
+  #winSub{font-size:10px; opacity:0.85; margin-bottom:22px;}
+  #winBtns{display:flex; gap:12px; justify-content:center; flex-wrap:wrap;}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--neon); border-radius:4px;}
+  ::-webkit-scrollbar-track{background:#081109;}
+</style>
+</head>
+<body>
+<div id="scanlines"></div>
+<div id="vignette"></div>
+
+<!-- SETUP SCREEN -->
+<div class="screen active" id="setup-screen">
+  <h1 class="title">🦟 MOSQUITO SWAT 🦟</h1>
+  <div class="subtitle">TROPICAL JUNGLE · STANDUP HOST EDITION</div>
+  <div id="setup-panel">
+    <div class="row" style="justify-content:center;">
+      <button id="soundCheckBtn" style="border-color:var(--neon2); color:var(--neon2);">🔊 TAP TO ENABLE SOUND</button>
+    </div>
+    <div class="row">
+      <input type="text" id="nameInput" placeholder="ENTER A NAME..." maxlength="18">
+      <button id="addBtn">ADD +</button>
+    </div>
+    <div id="nameCount">0 / 15 MOSQUITOES</div>
+    <ul id="nameList"></ul>
+    <button id="startBtn" disabled>▶ START THE SWARM</button>
+    <div class="hint">NEED AT LEAST 2 NAMES · SIT BACK — THE RANGER SWATS AUTOMATICALLY<br>LAST MOSQUITO FLYING RUNS STANDUP</div>
+  </div>
+</div>
+
+<!-- GAME SCREEN -->
+<div class="screen" id="game-screen">
+  <div id="jungle">
+    <div id="canopy"></div>
+  </div>
+  <div id="hud">
+    <div id="hudLeft">
+      <div class="pill">ALIVE: <span id="aliveCount">0</span></div>
+      <div class="pill" id="roundMsg">SCOUTING THE JUNGLE...</div>
+    </div>
+    <div id="hudRight">
+      <button id="muteBtn" title="Mute music">🔊</button>
+      <button id="pauseBtn" title="Pause">⏸</button>
+      <button id="skipBtn" title="Swat now">⚡</button>
+    </div>
+  </div>
+  <div id="arena">
+    <div id="character" style="--face:1;">
+      <svg viewBox="0 0 100 150" width="100" height="150">
+        <rect x="35" y="110" width="12" height="35" rx="6" fill="#4a3018"/>
+        <rect x="53" y="110" width="12" height="35" rx="6" fill="#4a3018"/>
+        <ellipse cx="41" cy="147" rx="9" ry="5" fill="#2a1c10"/>
+        <ellipse cx="59" cy="147" rx="9" ry="5" fill="#2a1c10"/>
+        <rect x="30" y="95" width="40" height="20" rx="6" fill="#c99a4e"/>
+        <rect x="28" y="55" width="44" height="45" rx="10" fill="#3f8f3c"/>
+        <rect x="18" y="60" width="12" height="35" rx="6" fill="#3f8f3c"/>
+        <circle cx="24" cy="98" r="7" fill="#f0bd8f"/>
+        <g id="swatArm">
+          <rect x="70" y="58" width="12" height="35" rx="6" fill="#3f8f3c"/>
+          <circle cx="76" cy="95" r="7" fill="#f0bd8f"/>
+          <g transform="translate(76,95)">
+            <rect x="-3" y="0" width="6" height="28" rx="2" fill="#8a5a2b"/>
+            <circle cx="0" cy="36" r="17" fill="rgba(255,216,74,0.28)" stroke="#d69b1e" stroke-width="3"/>
+            <line x1="-13" y1="36" x2="13" y2="36" stroke="#d69b1e" stroke-width="1.5"/>
+            <line x1="0" y1="23" x2="0" y2="49" stroke="#d69b1e" stroke-width="1.5"/>
+            <line x1="-9" y1="26" x2="9" y2="46" stroke="#d69b1e" stroke-width="1.5"/>
+            <line x1="9" y1="26" x2="-9" y2="46" stroke="#d69b1e" stroke-width="1.5"/>
+          </g>
+        </g>
+        <rect x="44" y="45" width="12" height="12" fill="#f0bd8f"/>
+        <circle cx="50" cy="35" r="18" fill="#f0bd8f"/>
+        <ellipse cx="50" cy="24" rx="25" ry="7" fill="#c9a24a"/>
+        <path d="M35 24 Q50 4 65 24 Z" fill="#d9b45a"/>
+        <circle cx="44" cy="34" r="2.2" fill="#222"/>
+        <circle cx="56" cy="34" r="2.2" fill="#222"/>
+        <path d="M40 30 Q44 27 48 30" stroke="#222" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <path d="M52 30 Q56 27 60 30" stroke="#222" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <path d="M42 41 Q50 48 58 41" stroke="#222" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+  <div id="ground"></div>
+  <div id="skipHint">⚡ SKIP TO SPEED UP</div>
+  <div id="eliminatedBar"></div>
+</div>
+
+<!-- WIN SCREEN -->
+<div class="screen" id="win-screen">
+  <canvas id="winCanvas"></canvas>
+  <div id="winBox">
+    <div id="winTrophy">🏆</div>
+    <div style="font-size:11px; color:var(--neon);">TODAY'S STANDUP HOST IS</div>
+    <div id="winName">???</div>
+    <div id="winSub">ALL OTHER MOSQUITOES HAVE BEEN SWATTED.</div>
+    <div id="winBtns">
+      <button id="replayBtn">↻ REPLAY (SAME NAMES)</button>
+      <button id="newBtn">✎ NEW NAMES</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- STATE ---------------- */
+  var MAX_NAMES = 15;
+  var names = [];
+  var mosquitoes = [];
+  var alive = [];
+  var eliminatedOrder = [];
+  var swatBusy = false;
+  var paused = false;
+  var finalShown = false;
+  var swatTimeoutId = null;
+  var musicMuted = false;
+  var gameStartTime = 0;
+  var MIN_GAME_MS = 30000;   // game must last at least 30 seconds
+  var FINAL_PAUSE = 1900;    // suspense pause before the deciding swat
+  var POST_OVERHEAD = 500;   // swing + splat animation time
+  var WIN_REVEAL_DELAY = 900;
+
+  var setupScreen = document.getElementById('setup-screen');
+  var gameScreen = document.getElementById('game-screen');
+  var winScreen = document.getElementById('win-screen');
+
+  var nameInput = document.getElementById('nameInput');
+  var addBtn = document.getElementById('addBtn');
+  var nameList = document.getElementById('nameList');
+  var nameCount = document.getElementById('nameCount');
+  var startBtn = document.getElementById('startBtn');
+
+  var jungle = document.getElementById('jungle');
+  var arena = document.getElementById('arena');
+  var characterEl = document.getElementById('character');
+  var swatArmEl = document.getElementById('swatArm');
+  var aliveCountEl = document.getElementById('aliveCount');
+  var eliminatedBar = document.getElementById('eliminatedBar');
+  var roundMsg = document.getElementById('roundMsg');
+  var muteBtn = document.getElementById('muteBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+  var skipBtn = document.getElementById('skipBtn');
+
+  var winNameEl = document.getElementById('winName');
+  var replayBtn = document.getElementById('replayBtn');
+  var newBtn = document.getElementById('newBtn');
+
+  /* ---------------- PERSISTENCE ---------------- */
+  try{
+    var saved = localStorage.getItem('mosquitoSwatNames');
+    if(saved){
+      var parsed = JSON.parse(saved);
+      if(Array.isArray(parsed)) names = parsed.slice(0, MAX_NAMES);
+    }
+  }catch(e){}
+
+  function persist(){
+    try{ localStorage.setItem('mosquitoSwatNames', JSON.stringify(names)); }catch(e){}
+  }
+
+  /* ---------------- AUDIO (all synthesized, no files) ---------------- */
+  var actx = null;
+  var masterGain = null;
+  function ctx(){
+    if(!actx){
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = actx.createGain();
+      masterGain.gain.value = 1;
+      masterGain.connect(actx.destination);
+    }
+    if(actx.state === 'suspended'){ actx.resume(); }
+    return actx;
+  }
+
+  // Browsers block audio until a real user gesture. Unlock on the very
+  // first interaction anywhere on the page, from any control.
+  var audioUnlocked = false;
+  function unlockAudio(){
+    var c = ctx();
+    if(c.state === 'suspended'){ c.resume(); }
+    if(!audioUnlocked){
+      audioUnlocked = true;
+      // near-silent warm-up blip forces the context into 'running' state
+      tone(440, 0.01, 'sine', 0.0001, 0.0001);
+    }
+  }
+  ['pointerdown','mousedown','touchstart','keydown'].forEach(function(evt){
+    window.addEventListener(evt, unlockAudio, {capture:true, passive:true});
+  });
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && actx && actx.state === 'suspended'){ actx.resume(); }
+  });
+
+  function tone(freq, dur, type, startGain, endGain, delay, detune){
+    var c = ctx();
+    var t0 = c.currentTime + (delay||0);
+    var osc = c.createOscillator();
+    var gain = c.createGain();
+    osc.type = type || 'square';
+    osc.frequency.setValueAtTime(freq, t0);
+    if(detune) osc.detune.setValueAtTime(detune, t0);
+    gain.gain.setValueAtTime(startGain!=null?startGain:0.15, t0);
+    gain.gain.exponentialRampToValueAtTime(Math.max(endGain!=null?endGain:0.001,0.0001), t0+dur);
+    osc.connect(gain).connect(masterGain);
+    osc.start(t0);
+    osc.stop(t0+dur+0.02);
+    return osc;
+  }
+
+  function sweep(freqStart, freqEnd, dur, type, gainVal, delay){
+    var c = ctx();
+    var t0 = c.currentTime + (delay||0);
+    var osc = c.createOscillator();
+    var gain = c.createGain();
+    osc.type = type || 'sawtooth';
+    osc.frequency.setValueAtTime(freqStart, t0);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(freqEnd,20), t0+dur);
+    gain.gain.setValueAtTime(gainVal!=null?gainVal:0.18, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0+dur+0.02);
+    osc.connect(gain).connect(masterGain);
+    osc.start(t0); osc.stop(t0+dur+0.04);
+  }
+
+  function noiseBurst(dur, filterFreq, gainVal, delay){
+    var c = ctx();
+    var bufferSize = Math.floor(c.sampleRate * dur);
+    var buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+    var data = buffer.getChannelData(0);
+    for(var i=0;i<bufferSize;i++){ data[i] = (Math.random()*2-1) * (1 - i/bufferSize); }
+    var src = c.createBufferSource();
+    src.buffer = buffer;
+    var filt = c.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = filterFreq || 1200;
+    var gain = c.createGain();
+    gain.gain.value = gainVal!=null?gainVal:0.35;
+    src.connect(filt).connect(gain).connect(masterGain);
+    src.start(c.currentTime + (delay||0));
+  }
+
+  function sfxUnlockConfirm(){
+    tone(523.25, 0.14, 'square', 0.22, 0.001);
+    tone(659.25, 0.14, 'square', 0.22, 0.001, 0.1);
+    tone(783.99, 0.18, 'square', 0.24, 0.001, 0.2);
+  }
+  function sfxBlip(){ tone(660, 0.08, 'square', 0.2, 0.001); }
+  function sfxRemove(){ tone(220, 0.1, 'square', 0.18, 0.001); }
+
+  // Funny cartoon "boing" swing sound
+  function sfxSwing(){
+    sweep(320, 1200, 0.16, 'triangle', 0.28);
+    sweep(1200, 260, 0.14, 'triangle', 0.18, 0.1);
+  }
+  // Splat + comedic squeak
+  function sfxSplat(){
+    noiseBurst(0.18, 1000, 0.6);
+    tone(110, 0.16, 'sine', 0.4, 0.001, 0.02);
+    sweep(1500, 300, 0.16, 'square', 0.2, 0.05);
+  }
+  // Comedic whiff/miss - descending "womp"
+  function sfxWhiff(){
+    sweep(500, 140, 0.32, 'triangle', 0.22);
+    tone(180, 0.22, 'sine', 0.14, 0.001, 0.12);
+  }
+  function sfxBuzzTick(){ tone(180 + Math.random()*40, 0.04, 'sawtooth', 0.05, 0.001); }
+  function sfxFanfare(){
+    var notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    notes.forEach(function(f, i){
+      tone(f, 0.3, 'square', 0.26, 0.001, i*0.13);
+      tone(f*1.005, 0.3, 'triangle', 0.14, 0.001, i*0.13);
+    });
+  }
+  function sfxNoNo(){ tone(160, 0.2, 'sawtooth', 0.18, 0.001); }
+  function sfxSuspense(){
+    // rising drumroll-ish flutter
+    for(var i=0;i<10;i++){
+      noiseBurst(0.06, 500 + i*40, 0.22, i*0.12);
+    }
+    sweep(200, 900, 1.2, 'sawtooth', 0.1, 0);
+  }
+  function sfxBirdChirp(){
+    var base = 1400 + Math.random()*400;
+    tone(base, 0.07, 'sine', 0.09, 0.001);
+    tone(base*1.3, 0.07, 'sine', 0.09, 0.001, 0.09);
+  }
+  function sfxCricket(){
+    for(var i=0;i<4;i++){
+      tone(3200 + Math.random()*200, 0.03, 'square', 0.04, 0.001, i*0.08);
+    }
+  }
+
+  // Goofy looping jungle marimba music
+  var melody = [523.25,659.25,783.99,659.25,587.33,698.46,880.00,698.46,
+                523.25,622.25,783.99,622.25,523.25,659.25,987.77,880.00];
+  var beatIndex = 0;
+  var musicTimer = null;
+  function startMusic(){
+    if(musicTimer) return;
+    beatIndex = 0;
+    musicTimer = setInterval(function(){
+      if(musicMuted) { beatIndex++; return; }
+      var note = melody[beatIndex % melody.length];
+      tone(note, 0.2, 'triangle', 0.11, 0.001, 0, (Math.random()*6-3));
+      if(beatIndex % 2 === 0){
+        noiseBurst(0.07, 380, 0.15);
+      }
+      if(beatIndex % 8 === 0){
+        tone(note/2, 0.25, 'sine', 0.11, 0.001);
+      }
+      beatIndex++;
+    }, 230);
+  }
+  function stopMusic(){
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+
+  var ambientTimer = null;
+  function scheduleAmbient(){
+    clearTimeout(ambientTimer);
+    ambientTimer = setTimeout(function(){
+      if(!musicMuted){
+        if(Math.random() < 0.5) sfxBirdChirp(); else sfxCricket();
+      }
+      scheduleAmbient();
+    }, 2500 + Math.random()*4000);
+  }
+  function stopAmbient(){ clearTimeout(ambientTimer); ambientTimer = null; }
+
+  muteBtn.addEventListener('click', function(){
+    unlockAudio();
+    musicMuted = !musicMuted;
+    muteBtn.textContent = musicMuted ? '🔇' : '🔊';
+    if(masterGain){
+      masterGain.gain.setTargetAtTime(musicMuted ? 0 : 1, actx.currentTime, 0.05);
+    }
+  });
+
+  var soundCheckBtn = document.getElementById('soundCheckBtn');
+  soundCheckBtn.addEventListener('click', function(){
+    unlockAudio();
+    sfxUnlockConfirm();
+    soundCheckBtn.textContent = '🔊 SOUND READY!';
+    soundCheckBtn.disabled = false;
+  });
+
+  /* ---------------- SETUP SCREEN LOGIC ---------------- */
+  function renderNameList(){
+    nameList.innerHTML = '';
+    names.forEach(function(n, idx){
+      var li = document.createElement('li');
+      var span = document.createElement('span');
+      span.textContent = '🦟 ' + n;
+      var rm = document.createElement('span');
+      rm.className = 'rm';
+      rm.textContent = '✕';
+      rm.title = 'Remove';
+      rm.addEventListener('click', function(){
+        names.splice(idx,1);
+        sfxRemove();
+        persist();
+        renderNameList();
+      });
+      li.appendChild(span);
+      li.appendChild(rm);
+      nameList.appendChild(li);
+    });
+    nameCount.textContent = names.length + ' / ' + MAX_NAMES + ' MOSQUITOES';
+    startBtn.disabled = names.length < 2;
+    addBtn.disabled = names.length >= MAX_NAMES;
+    nameInput.disabled = names.length >= MAX_NAMES;
+  }
+
+  function addName(){
+    var v = nameInput.value.trim();
+    if(!v) return;
+    if(names.length >= MAX_NAMES) return;
+    if(names.some(function(n){ return n.toLowerCase() === v.toLowerCase(); })){
+      nameInput.value = '';
+      return;
+    }
+    names.push(v);
+    nameInput.value = '';
+    sfxBlip();
+    persist();
+    renderNameList();
+    nameInput.focus();
+  }
+
+  addBtn.addEventListener('click', function(){ unlockAudio(); addName(); });
+  nameInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ unlockAudio(); addName(); }
+  });
+
+  startBtn.addEventListener('click', function(){
+    unlockAudio();
+    if(names.length < 2) return;
+    startGame();
+  });
+
+  renderNameList();
+
+  /* ---------------- GAME SCREEN LOGIC ---------------- */
+  function showScreen(el){
+    [setupScreen, gameScreen, winScreen].forEach(function(s){ s.classList.remove('active'); });
+    el.classList.add('active');
+    if(el === gameScreen){ startMusic(); scheduleAmbient(); }
+    else { stopMusic(); stopAmbient(); }
+  }
+
+  var fireflyEls = [];
+  function buildJungleDecor(){
+    // clear old decor (keep canopy)
+    jungle.querySelectorAll('.vine,.palm,.firefly').forEach(function(el){ el.remove(); });
+    fireflyEls = [];
+    var rect = jungle.getBoundingClientRect();
+
+    // vines
+    var vineX = [8, 22, 48, 68, 88, 96];
+    vineX.forEach(function(pct, i){
+      var v = document.createElement('div');
+      v.className = 'vine';
+      var h = 50 + (i % 3) * 20;
+      v.style.left = pct + '%';
+      v.style.height = h + 'px';
+      v.style.animationDelay = (i * 0.4) + 's';
+      jungle.appendChild(v);
+    });
+
+    // palm trees (simple SVG, left + right)
+    var palmSVG = '<svg viewBox="0 0 120 220" width="110" height="200">' +
+      '<path d="M60 220 C55 160 72 120 54 58" stroke="#5c3a1e" stroke-width="14" fill="none" stroke-linecap="round"/>' +
+      '<g fill="#256a2f">' +
+        '<ellipse cx="54" cy="55" rx="46" ry="15" transform="rotate(-25 54 55)"/>' +
+        '<ellipse cx="54" cy="55" rx="46" ry="15" transform="rotate(15 54 55)"/>' +
+        '<ellipse cx="54" cy="55" rx="46" ry="15" transform="rotate(55 54 55)"/>' +
+        '<ellipse cx="54" cy="55" rx="46" ry="15" transform="rotate(-65 54 55)"/>' +
+        '<ellipse cx="54" cy="55" rx="46" ry="15" transform="rotate(100 54 55)"/>' +
+      '</g>' +
+      '<g fill="#8B5A2B"><ellipse cx="48" cy="60" rx="7" ry="6"/><ellipse cx="62" cy="66" rx="7" ry="6"/></g>' +
+    '</svg>';
+    var palmLeft = document.createElement('div');
+    palmLeft.className = 'palm';
+    palmLeft.style.left = '-10px';
+    palmLeft.innerHTML = palmSVG;
+    jungle.appendChild(palmLeft);
+    var palmRight = document.createElement('div');
+    palmRight.className = 'palm';
+    palmRight.style.right = '-10px';
+    palmRight.style.transform = 'scaleX(-1)';
+    palmRight.innerHTML = palmSVG;
+    jungle.appendChild(palmRight);
+    var palmMid = document.createElement('div');
+    palmMid.className = 'palm';
+    palmMid.style.left = (rect.width*0.45) + 'px';
+    palmMid.style.opacity = '0.5';
+    palmMid.style.transform = 'scale(0.7)';
+    palmMid.innerHTML = palmSVG;
+    jungle.appendChild(palmMid);
+
+    // fireflies
+    for(var i=0;i<14;i++){
+      var f = document.createElement('div');
+      f.className = 'firefly';
+      f.style.left = (Math.random()*90+3) + '%';
+      f.style.top = (20 + Math.random()*55) + '%';
+      f.style.animationDelay = (Math.random()*2.4) + 's';
+      f.style.animationDuration = (2 + Math.random()*2) + 's';
+      jungle.appendChild(f);
+      fireflyEls.push(f);
+    }
+  }
+
+  var funnyLines = [
+    '{n} DID NOT SEE THAT COMING! 🪰💥',
+    'SPLAT! BYE-BYE {n}! 🦟💫',
+    '{n} GOT ZAPPED! ⚡',
+    'THE RANGER STRIKES {n} DOWN! 🥊',
+    '{n} IS OUTTA HERE! 🌪️',
+    'BZZZT... AND {n} IS GONE!',
+    '{n} JOINS THE BUG GRAVEYARD ⚰️',
+    'ONE MIGHTY SWAT ELIMINATES {n}!'
+  ];
+  var popWords = ['SPLAT!','BONK!','ZAP!','GOTCHA!','BZZZT!','POW!','SWATTED!'];
+
+  function startGame(){
+    arena.querySelectorAll('.mosquito').forEach(function(m){ m.remove(); });
+    eliminatedBar.innerHTML = '';
+    eliminatedOrder = [];
+    mosquitoes = [];
+    clearTimeout(swatTimeoutId);
+    swatTimeoutId = null;
+    paused = false;
+    finalShown = false;
+    swatBusy = false;
+    gameStartTime = Date.now();
+    pauseBtn.textContent = '⏸';
+    roundMsg.textContent = 'SCOUTING THE JUNGLE...';
+
+    showScreen(gameScreen);
+    buildJungleDecor();
+
+    var rect = arena.getBoundingClientRect();
+    names.forEach(function(n, i){
+      var el = document.createElement('div');
+      el.className = 'mosquito';
+      el.innerHTML = '🦟<div class="tag"></div>';
+      el.querySelector('.tag').textContent = n;
+      arena.appendChild(el);
+
+      var m = {
+        id: i,
+        name: n,
+        el: el,
+        x: 40 + Math.random() * Math.max(40, rect.width - 120),
+        y: 70 + Math.random() * Math.max(40, rect.height - 260),
+        vx: (Math.random()*2-1) * 1.4,
+        vy: (Math.random()*2-1) * 1.4,
+        alive: true,
+        phase: Math.random()*Math.PI*2
+      };
+      mosquitoes.push(m);
+    });
+    alive = mosquitoes.slice();
+    updateAliveCount();
+    startFlying();
+
+    setTimeout(function(){
+      roundMsg.textContent = 'AUTO-SWATTING IN PROGRESS...';
+      scheduleNext();
+    }, 900);
+  }
+
+  function updateAliveCount(){
+    aliveCountEl.textContent = alive.length;
+  }
+
+  var flyingRAF = null;
+  function startFlying(){
+    if(flyingRAF) cancelAnimationFrame(flyingRAF);
+    var t = 0;
+    function step(){
+      t += 0.02;
+      var rect = arena.getBoundingClientRect();
+      alive.forEach(function(m){
+        m.x += m.vx + Math.sin(t + m.phase) * 0.6;
+        m.y += m.vy + Math.cos(t*1.3 + m.phase) * 0.6;
+        if(m.x < 10){ m.x = 10; m.vx *= -1; }
+        if(m.x > rect.width - 50){ m.x = rect.width - 50; m.vx *= -1; }
+        if(m.y < 60){ m.y = 60; m.vy *= -1; }
+        if(m.y > rect.height - 170){ m.y = rect.height - 170; m.vy *= -1; }
+        m.el.style.transform = 'translate(' + m.x + 'px,' + m.y + 'px)';
+      });
+      if(Math.random() < 0.015 && alive.length){
+        sfxBuzzTick();
+      }
+      flyingRAF = requestAnimationFrame(step);
+    }
+    step();
+  }
+
+  function spawnSplatMark(x, y){
+    var mark = document.createElement('div');
+    mark.className = 'splatMark';
+    mark.style.left = (x-13) + 'px';
+    mark.style.top = (y-13) + 'px';
+    arena.appendChild(mark);
+    setTimeout(function(){ mark.remove(); }, 1200);
+  }
+
+  function spawnPopText(x, y, text){
+    var p = document.createElement('div');
+    p.className = 'popText';
+    p.textContent = text;
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    arena.appendChild(p);
+    setTimeout(function(){ p.remove(); }, 850);
+  }
+
+  function moveCharacterTo(targetX){
+    var rect = arena.getBoundingClientRect();
+    var minX = 10, maxX = Math.max(minX, rect.width - 110);
+    var cx = Math.min(maxX, Math.max(minX, targetX - 50));
+    var curLeft = parseFloat(characterEl.style.left || '20');
+    characterEl.style.setProperty('--face', cx < curLeft ? '-1' : '1');
+    characterEl.style.left = cx + 'px';
+  }
+
+  function eliminateRandom(){
+    if(swatBusy) return;
+    if(alive.length <= 1) return;
+    swatBusy = true;
+
+    var target = alive[Math.floor(Math.random() * alive.length)];
+    moveCharacterTo(target.x);
+
+    setTimeout(function(){
+      sfxSwing();
+      swatArmEl.classList.remove('swing');
+      void swatArmEl.offsetWidth;
+      swatArmEl.classList.add('swing');
+      characterEl.classList.remove('hop');
+      void characterEl.offsetWidth;
+      characterEl.classList.add('hop');
+
+      setTimeout(function(){
+        target.alive = false;
+        target.el.classList.add('splat');
+        spawnSplatMark(target.x + 15, target.y + 15);
+        spawnPopText(target.x, target.y - 6, popWords[Math.floor(Math.random()*popWords.length)]);
+        sfxSplat();
+        alive = alive.filter(function(m){ return m.alive; });
+        eliminatedOrder.push(target.name);
+        renderEliminated();
+        updateAliveCount();
+        setTimeout(function(){ target.el.remove(); }, 420);
+
+        var line = funnyLines[Math.floor(Math.random()*funnyLines.length)].replace('{n}', target.name.toUpperCase());
+        roundMsg.textContent = line;
+
+        swatBusy = false;
+
+        if(alive.length === 1){
+          clearTimeout(swatTimeoutId);
+          cancelAnimationFrame(flyingRAF);
+          setTimeout(function(){ showWinner(alive[0].name); }, 900);
+        } else {
+          scheduleNext();
+        }
+      }, 150);
+    }, 350);
+  }
+
+  var missWords = ['MISS!','WHIFF!','DODGED!','SO CLOSE!','WOMP WOMP','NICE TRY!'];
+  var missLines = [
+    '{n} DODGES AT THE LAST SECOND! 😅',
+    'THE RANGER SWINGS AND MISSES {n}!',
+    '{n} JUKES OUT OF THE WAY! 💨',
+    'WHIFF! {n} LIVES TO BUZZ ANOTHER SECOND!',
+    'SO CLOSE! {n} ESCAPES THE SWATTER!'
+  ];
+
+  function doMissRound(callback){
+    if(swatBusy || !alive.length){ callback(); return; }
+    swatBusy = true;
+    var target = alive[Math.floor(Math.random() * alive.length)];
+    moveCharacterTo(target.x);
+
+    setTimeout(function(){
+      sfxSwing();
+      swatArmEl.classList.remove('swing');
+      void swatArmEl.offsetWidth;
+      swatArmEl.classList.add('swing');
+      characterEl.classList.remove('hop');
+      void characterEl.offsetWidth;
+      characterEl.classList.add('hop');
+
+      setTimeout(function(){
+        sfxWhiff();
+        spawnPopText(target.x, target.y - 6, missWords[Math.floor(Math.random()*missWords.length)]);
+        target.x += (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random()*20);
+        var rect = arena.getBoundingClientRect();
+        target.x = Math.min(Math.max(10, target.x), rect.width - 50);
+        roundMsg.textContent = missLines[Math.floor(Math.random()*missLines.length)].replace('{n}', target.name.toUpperCase());
+        swatBusy = false;
+        swatTimeoutId = setTimeout(callback, 550 + Math.random()*450);
+      }, 150);
+    }, 350);
+  }
+
+  function scheduleNext(){
+    if(paused) return;
+    if(alive.length <= 1) return;
+    clearTimeout(swatTimeoutId);
+
+    if(alive.length === 2){
+      var elapsedMs = Date.now() - gameStartTime;
+      var stillNeeded = MIN_GAME_MS - elapsedMs - (FINAL_PAUSE + POST_OVERHEAD + WIN_REVEAL_DELAY);
+      if(stillNeeded > 300 && !finalShown){
+        roundMsg.textContent = '👀 THE RANGER LINES UP THE FINAL SHOT...';
+        swatTimeoutId = setTimeout(function(){
+          doMissRound(function(){ scheduleNext(); });
+        }, 500);
+        return;
+      }
+      if(!finalShown){
+        finalShown = true;
+        roundMsg.textContent = '⚔️ FINAL SHOWDOWN! ⚔️';
+        sfxSuspense();
+        swatTimeoutId = setTimeout(function(){ eliminateRandom(); }, FINAL_PAUSE);
+      }
+      return;
+    }
+
+    var totalStart = mosquitoes.length;
+    var elapsedCount = totalStart - alive.length;
+    var interval = Math.max(700, 1500 - elapsedCount * 45);
+    swatTimeoutId = setTimeout(function(){ eliminateRandom(); }, interval);
+  }
+
+  function renderEliminated(){
+    eliminatedBar.innerHTML = '';
+    eliminatedOrder.forEach(function(n){
+      var s = document.createElement('span');
+      s.className = 'dead';
+      s.textContent = n;
+      eliminatedBar.appendChild(s);
+    });
+  }
+
+  pauseBtn.addEventListener('click', function(){
+    ctx();
+    paused = !paused;
+    pauseBtn.textContent = paused ? '▶' : '⏸';
+    if(paused){
+      clearTimeout(swatTimeoutId);
+      roundMsg.textContent = 'PAUSED';
+    } else {
+      roundMsg.textContent = 'AUTO-SWATTING IN PROGRESS...';
+      scheduleNext();
+    }
+  });
+
+  skipBtn.addEventListener('click', function(){
+    ctx();
+    if(paused || alive.length <= 1) return;
+    clearTimeout(swatTimeoutId);
+    if(!swatBusy) eliminateRandom();
+  });
+
+  /* ---------------- WIN SCREEN ---------------- */
+  var winCanvas = document.getElementById('winCanvas');
+  var wctx = winCanvas.getContext('2d');
+  var confetti = [];
+  var confettiRAF = null;
+
+  function resizeWinCanvas(){
+    winCanvas.width = window.innerWidth;
+    winCanvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeWinCanvas);
+
+  function showWinner(name){
+    winNameEl.textContent = name.toUpperCase();
+    showScreen(winScreen);
+    sfxFanfare();
+    resizeWinCanvas();
+    confetti = [];
+    var colors = ['#7CFF6B','#FFD84A','#FF4D4D','#6BD0FF','#FFFFFF'];
+    for(var i=0;i<140;i++){
+      confetti.push({
+        x: Math.random()*winCanvas.width,
+        y: -20 - Math.random()*winCanvas.height,
+        r: 4 + Math.random()*5,
+        c: colors[Math.floor(Math.random()*colors.length)],
+        vy: 2 + Math.random()*3,
+        vx: (Math.random()*2-1)*1.5,
+        rot: Math.random()*Math.PI,
+        vr: (Math.random()*2-1)*0.2
+      });
+    }
+    if(confettiRAF) cancelAnimationFrame(confettiRAF);
+    (function loop(){
+      wctx.clearRect(0,0,winCanvas.width,winCanvas.height);
+      confetti.forEach(function(p){
+        p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+        if(p.y > winCanvas.height + 20){ p.y = -20; p.x = Math.random()*winCanvas.width; }
+        wctx.save();
+        wctx.translate(p.x, p.y);
+        wctx.rotate(p.rot);
+        wctx.fillStyle = p.c;
+        wctx.fillRect(-p.r/2, -p.r/2, p.r, p.r*1.8);
+        wctx.restore();
+      });
+      confettiRAF = requestAnimationFrame(loop);
+    })();
+  }
+
+  replayBtn.addEventListener('click', function(){
+    if(confettiRAF) cancelAnimationFrame(confettiRAF);
+    startGame();
+  });
+  newBtn.addEventListener('click', function(){
+    if(confettiRAF) cancelAnimationFrame(confettiRAF);
+    stopMusic();
+    stopAmbient();
+    showScreen(setupScreen);
+  });
+
+})();
+</script>
+</body>
+</html>
