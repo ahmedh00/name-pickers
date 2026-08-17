@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Breakout Name Picker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #08081a;
+      color: #c0d0ff;
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      font-size: clamp(1.8rem, 5vw, 3rem);
+      color: #ff6600;
+      text-shadow: 0 0 24px #ff6600aa;
+      letter-spacing: 6px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.75rem;
+      letter-spacing: 4px;
+      color: #556;
+      margin-bottom: 32px;
+    }
+
+    /* ── Setup ── */
+    #setup-screen { width: 100%; max-width: 480px; }
+
+    .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    input[type="text"] {
+      flex: 1;
+      background: #0f0f22;
+      border: 2px solid #223;
+      border-radius: 4px;
+      color: #dde;
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type="text"]:focus { border-color: #00ccff; }
+
+    button {
+      background: transparent;
+      border: 2px solid #00ccff;
+      color: #00ccff;
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 10px 16px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.15s;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled) { background: #00ccff; color: #000; }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    #name-list {
+      list-style: none;
+      margin-bottom: 16px;
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid #1a1a30;
+      border-radius: 4px;
+    }
+    #name-list:empty { border: none; }
+
+    #name-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 9px 12px;
+      border-bottom: 1px solid #1a1a30;
+      font-size: 0.95rem;
+    }
+    #name-list li:last-child { border-bottom: none; }
+    #name-list li:hover { background: #0f0f22; }
+
+    .remove-btn {
+      border: none;
+      color: #ff4466;
+      font-size: 1.1rem;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .remove-btn:hover { background: transparent !important; color: #ff0033 !important; }
+
+    #start-btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.1rem;
+      letter-spacing: 4px;
+      border-color: #ff6600;
+      color: #ff6600;
+    }
+    #start-btn:hover:not(:disabled) { background: #ff6600; color: #000; }
+
+    .name-count {
+      text-align: right;
+      font-size: 0.75rem;
+      color: #445;
+      margin-bottom: 12px;
+    }
+
+    /* ── Game ── */
+    #game-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid #1a1a36;
+      border-radius: 4px;
+      max-width: 100%;
+    }
+
+    .game-hud {
+      display: flex;
+      gap: 24px;
+      font-size: 0.78rem;
+      letter-spacing: 2px;
+      color: #445;
+    }
+
+    #winner-banner {
+      display: none;
+      text-align: center;
+      animation: fadeIn 0.5s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+
+    .winner-label {
+      font-size: 0.75rem;
+      letter-spacing: 5px;
+      color: #556;
+      margin-bottom: 6px;
+    }
+
+    .winner-name {
+      font-size: clamp(2rem, 6vw, 3.5rem);
+      color: #ffee00;
+      text-shadow: 0 0 40px #ffee00cc, 0 0 80px #ff880066;
+      letter-spacing: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .game-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    #play-again-btn { border-color: #00ff88; color: #00ff88; }
+    #play-again-btn:hover { background: #00ff88; color: #000; }
+    #edit-names-btn { border-color: #8866ff; color: #8866ff; }
+    #edit-names-btn:hover { background: #8866ff; color: #000; }
+  </style>
+</head>
+<body>
+
+<h1>BREAKOUT</h1>
+<div class="subtitle">NAME PICKER</div>
+
+<!-- ── Setup Screen ── -->
+<div id="setup-screen">
+  <div class="input-row">
+    <input type="text" id="name-input" placeholder="Enter a name…" maxlength="18" autocomplete="off" />
+    <button id="add-btn">ADD</button>
+  </div>
+  <div class="name-count" id="name-count"></div>
+  <ul id="name-list"></ul>
+  <button id="start-btn" disabled>▶ LAUNCH</button>
+</div>
+
+<!-- ── Game Screen ── -->
+<div id="game-screen">
+  <canvas id="game-canvas"></canvas>
+  <div class="game-hud">
+    <span id="hud-remaining">REMAINING: –</span>
+  </div>
+  <div id="winner-banner">
+    <div class="winner-label">✦ WINNER ✦</div>
+    <div class="winner-name" id="winner-name-text"></div>
+  </div>
+  <div class="game-btns" style="display:none" id="game-btns">
+    <button id="play-again-btn">↺ PLAY AGAIN</button>
+    <button id="edit-names-btn">✎ EDIT NAMES</button>
+  </div>
+</div>
+
+<script>
+// ── roundRect polyfill ────────────────────────────────────────────────────────
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.min(typeof r === 'number' ? r : r[0], w / 2, h / 2);
+    this.moveTo(x + r, y);
+    this.lineTo(x + w - r, y);
+    this.arcTo(x + w, y, x + w, y + r, r);
+    this.lineTo(x + w, y + h - r);
+    this.arcTo(x + w, y + h, x + w - r, y + h, r);
+    this.lineTo(x + r, y + h);
+    this.arcTo(x, y + h, x, y + h - r, r);
+    this.lineTo(x, y + r);
+    this.arcTo(x, y, x + r, y, r);
+    this.closePath();
+  };
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const names = [];
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const nameInput      = document.getElementById('name-input');
+const addBtn         = document.getElementById('add-btn');
+const nameListEl     = document.getElementById('name-list');
+const nameCount      = document.getElementById('name-count');
+const startBtn       = document.getElementById('start-btn');
+const setupScreen    = document.getElementById('setup-screen');
+const gameScreen     = document.getElementById('game-screen');
+const canvas         = document.getElementById('game-canvas');
+const ctx            = canvas.getContext('2d');
+const hudRemaining   = document.getElementById('hud-remaining');
+const winnerBanner   = document.getElementById('winner-banner');
+const winnerNameText = document.getElementById('winner-name-text');
+const gameBtns       = document.getElementById('game-btns');
+const playAgainBtn   = document.getElementById('play-again-btn');
+const editNamesBtn   = document.getElementById('edit-names-btn');
+
+// ── Name list ─────────────────────────────────────────────────────────────────
+function addName() {
+  const name = nameInput.value.trim();
+  if (!name) return;
+  if (names.some(n => n.toLowerCase() === name.toLowerCase())) { nameInput.select(); return; }
+  names.push(name);
+  nameInput.value = '';
+  renderList();
+  startBtn.disabled = names.length < 2;
+}
+
+function removeName(i) {
+  names.splice(i, 1);
+  renderList();
+  startBtn.disabled = names.length < 2;
+}
+
+function renderList() {
+  nameListEl.innerHTML = '';
+  names.forEach((name, i) => {
+    const li  = document.createElement('li');
+    li.textContent = name;
+    const btn = document.createElement('button');
+    btn.className = 'remove-btn';
+    btn.textContent = '×';
+    btn.onclick = () => removeName(i);
+    li.appendChild(btn);
+    nameListEl.appendChild(li);
+  });
+  nameCount.textContent = names.length
+    ? `${names.length} name${names.length > 1 ? 's' : ''} added`
+    : '';
+}
+
+addBtn.addEventListener('click', addName);
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addName(); });
+
+// ── Layout constants ──────────────────────────────────────────────────────────
+const COLS      = 12;
+const BRICK_H   = 22;
+const BRICK_GAP = 4;
+const TOP_PAD   = 46;
+const BALL_R    = 8;
+const PADDLE_H  = 10;
+
+// Classic Breakout row colours — 2 rows each of red/orange/yellow/green/cyan/purple
+const ROW_COLORS = [
+  '#ff1133', '#ff1133',
+  '#ff7700', '#ff7700',
+  '#ffcc00', '#ffcc00',
+  '#22bb44', '#22bb44',
+  '#0099ee', '#0099ee',
+  '#aa33ff', '#aa33ff',
+];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ── Build brick grid ──────────────────────────────────────────────────────────
+function buildBricks(W) {
+  // Enough rows so named bricks fill ≤ 55% of total grid slots
+  const minRows = Math.ceil(names.length / (COLS * 0.55));
+  const ROWS    = Math.max(8, minRows);
+
+  const brickW = Math.floor((W - BRICK_GAP * (COLS + 1)) / COLS);
+  const grid   = [];
+
+  for (let row = 0; row < ROWS; row++) {
+    const color = ROW_COLORS[row % ROW_COLORS.length];
+    for (let col = 0; col < COLS; col++) {
+      grid.push({
+        x: BRICK_GAP + col * (brickW + BRICK_GAP),
+        y: TOP_PAD  + row * (BRICK_H  + BRICK_GAP),
+        w: brickW,
+        h: BRICK_H,
+        color,
+        alive:   true,
+        isNamed: false,
+        name:    null,
+      });
+    }
+  }
+
+  // Scatter names into random grid slots
+  const slots = shuffle(grid.map((_, i) => i));
+  shuffle([...names]).forEach((name, i) => {
+    grid[slots[i]].isNamed = true;
+    grid[slots[i]].name    = name;
+  });
+
+  return { bricks: grid, rows: ROWS };
+}
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let bricks = [], ball = null, paddle = null, particles = [], winner = null;
+let gameRunning = false, rafId = null;
+let paddleOffset = 0, paddleOffsetGoal = 0, paddleOffsetTick = 0;
+
+function initGame() {
+  const W = Math.min(window.innerWidth - 32, 820);
+  const { bricks: b, rows } = buildBricks(W);
+  bricks = b;
+
+  const brickBottom = TOP_PAD + rows * (BRICK_H + BRICK_GAP);
+  const H = Math.max(560, brickBottom + 180);
+  canvas.width  = W;
+  canvas.height = H;
+
+  particles  = [];
+  winner     = null;
+  gameRunning = true;
+
+  const SPEED = 13;
+  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.85;
+  ball = {
+    x: W / 2 + (Math.random() - 0.5) * 60,
+    y: H - 110,
+    vx: Math.cos(angle) * SPEED,
+    vy: Math.sin(angle) * SPEED,
+    trail: [],
+  };
+
+  paddle = { x: W / 2 - 55, y: H - 28, w: 110, h: PADDLE_H };
+  paddleOffset = 0; paddleOffsetGoal = 0; paddleOffsetTick = 0;
+}
+
+// ── Audio ─────────────────────────────────────────────────────────────────────
+let audioCtx;
+function getAC() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function beep(freq, dur, type = 'square', vol = 0.1) {
+  try {
+    const a = getAC();
+    const osc = a.createOscillator(), g = a.createGain();
+    osc.connect(g); g.connect(a.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, a.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, a.currentTime + dur);
+    g.gain.setValueAtTime(vol, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    osc.start(a.currentTime); osc.stop(a.currentTime + dur);
+  } catch (_) {}
+}
+
+function sfxBreak()  { beep(550 + Math.random() * 220, 0.1); }
+function sfxNamed()  { beep(880, 0.18, 'square', 0.14); }
+function sfxPaddle() { beep(200, 0.07, 'sine', 0.08); }
+function sfxWin()    {
+  [523, 659, 784, 1047].forEach((f, i) =>
+    setTimeout(() => beep(f, 0.28, 'triangle', 0.15), i * 100));
+}
+
+// ── Particles ─────────────────────────────────────────────────────────────────
+function spawnParticles(x, y, color, count = 10) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.6;
+    const spd   = 1.5 + Math.random() * 4.5;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - 0.5,
+      life: 1,
+      color,
+      r: 2 + Math.random() * 3,
+    });
+  }
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+function update() {
+  if (!gameRunning) return;
+
+  const W = canvas.width, H = canvas.height;
+  const namedAlive = bricks.filter(b => b.alive && b.isNamed);
+
+  if (namedAlive.length === 1 && !winner) {
+    winner      = namedAlive[0];
+    gameRunning = false;
+
+    // Clear remaining filler bricks
+    setTimeout(() => {
+      bricks.forEach(b => {
+        if (b.alive && !b.isNamed) {
+          b.alive = false;
+          spawnParticles(b.x + b.w / 2, b.y + b.h / 2, b.color, 5);
+        }
+      });
+      spawnParticles(winner.x + winner.w / 2, winner.y + winner.h / 2, '#ffee00', 30);
+    }, 150);
+
+    setTimeout(() => {
+      winnerNameText.textContent = winner.name;
+      winnerBanner.style.display = 'block';
+      gameBtns.style.display     = 'flex';
+      sfxWin();
+    }, 750);
+
+    return;
+  }
+
+  // Trail
+  ball.trail.push({ x: ball.x, y: ball.y });
+  if (ball.trail.length > 10) ball.trail.shift();
+
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  // Wall bounces
+  if (ball.x - BALL_R < 0)  { ball.x = BALL_R;     ball.vx =  Math.abs(ball.vx); }
+  if (ball.x + BALL_R > W)  { ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx); }
+  if (ball.y - BALL_R < 0)  { ball.y = BALL_R;     ball.vy =  Math.abs(ball.vy); }
+
+  // Fell out — respawn keeping speed
+  if (ball.y > H + 30) {
+    const spd   = Math.hypot(ball.vx, ball.vy);
+    const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.8;
+    ball.x  = W / 2 + (Math.random() - 0.5) * 80;
+    ball.y  = H - 110;
+    ball.vx = Math.cos(angle) * spd;
+    ball.vy = Math.sin(angle) * spd;
+  }
+
+  // Auto-paddle: drift aim point slowly so the ball hits different spots
+  if (--paddleOffsetTick <= 0) {
+    paddleOffsetGoal = (Math.random() - 0.5) * paddle.w * 0.7;
+    paddleOffsetTick = 50 + Math.floor(Math.random() * 60);
+  }
+  paddleOffset += (paddleOffsetGoal - paddleOffset) * 0.035;
+  const target = ball.x - paddle.w / 2 + paddleOffset;
+  paddle.x += (target - paddle.x) * 0.16;
+  paddle.x  = Math.max(0, Math.min(W - paddle.w, paddle.x));
+
+  // Paddle collision
+  if (
+    ball.vy > 0 &&
+    ball.y + BALL_R >= paddle.y &&
+    ball.y + BALL_R <= paddle.y + PADDLE_H + 2 &&
+    ball.x > paddle.x - 2 &&
+    ball.x < paddle.x + paddle.w + 2
+  ) {
+    ball.y  = paddle.y - BALL_R;
+    ball.vy = -Math.abs(ball.vy);
+    const rel = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
+    ball.vx   = rel * 6.5 + (Math.random() - 0.5) * 0.4;
+    // Clamp speed
+    const spd = Math.hypot(ball.vx, ball.vy);
+    const MIN = 12, MAX = 17;
+    if (spd < MIN) { ball.vx *= MIN / spd; ball.vy *= MIN / spd; }
+    if (spd > MAX) { ball.vx *= MAX / spd; ball.vy *= MAX / spd; }
+    sfxPaddle();
+  }
+
+  // Brick collision
+  for (const brick of bricks) {
+    if (!brick.alive) continue;
+
+    const nearX = Math.max(brick.x, Math.min(ball.x, brick.x + brick.w));
+    const nearY = Math.max(brick.y, Math.min(ball.y, brick.y + brick.h));
+    const dx = ball.x - nearX, dy = ball.y - nearY;
+    if (dx * dx + dy * dy >= BALL_R * BALL_R) continue;
+
+    const inX = ball.x >= brick.x && ball.x <= brick.x + brick.w;
+    const inY = ball.y >= brick.y && ball.y <= brick.y + brick.h;
+    if      (inX && !inY) ball.vy = -ball.vy;
+    else if (inY && !inX) ball.vx = -ball.vx;
+    else                  { ball.vx = -ball.vx; ball.vy = -ball.vy; }
+
+    // Never destroy the last named brick
+    const safeToDestroy = !brick.isNamed || namedAlive.length > 1;
+    if (safeToDestroy) {
+      brick.alive = false;
+      spawnParticles(brick.x + brick.w / 2, brick.y + brick.h / 2, brick.color,
+        brick.isNamed ? 20 : 8);
+      if (brick.isNamed) sfxNamed(); else sfxBreak();
+    }
+    break;
+  }
+
+  // Particles
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.025; });
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  const t = Date.now() / 1000;
+
+  ctx.fillStyle = '#06061a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Scanlines
+  ctx.fillStyle = 'rgba(0,0,0,0.13)';
+  for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+
+  // Bricks
+  for (const brick of bricks) {
+    if (!brick.alive) continue;
+    const isWinner = brick === winner;
+    const pulse    = isWinner ? 0.5 + 0.5 * Math.abs(Math.sin(t * Math.PI * 2.4)) : 1;
+
+    ctx.save();
+    ctx.globalAlpha = brick.isNamed ? pulse : 0.52;
+
+    if (isWinner) {
+      ctx.shadowColor = '#ffee00';
+      ctx.shadowBlur  = 14 + 10 * Math.abs(Math.sin(t * Math.PI * 2.4));
+    } else if (brick.isNamed) {
+      ctx.shadowColor = brick.color;
+      ctx.shadowBlur  = 5;
+    }
+
+    // Body
+    ctx.beginPath();
+    ctx.roundRect(brick.x, brick.y, brick.w, brick.h, 3);
+    ctx.fillStyle = brick.color;
+    ctx.fill();
+
+    // Top highlight (all bricks)
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha *= 0.22;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.roundRect(brick.x + 1, brick.y + 1, brick.w - 2, brick.h * 0.42, [3, 3, 0, 0]);
+    ctx.fill();
+
+    if (brick.isNamed) {
+      // White outline to make named bricks pop
+      ctx.globalAlpha = pulse * (isWinner ? 1 : 0.85);
+      ctx.strokeStyle = isWinner ? '#ffee00' : 'rgba(255,255,255,0.9)';
+      ctx.lineWidth   = isWinner ? 2 : 1.5;
+      ctx.beginPath();
+      ctx.roundRect(brick.x, brick.y, brick.w, brick.h, 3);
+      ctx.stroke();
+
+      // Name text
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle   = '#fff';
+      ctx.textAlign   = 'center';
+      ctx.textBaseline = 'middle';
+      const fs = Math.min(11, (brick.w - 6) / Math.max(1, brick.name.length) * 1.55);
+      ctx.font = `bold ${Math.max(7, fs)}px 'Courier New', monospace`;
+      ctx.fillText(brick.name, brick.x + brick.w / 2, brick.y + brick.h / 2, brick.w - 6);
+    }
+
+    ctx.restore();
+  }
+
+  // Ball trail
+  ball.trail.forEach((p, i) => {
+    const a = (i / ball.trail.length) * 0.28;
+    const r = BALL_R * (i / ball.trail.length) * 0.75;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(80,190,255,${a})`;
+    ctx.fill();
+  });
+
+  // Ball
+  const bg = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, BALL_R);
+  bg.addColorStop(0, '#ffffff');
+  bg.addColorStop(1, '#88ccff');
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+  ctx.shadowColor = '#55aaff';
+  ctx.shadowBlur  = 14;
+  ctx.fillStyle   = bg;
+  ctx.fill();
+  ctx.shadowBlur  = 0;
+
+  // Paddle
+  const pg = ctx.createLinearGradient(0, paddle.y, 0, paddle.y + PADDLE_H);
+  pg.addColorStop(0, '#88eeff');
+  pg.addColorStop(1, '#0077bb');
+  ctx.beginPath();
+  ctx.roundRect(paddle.x, paddle.y, paddle.w, PADDLE_H, 3);
+  ctx.shadowColor = '#00aaff';
+  ctx.shadowBlur  = 8;
+  ctx.fillStyle   = pg;
+  ctx.fill();
+  ctx.shadowBlur  = 0;
+
+  // Particles
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.9;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fillStyle  = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur  = 5;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // HUD
+  const namedLeft = bricks.filter(b => b.alive && b.isNamed).length;
+  hudRemaining.textContent = `REMAINING: ${namedLeft}`;
+}
+
+// ── Loop ──────────────────────────────────────────────────────────────────────
+function loop() { update(); draw(); rafId = requestAnimationFrame(loop); }
+
+function startGame() {
+  if (rafId) cancelAnimationFrame(rafId);
+  winnerBanner.style.display = 'none';
+  gameBtns.style.display     = 'none';
+  initGame();
+  loop();
+}
+
+// ── Screen nav ────────────────────────────────────────────────────────────────
+startBtn.addEventListener('click', () => {
+  setupScreen.style.display = 'none';
+  gameScreen.style.display  = 'flex';
+  startGame();
+});
+
+playAgainBtn.addEventListener('click', startGame);
+
+editNamesBtn.addEventListener('click', () => {
+  if (rafId) cancelAnimationFrame(rafId);
+  gameScreen.style.display  = 'none';
+  setupScreen.style.display = 'block';
+});
+</script>
+</body>
+</html>
