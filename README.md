@@ -41,6 +41,7 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `crossy-picker-3d.html` | [Try it](https://ahmedh00.github.io/name-pickers/crossy-picker-3d.html) | Inspired by Crossy Road - last survivor wins |
 | `mosquito.html` | [Try it](https://ahmedh00.github.io/name-pickers/mosquito.html) | Avoid getting swatted to win |
 | `breakout.html` | [Try it](https://ahmedh00.github.io/name-pickers/breakout.html) | Inspired by Breakout - last remaining name wins |
+| `claw-machine.html` | [Try it](https://ahmedh00.github.io/name-pickers/claw-machine.html) | Inspired by arcade claw machines - the prize that makes it down the chute wins |
 
 
 ## Contributing
