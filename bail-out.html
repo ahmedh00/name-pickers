@@ -1,0 +1,2574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bail Out! Name Picker</title>
+    <style>
+        :root {
+            --bg: #141418;
+            --panel: #26262e;
+            --edge: #80f800;
+            --hot: #f80878;
+            --cyan: #00e8f8;
+            --yellow: #f8e800;
+            --text: #f0f0f4;
+            --muted: #a8a8b8;
+            --error: #ff7088;
+            --px: 2px;   /* size of one canvas pixel on screen, set from JS */
+        }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Lucida Console', Monaco, Consolas, 'Courier New', monospace;
+            background-color: var(--bg);
+            /* Concrete with expansion joints. */
+            background-image:
+                linear-gradient(90deg, rgba(0, 0, 0, 0.35) 2px, transparent 2px),
+                linear-gradient(rgba(0, 0, 0, 0.35) 2px, transparent 2px),
+                repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 5px);
+            background-size: 160px 160px, 160px 160px, auto;
+            color: var(--text);
+            margin: 0;
+            padding: 14px 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-size: 40px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin: 0;
+            transform: rotate(-2deg) skewX(-8deg);
+            background: linear-gradient(#f8f8a0 0 25%, #f8e800 25% 45%, #80f800 45% 62%, #f80878 62%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            filter: drop-shadow(2px 2px 0 #000) drop-shadow(2px 2px 0 #000) drop-shadow(3px 3px 0 #f80878);
+        }
+        .subtitle {
+            color: var(--cyan);
+            font-size: 12px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin: 2px 0 14px;
+            text-shadow: 2px 2px 0 #000;
+        }
+        .container {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            gap: 24px;
+            max-width: 1400px;
+            width: 100%;
+        }
+        .panel {
+            background: var(--panel);
+            border: 3px solid var(--edge);
+            box-shadow: 0 0 0 3px #000, 7px 7px 0 3px var(--hot);
+        }
+        .sidebar {
+            flex: 0 0 270px;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+        .game-area {
+            flex: 1 1 auto;
+            display: flex;
+            justify-content: center;
+            min-width: 0;
+        }
+        .board-wrap {
+            position: relative;
+            width: min(100%, calc((100vh - 110px) * 16 / 9));
+            min-width: 280px;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            box-shadow: 0 0 0 3px #000, 0 0 0 7px #58586a, 0 0 0 10px #000, 9px 9px 0 10px rgba(0, 0, 0, 0.55);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        /* CRT scanlines, one per canvas pixel row. */
+        .board-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--px) * 0.6), rgba(0, 0, 0, 0.3) calc(var(--px) * 0.6), rgba(0, 0, 0, 0.3) var(--px));
+        }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #000;
+            color: var(--edge);
+            border: 3px solid #000;
+            box-shadow: 0 0 0 2px #58586a;
+            font-family: inherit;
+            font-size: 15px;
+        }
+        input[type="text"]::placeholder { color: #5a5a6a; }
+        button {
+            width: 100%;
+            padding: 9px 8px;
+            background: var(--yellow);
+            color: #000;
+            border: 3px solid #000;
+            box-shadow: 4px 4px 0 #000;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-bottom: 12px;
+        }
+        button:hover:not(:disabled) { background: #ffff60; }
+        button:active:not(:disabled) { transform: translate(3px, 3px); box-shadow: 1px 1px 0 #000; }
+        button:disabled, input:disabled { opacity: 0.45; cursor: not-allowed; }
+        button:focus-visible, input:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+        #startBtn { background: var(--hot); color: #fff; font-size: 17px; text-shadow: 2px 2px 0 #000; }
+        #startBtn:hover:not(:disabled) { background: #ff40a0; }
+        #skipBtn { background: var(--cyan); }
+        #muteBtn { background: #a8a8b8; font-size: 12px; }
+        #nameError { min-height: 1.2em; margin: -4px 0 8px; color: var(--error); font-size: 13px; }
+        ul { list-style: none; padding: 0; margin: 0 0 4px; max-height: 230px; overflow-y: auto; }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 6px 4px 4px;
+            margin-bottom: 4px;
+            background: rgba(0, 0, 0, 0.35);
+        }
+        li::before {
+            content: '';
+            flex: 0 0 10px;
+            height: 10px;
+            background: var(--swatch, #888);
+            box-shadow: 0 0 0 2px #000;
+            margin: 0 4px 0 2px;
+        }
+        li .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        li.out { opacity: 0.4; }
+        li.winner { color: var(--yellow); background: rgba(248, 232, 0, 0.15); }
+        li.winner .name::before { content: '★ '; }
+        .count { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+        .remove-btn {
+            width: auto;
+            margin: 0;
+            padding: 1px 7px;
+            background: #e01818;
+            color: #fff;
+            font-size: 12px;
+            border-width: 2px;
+            box-shadow: 2px 2px 0 #000;
+            flex-shrink: 0;
+        }
+        .remove-btn:hover:not(:disabled) { background: #ff4040; }
+        hr { border: none; border-top: 3px dashed #58586a; margin: 14px 0; }
+        .modes { display: flex; gap: 8px; }
+        .modes button { font-size: 12px; padding: 7px 4px; background: #a8a8b8; margin-bottom: 8px; }
+        .modes button[aria-pressed="true"] { background: var(--edge); }
+        .mode-help { font-size: 12px; color: var(--muted); margin: 0 0 12px; line-height: 1.4; }
+        .keys { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.9; }
+        kbd { background: #d0d0d8; color: #000; padding: 0 4px; font-family: inherit; box-shadow: 2px 2px 0 #000; }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        /* The podium is drawn on the canvas; these buttons sit underneath it. */
+        #winnerOverlay {
+            position: absolute;
+            left: 22%;
+            right: 22%;
+            bottom: 4%;
+            z-index: 1;
+            display: flex;
+            gap: 14px;
+        }
+        #winnerOverlay button { margin: 0; font-size: clamp(11px, 1.7vh, 16px); }
+        #debugPanel { max-width: 1100px; width: 100%; margin-top: 28px; padding: 18px 22px; box-sizing: border-box; }
+        #debugPanel h2 { margin-top: 0; color: var(--yellow); }
+        #debugPanel p { color: var(--muted); font-size: 14px; }
+        #debugPanel a { color: var(--cyan); }
+        #debugRun { width: auto; padding: 9px 18px; }
+        #debugResults table { border-collapse: collapse; margin: 10px 0 16px; font-size: 14px; }
+        #debugResults td, #debugResults th { padding: 3px 10px; text-align: right; border-bottom: 2px solid rgba(0, 0, 0, 0.45); }
+        #debugResults td:first-child, #debugResults th:first-child { text-align: left; }
+        .bar { display: inline-block; height: 10px; background: var(--edge); box-shadow: 2px 2px 0 #000; vertical-align: middle; }
+        .summary { font-size: 20px; font-weight: bold; margin: 12px 0 4px; }
+        .summary.pass { color: var(--edge); }
+        .summary.fail { color: var(--error); }
+        @media (max-width: 900px) {
+            body { padding: 12px; }
+            h1 { font-size: 32px; }
+            .container { flex-direction: column-reverse; align-items: stretch; gap: 30px; }
+            .sidebar { flex-basis: auto; }
+            .board-wrap { width: min(calc(100% - 20px), calc((100vh - 90px) * 16 / 9)); margin: 10px auto 0; }
+            #winnerOverlay { position: static; margin-top: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Bail Out!</h1>
+    <div class="subtitle">Skate contest name picker</div>
+
+    <div class="container" id="gameView">
+        <div class="sidebar panel">
+            <input type="text" id="nameInput" placeholder="Enter a skater (or a comma list)..." autocomplete="off" maxlength="400">
+            <div id="nameError" role="alert" aria-live="polite"></div>
+            <button id="addBtn">Add Skater</button>
+            <div class="count" id="nameCount"></div>
+            <ul id="nameList"></ul>
+            <hr>
+            <div class="modes" role="group" aria-label="Contest format">
+                <button id="modeFull" aria-pressed="true">Full contest</button>
+                <button id="modeQuick" aria-pressed="false">Quick</button>
+            </div>
+            <p class="mode-help" id="modeHelp"></p>
+            <button id="startBtn" disabled>Start Contest</button>
+            <button id="skipBtn" hidden>Skip to final</button>
+            <button id="muteBtn" aria-pressed="false">Sound: on</button>
+            <p class="keys"><kbd>Space</kbd>/<kbd>Enter</kbd> start / continue · <kbd>S</kbd> skip to final · <kbd>M</kbd> mute · <kbd>Esc</kbd> names</p>
+        </div>
+
+        <div class="game-area">
+            <div class="board-wrap">
+                <canvas id="gameCanvas" aria-label="Bail Out! skate contest"></canvas>
+                <div id="winnerOverlay" hidden>
+                    <p class="visually-hidden" aria-live="polite">Winner: <span id="winnerName"></span></p>
+                    <button id="againBtn">Run it back</button>
+                    <button id="editBtn">Edit names</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="debugPanel" class="panel" hidden>
+        <h2>Fairness check (debug)</h2>
+        <p id="debugIntro"></p>
+        <button id="debugRun">Simulate 10,000 contests</button>
+        <div id="debugResults" aria-live="polite"></div>
+        <p><a id="backLink" href="?">Back to the contest</a></p>
+    </div>
+
+<script id="bail-core">
+    // =====================================================================
+    // Bail Out! core: config, RNG, course generation, skater state machine
+    // and contest logic. No DOM access, so it runs headless (debug, Node).
+    // =====================================================================
+    const BailCore = (() => {
+        // --- Config ---
+        const CFG = {
+            HZ: 120,
+            DT: 1 / 120,
+            MAX_NAMES: 30,
+            MAX_NAME_LENGTH: 16,
+            HEAT_SIZE: 6,
+            QUICK_CAP: 8,
+            COURSE_LENGTH: 1300,
+            CRUISE: 118,                 // px per second
+            ACCEL: 70,
+            MAX_SPEED: 165,
+            PUSH_EVERY: 0.4,             // each skater re-rolls their push strength this often
+            PUSH_SPREAD: 0.1,
+            // One outcome table, used for every obstacle and every skater (percent).
+            OUTCOMES: { clean: 72, wobble: 18, bail: 10 },
+            CLEAN_BOOST: 22,
+            WOBBLE_FACTOR: 0.65,
+            WOBBLE_TIME: 0.6,
+            BAIL_TIME: 1.5,
+            AIR_TIME: 0.5,
+            BIG_AIR_TIME: 0.75,
+            MANUAL_TIME: 0.5,
+            RAIL_LENGTH: 60,
+            TROLLEY_SPEED: 30,
+            HEAT_GRACE: 1.5,             // seconds after the last qualifier finishes before the heat is called
+            HEAT_TIME_CAP: 30,
+            // Vert final.
+            VERT_AIRS: 4,
+            QUICK_AIRS: 3,
+            DROP_IN: 0.8,
+            AIR_CYCLE: 1.3,              // ride across the pipe + one air
+            VERT_AIR_TIME: 0.55,
+            END_ROLL: 0.5,
+            BAIL_BASE: 0.04,
+            BAIL_PER_DIFF: 0.025,
+            // Fixed pauses the live contest also uses, so simulated durations match.
+            TIMING: { heatIntro: 1.6, heatOutro: 1.8, finalIntro: 2.0, runIntro: 0.9, cards: 1.9, coinFlip: 3.2 },
+        };
+
+        // Obstacles on the downhill course. `tricks` are what a clean pass is called.
+        const OBSTACLES = {
+            kerb: { action: 'air', weight: 3, tricks: ['OLLIE', 'KICKFLIP', 'POP SHOVE-IT'] },
+            ramp: { action: 'air', big: true, weight: 2, tricks: ['FRONTSIDE 180', 'KICKFLIP', 'HEELFLIP', 'BIG OLLIE'] },
+            rail: { action: 'grind', weight: 2, tricks: ['50-50 GRIND', 'BOARDSLIDE', '5-0 GRIND', 'NOSEGRIND'] },
+            cone: { action: 'air', weight: 2, tricks: ['OLLIE', 'NOLLIE'] },
+            pothole: { action: 'air', weight: 1, tricks: ['OLLIE'] },
+            puddle: { action: 'manual', weight: 1, tricks: ['MANUAL'] },
+            trolley: { action: 'air', big: true, weight: 0, tricks: ['HIPPIE JUMP', 'BIG OLLIE'] },
+        };
+
+        // Vert tricks: difficulty points and how often they're attempted. Bail chance grows with difficulty.
+        const TRICKS = [
+            { name: 'FRONTSIDE AIR', diff: 2, weight: 18, spin: 180 },
+            { name: 'BACKSIDE AIR', diff: 2, weight: 18, spin: 180 },
+            { name: 'INDY GRAB', diff: 3, weight: 14, spin: 180 },
+            { name: 'MELON GRAB', diff: 3, weight: 12, spin: 180 },
+            { name: 'ROCKET AIR', diff: 4, weight: 9, spin: 180 },
+            { name: 'ALLEY-OOP', diff: 4, weight: 8, spin: 180 },
+            { name: 'KICKFLIP INDY', diff: 5, weight: 6, spin: 180 },
+            { name: 'HEELFLIP INDY', diff: 5, weight: 5, spin: 180 },
+            { name: 'INVERT', diff: 5, weight: 6, spin: 180, invert: true },
+            { name: '540', diff: 7, weight: 4, spin: 540 },
+            { name: 'McTWIST', diff: 8, weight: 3, spin: 540, invert: true },
+            { name: '720', diff: 9, weight: 1.5, spin: 720 },
+            { name: '900', diff: 10, weight: 0.5, spin: 900 },
+        ];
+
+        // --- RNG ---
+        // One sfc32 generator, seeded from crypto.getRandomValues (or from ?seed= in debug).
+        function sfc32(a, b, c, d) {
+            return () => {
+                a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+                let t = (a + b) | 0;
+                a = b ^ (b >>> 9);
+                b = (c + (c << 3)) | 0;
+                c = (c << 21) | (c >>> 11);
+                d = (d + 1) | 0;
+                t = (t + d) | 0;
+                c = (c + t) | 0;
+                return t >>> 0;
+            };
+        }
+
+        function makeRng(seed) {
+            let words;
+            if (seed === undefined || seed === null) {
+                words = crypto.getRandomValues(new Uint32Array(4));
+            } else {
+                // splitmix32 spreads a small numeric seed over the 128-bit state.
+                let s = seed >>> 0;
+                words = [0, 0, 0, 0].map(() => {
+                    s = (s + 0x9E3779B9) >>> 0;
+                    let z = s;
+                    z = Math.imul(z ^ (z >>> 16), 0x85EBCA6B);
+                    z = Math.imul(z ^ (z >>> 13), 0xC2B2AE35);
+                    return (z ^ (z >>> 16)) >>> 0;
+                });
+            }
+            const next = sfc32(words[0], words[1], words[2], words[3]);
+            for (let i = 0; i < 12; i++) next();
+            return {
+                // Uniform integer in [0, n); rejects the top of the range to avoid modulo bias.
+                int(n) {
+                    if (!Number.isInteger(n) || n < 1) throw new RangeError(`int needs a positive integer, got ${n}`);
+                    const limit = 2 ** 32 - (2 ** 32 % n);
+                    let x;
+                    do { x = next(); } while (x >= limit);
+                    return x % n;
+                },
+                float() { return next() / 2 ** 32; },
+                weighted(items) {
+                    const total = items.reduce((s, it) => s + it.weight, 0);
+                    let r = this.float() * total;
+                    for (const it of items) if ((r -= it.weight) < 0) return it;
+                    return items[items.length - 1];
+                },
+            };
+        }
+
+        // Fisher-Yates on a copy.
+        function shuffle(items, rng) {
+            const out = [...items];
+            for (let i = out.length - 1; i > 0; i--) {
+                const j = rng.int(i + 1);
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+
+        // --- Names ---
+        function normalizeName(raw) {
+            return String(raw).normalize('NFC').replace(/[​-‍⁠﻿]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function validateName(raw, existing) {
+            const name = normalizeName(raw);
+            if (!name) return { error: 'Type a name first.' };
+            if (name.length > CFG.MAX_NAME_LENGTH) return { error: `Names can be up to ${CFG.MAX_NAME_LENGTH} characters.` };
+            const lower = name.toLowerCase();
+            if (existing.some(e => normalizeName(e).toLowerCase() === lower)) return { error: `${name} is already entered.` };
+            if (existing.length >= CFG.MAX_NAMES) return { error: `The contest takes ${CFG.MAX_NAMES} skaters at most.` };
+            return { name };
+        }
+
+        function parseSavedNames(json) {
+            let data;
+            try { data = JSON.parse(json); } catch { return []; }
+            if (!Array.isArray(data)) return [];
+            const names = [];
+            for (const item of data) {
+                if (typeof item !== 'string') continue;
+                const result = validateName(item, names);
+                if (result.name) names.push(result.name);
+            }
+            return names;
+        }
+
+        // --- Contest draw ---
+        // Shuffled names are dealt round-robin into heats of at most 6, so heat sizes differ by at most one.
+        // Because the deal is a uniform shuffle, every name has the same chance of each heat and lane.
+        function planHeats(names, rng) {
+            const order = shuffle(names, rng);
+            const count = Math.ceil(order.length / CFG.HEAT_SIZE);
+            const heats = Array.from({ length: count }, () => []);
+            order.forEach((name, i) => heats[i % count].push(name));
+            return heats;
+        }
+
+        const qualifyCount = heatCount => (heatCount <= 2 ? 3 : 2);
+
+        // --- Course generation ---
+        function generateCourse(rng) {
+            const kinds = Object.entries(OBSTACLES).filter(([, o]) => o.weight > 0).map(([kind, o]) => ({ kind, weight: o.weight }));
+            const obstacles = [];
+            let x = 170;
+            while (x < CFG.COURSE_LENGTH - 140) {
+                const { kind } = rng.weighted(kinds);
+                obstacles.push({ kind, x });
+                x += 150 + rng.int(80) + (kind === 'rail' ? CFG.RAIL_LENGTH : 0);
+            }
+            // A shopping trolley rolls back down the hill towards the skaters.
+            return { length: CFG.COURSE_LENGTH, obstacles, trolley: { x0: 950 + rng.int(300) } };
+        }
+
+        const trolleyX = (course, t) => course.trolley.x0 - CFG.TROLLEY_SPEED * t;
+
+        // --- Downhill heat: skater state machine ---
+        // States: rolling, air, grind, manual, wobble, bailing. Identical stats for everyone.
+        function createHeat(names, course, { events = false } = {}) {
+            return {
+                names, course, t: 0, done: false,
+                skaters: names.map((name, lane) => ({
+                    name, lane, x: 0, prevX: 0, v: 0, state: 'rolling', timer: 0, trick: null, big: false,
+                    next: 0, trolleyDone: false, target: CFG.CRUISE, pushT: 0, finish: null,
+                })),
+                finishers: [], callAt: null, order: null,
+                events: events ? [] : null,
+                stats: {},
+            };
+        }
+
+        function emit(heat, ev) { if (heat.events) heat.events.push(ev); }
+
+        function encounter(heat, s, kind, rng) {
+            // Already in the air or tumbling: sails over / slides past it.
+            if (s.state === 'air' || s.state === 'bailing') return;
+            const ob = OBSTACLES[kind];
+            const st = heat.stats[kind] || (heat.stats[kind] = { encounters: 0, bails: 0 });
+            st.encounters++;
+            const roll = rng.int(100);
+            if (roll < CFG.OUTCOMES.clean) {
+                s.trick = ob.tricks[rng.int(ob.tricks.length)];
+                s.big = !!ob.big;
+                if (ob.action === 'air') {
+                    s.state = 'air';
+                    s.timer = ob.big ? CFG.BIG_AIR_TIME : CFG.AIR_TIME;
+                } else if (ob.action === 'grind') {
+                    s.state = 'grind';
+                    s.timer = CFG.RAIL_LENGTH / Math.max(40, s.v);
+                } else {
+                    s.state = 'manual';
+                    s.timer = CFG.MANUAL_TIME;
+                }
+                s.airTime = s.timer;
+                emit(heat, { type: 'trick', skater: s, kind, action: ob.action });
+            } else if (roll < CFG.OUTCOMES.clean + CFG.OUTCOMES.wobble) {
+                s.state = 'wobble';
+                s.timer = CFG.WOBBLE_TIME;
+                s.v *= CFG.WOBBLE_FACTOR;
+                emit(heat, { type: 'wobble', skater: s, kind });
+            } else {
+                st.bails++;
+                s.state = 'bailing';
+                s.timer = CFG.BAIL_TIME;
+                emit(heat, { type: 'bail', skater: s, kind });
+            }
+        }
+
+        function stepHeat(heat, rng) {
+            const dt = CFG.DT, L = heat.course.length;
+            heat.t += dt;
+            for (const s of heat.skaters) {
+                s.prevX = s.x;
+                if (s.finish !== null) {
+                    // Coasting after the line (no randomness, cannot change the result).
+                    s.v *= 0.992;
+                    s.x += s.v * dt;
+                    continue;
+                }
+                if ((s.pushT -= dt) <= 0) {
+                    s.pushT = CFG.PUSH_EVERY;
+                    s.target = CFG.CRUISE * (1 - CFG.PUSH_SPREAD + rng.float() * 2 * CFG.PUSH_SPREAD);
+                }
+                if (s.state === 'bailing') {
+                    s.v = Math.max(0, s.v - 160 * dt);
+                    if ((s.timer -= dt) <= 0) { s.state = 'rolling'; s.v = 20; emit(heat, { type: 'recover', skater: s }); }
+                } else {
+                    if (s.state !== 'rolling' && (s.timer -= dt) <= 0) {
+                        if (s.state === 'air' || s.state === 'grind' || s.state === 'manual') {
+                            s.v = Math.min(CFG.MAX_SPEED, s.v + CFG.CLEAN_BOOST);
+                            emit(heat, { type: 'land', skater: s });
+                        }
+                        s.state = 'rolling';
+                        s.trick = null;
+                    }
+                    if (s.state !== 'air' && s.state !== 'grind') {
+                        const dv = s.target - s.v;
+                        s.v += Math.max(-CFG.ACCEL * dt * 0.5, Math.min(CFG.ACCEL * dt, dv));
+                    }
+                }
+                s.x += s.v * dt;
+                const obs = heat.course.obstacles;
+                while (s.next < obs.length && s.x >= obs[s.next].x) encounter(heat, s, obs[s.next++].kind, rng);
+                if (!s.trolleyDone && s.x >= trolleyX(heat.course, heat.t)) {
+                    s.trolleyDone = true;
+                    encounter(heat, s, 'trolley', rng);
+                }
+                if (s.x >= L) {
+                    s.finish = heat.t - (s.x - L) / Math.max(1, s.v);
+                    heat.finishers.push(s);
+                    emit(heat, { type: 'finish', skater: s, place: heat.finishers.length });
+                }
+            }
+            const q = Math.min(heat.qualify || 3, heat.skaters.length);
+            if (heat.callAt === null && heat.finishers.length >= q) heat.callAt = heat.t + CFG.HEAT_GRACE;
+            if (heat.finishers.length === heat.skaters.length || (heat.callAt !== null && heat.t >= heat.callAt) || heat.t >= CFG.HEAT_TIME_CAP) {
+                heat.done = true;
+                heat.order = standings(heat).map(s => s.name);
+            }
+        }
+
+        // Finished skaters by time, then everyone else by distance.
+        function standings(heat) {
+            const fin = [...heat.finishers].sort((a, b) => a.finish - b.finish);
+            const rest = heat.skaters.filter(s => s.finish === null).sort((a, b) => b.x - a.x);
+            return [...fin, ...rest];
+        }
+
+        // --- Vert final ---
+        function rollRun(name, airs, rng) {
+            const list = [];
+            let points = 0;
+            for (let i = 0; i < airs; i++) {
+                const trick = rng.weighted(TRICKS);
+                const landed = rng.float() >= CFG.BAIL_BASE + CFG.BAIL_PER_DIFF * trick.diff;
+                const exec = 0.8 + rng.float() * 0.4;
+                const pts = landed ? trick.diff * exec : 0;
+                points += pts;
+                list.push({ trick, landed, pts });
+            }
+            // Judges score the run out of 10 (kept in whole tenths so totals compare exactly),
+            // each with a little opinion of their own.
+            const base = Math.max(0, Math.min(100, Math.round(15 + points * 4.2 * 5 / airs)));
+            const cards = [0, 1, 2].map(() => Math.max(0, Math.min(100, base + rng.int(11) - 5)));
+            return { name, airs: list, points, cards, total: cards.reduce((a, b) => a + b, 0) };
+        }
+
+        const runDuration = airs => CFG.DROP_IN + airs * CFG.AIR_CYCLE + CFG.END_ROLL;
+
+        // --- Contest flow (shared by the live game and the headless simulation) ---
+        function createContest(names, mode) {
+            const c = {
+                names: [...names], mode, quick: mode === 'quick' && names.length <= CFG.QUICK_CAP,
+                heatPlan: [], heatIndex: -1, heat: null, qualify: 0, qualifiers: [],
+                finalists: null, order: null, runs: [], airs: CFG.VERT_AIRS,
+                winner: null, podium: null, coinFlip: null, duration: 0,
+                stats: { heat: {}, vert: { airs: 0, bails: 0 } },
+            };
+            return c;
+        }
+
+        function planContest(c, rng) {
+            if (c.quick) {
+                c.finalists = [...c.names];
+                c.airs = CFG.QUICK_AIRS;
+                return;
+            }
+            c.heatPlan = planHeats(c.names, rng);
+            c.qualify = qualifyCount(c.heatPlan.length);
+            // If every skater would qualify anyway, go straight to the final.
+            if (c.qualify >= c.names.length) {
+                c.heatPlan = [];
+                c.finalists = [...c.names];
+            }
+        }
+
+        const heatsLeft = c => c.heatIndex + 1 < c.heatPlan.length;
+
+        function startHeat(c, rng, opts) {
+            c.heatIndex++;
+            c.heat = createHeat(c.heatPlan[c.heatIndex], generateCourse(rng), opts);
+            c.heat.qualify = c.qualify;
+            return c.heat;
+        }
+
+        function finishHeat(c) {
+            const h = c.heat;
+            const q = Math.min(c.qualify, h.skaters.length);
+            c.qualifiers.push(...h.order.slice(0, q));
+            c.duration += CFG.TIMING.heatIntro + h.t + CFG.TIMING.heatOutro;
+            for (const [kind, st] of Object.entries(h.stats)) {
+                const agg = c.stats.heat[kind] || (c.stats.heat[kind] = { encounters: 0, bails: 0 });
+                agg.encounters += st.encounters;
+                agg.bails += st.bails;
+            }
+            return h.order.slice(0, q);
+        }
+
+        function runHeatToEnd(c, rng) {
+            while (!c.heat.done) stepHeat(c.heat, rng);
+            return finishHeat(c);
+        }
+
+        function startFinal(c, rng) {
+            if (!c.finalists) c.finalists = [...c.qualifiers];
+            c.order = shuffle(c.finalists, rng);
+            c.duration += CFG.TIMING.finalIntro;
+        }
+
+        function startRun(c, rng) {
+            const run = rollRun(c.order[c.runs.length], c.airs, rng);
+            c.runs.push(run);
+            c.duration += CFG.TIMING.runIntro + runDuration(c.airs) + CFG.TIMING.cards;
+            c.stats.vert.airs += run.airs.length;
+            c.stats.vert.bails += run.airs.filter(a => !a.landed).length;
+            return run;
+        }
+
+        // Highest total wins; a tie at the top is settled by a coin flip from the same generator.
+        function finishFinal(c, rng) {
+            const best = Math.max(...c.runs.map(r => r.total));
+            const tied = c.runs.filter(r => r.total === best);
+            const winner = tied.length > 1 ? tied[rng.int(tied.length)] : tied[0];
+            if (tied.length > 1) {
+                c.coinFlip = { tied: tied.map(r => r.name), winner: winner.name };
+                c.duration += CFG.TIMING.coinFlip;
+            }
+            c.winner = winner.name;
+            c.podium = [winner, ...c.runs.filter(r => r !== winner).sort((a, b) => b.total - a.total)].slice(0, 3);
+        }
+
+        function runContest(names, mode, rng) {
+            const c = createContest(names, mode);
+            planContest(c, rng);
+            while (heatsLeft(c)) {
+                startHeat(c, rng);
+                runHeatToEnd(c, rng);
+            }
+            startFinal(c, rng);
+            while (c.runs.length < c.order.length) startRun(c, rng);
+            finishFinal(c, rng);
+            return c;
+        }
+
+        // --- Fairness statistics ---
+        // Chi-square critical values at p = 0.001, indexed by degrees of freedom.
+        const CHI_CRITICAL = [NaN, 10.828, 13.816, 16.266, 18.467, 20.515, 22.458, 24.322, 26.124, 27.877,
+            29.588, 31.264, 32.909, 34.528, 36.123, 37.697, 39.252, 40.790, 42.312, 43.820, 45.315,
+            46.797, 48.268, 49.728, 51.179, 52.620, 54.052, 55.476, 56.892, 58.301, 59.703];
+
+        function createSimulation(names, mode, rng, total) {
+            const wins = new Map(names.map(n => [n, 0]));
+            const s = { contests: 0, duration: 0, minDuration: Infinity, maxDuration: 0, coinFlips: 0, heat: {}, vert: { airs: 0, bails: 0 } };
+            return {
+                done: () => s.contests >= total,
+                run(max) {
+                    const stop = Math.min(total, s.contests + max);
+                    while (s.contests < stop) {
+                        const c = runContest(names, mode, rng);
+                        wins.set(c.winner, wins.get(c.winner) + 1);
+                        s.contests++;
+                        s.duration += c.duration;
+                        s.minDuration = Math.min(s.minDuration, c.duration);
+                        s.maxDuration = Math.max(s.maxDuration, c.duration);
+                        if (c.coinFlip) s.coinFlips++;
+                        for (const [kind, st] of Object.entries(c.stats.heat)) {
+                            const agg = s.heat[kind] || (s.heat[kind] = { encounters: 0, bails: 0 });
+                            agg.encounters += st.encounters;
+                            agg.bails += st.bails;
+                        }
+                        s.vert.airs += c.stats.vert.airs;
+                        s.vert.bails += c.stats.vert.bails;
+                    }
+                    return s.contests;
+                },
+                result() {
+                    const w = names.map(n => wins.get(n));
+                    const expected = s.contests / names.length;
+                    const chi = w.reduce((sum, o) => sum + (o - expected) ** 2 / expected, 0);
+                    const df = names.length - 1;
+                    return {
+                        names, wins: w, contests: s.contests, chi, df, limit: CHI_CRITICAL[df], passed: chi < CHI_CRITICAL[df],
+                        avgDuration: s.duration / s.contests, minDuration: s.minDuration, maxDuration: s.maxDuration,
+                        coinFlips: s.coinFlips, heat: s.heat, vert: s.vert,
+                    };
+                },
+            };
+        }
+
+        return {
+            CFG, OBSTACLES, TRICKS, makeRng, shuffle,
+            normalizeName, validateName, parseSavedNames,
+            planHeats, qualifyCount, generateCourse, trolleyX, createHeat, stepHeat, standings,
+            rollRun, runDuration, createContest, planContest, heatsLeft, startHeat, finishHeat, runHeatToEnd,
+            startFinal, startRun, finishFinal, runContest, createSimulation,
+        };
+    })();
+</script>
+
+<script>
+    // =====================================================================
+    // Bail Out! game: pixel rendering, audio, UI and contest flow.
+    // The canvas is 384 x 216 real pixels (x5 = 1080p), scaled up by CSS.
+    // =====================================================================
+
+    // --- Config ---
+    const C = BailCore.CFG;
+    const SW = 384, SH = 216;
+    const STORAGE_KEY = 'bailOutNames';
+    const SETTINGS_KEY = 'bailOutSettings';
+
+    const params = new URLSearchParams(location.search);
+    const DEBUG = params.get('debug') === '1' || params.has('selftest');
+    const SEED = DEBUG && params.has('seed') && Number.isFinite(Number(params.get('seed'))) ? Number(params.get('seed')) : null;
+    // The single contest generator: seeded from crypto, or from ?seed= in debug for replays.
+    const rng = BailCore.makeRng(SEED);
+    const motionQuery = window.matchMedia ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+    const reducedMotion = () => motionQuery.matches;
+
+    // --- UI Elements ---
+    const $ = id => document.getElementById(id);
+    const nameInput = $('nameInput'), nameError = $('nameError'), addBtn = $('addBtn');
+    const nameCount = $('nameCount'), nameList = $('nameList');
+    const modeFull = $('modeFull'), modeQuick = $('modeQuick'), modeHelp = $('modeHelp');
+    const startBtn = $('startBtn'), skipBtn = $('skipBtn'), muteBtn = $('muteBtn');
+    const winnerOverlay = $('winnerOverlay'), winnerNameEl = $('winnerName');
+    const againBtn = $('againBtn'), editBtn = $('editBtn');
+    const canvas = $('gameCanvas');
+    canvas.width = SW;
+    canvas.height = SH;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    // --- State ---
+    let participants = [];
+    let settings = { mode: 'full' };
+    let game = null;          // the contest in progress, see startContest()
+    const fx = { shake: 0, banner: null, popups: [], confetti: [], hype: 0, timeScale: 1, slowmo: false };
+
+    // =====================================================================
+    // Palette & pixel helpers
+    // =====================================================================
+    const PAL = {
+        black: '#000000', white: '#ffffff', ink: '#0c0c14',
+        asphalt0: '#18181f', asphalt1: '#24242e', asphalt2: '#30303c', asphalt3: '#44444f',
+        concrete0: '#505060', concrete1: '#787884', concrete2: '#a0a0a8', concrete3: '#c8c8cc',
+        brick0: '#3a1410', brick1: '#5a1c14', brick2: '#7a2818',
+        lime: '#80f800', hot: '#f80878', cyan: '#00e8f8', yellow: '#f8e800', orange: '#f88800',
+        purple: '#9040f8', red: '#e01818', cream: '#f8f0c8',
+        wood0: '#4a2c10', wood1: '#7a4c20', wood2: '#a87038', wood3: '#d8a060',
+        steel1: '#606878', steel2: '#a0a8b8', steel3: '#e0e8f0',
+        windowLit: '#f8d048', windowDim: '#685818', water: '#2860c0', water2: '#80b8f8',
+    };
+    const RAMPS = {
+        graffiti: ['#f8f8a0', '#f8e800', '#b8f818', '#80f800', '#f048e0', '#f80878', '#a00860'],
+        hot: ['#ffffff', '#f8e800', '#f8c000', '#f88800', '#f84030', '#f80878', '#a00860'],
+        chrome: ['#ffffff', '#c0f8ff', '#58f0f8', '#00a8c8', '#f048e0', '#b018b0', '#782078'],
+        dusk: ['#100828', '#281050', '#582070', '#a03868', '#e86840', '#f8a848'],
+        night: ['#04040c', '#08081c', '#10102c', '#1c1c40'],
+        wood: ['#4a2c10', '#7a4c20', '#a87038', '#d8a060'],
+        concrete: ['#505060', '#787884', '#a0a0a8', '#c8c8cc'],
+        window: ['#202030', '#18181f', '#101018', '#000000'],
+    };
+    const SHIRTS = ['#f80878', '#80f800', '#00e8f8', '#f8e800', '#f88800', '#9040f8', '#e01818', '#40f8b0', '#f8a0f0', '#3878f8', '#ffffff', '#c8c800'];
+    const HELMETS = ['#e01818', '#f8e800', '#282830', '#3878f8', '#f0f0f0', '#80f800', '#f88800'];
+    const SKINS = ['#f8d0b0', '#e0a878', '#b07848', '#805030', '#583018'];
+    const PANTS = ['#3050a0', '#282830', '#506080', '#604830', '#2a6a3a'];
+    const DECKS = ['#f88800', '#f80878', '#80f800', '#00e8f8', '#f8e800', '#9040f8'];
+    const CONFETTI = [PAL.hot, PAL.lime, PAL.cyan, PAL.yellow, PAL.orange, PAL.white];
+
+    // 4x4 ordered dither, the classic way to fake in-between colours.
+    const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    const dither = (x, y) => BAYER[(y & 3) * 4 + (x & 3)] / 16;
+    const rampAt = (ramp, t, x, y) => ramp[Math.max(0, Math.min(ramp.length - 1, Math.floor(t * (ramp.length - 1) + dither(x, y))))];
+
+    function makeCanvas(w, h) {
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.ceil(w));
+        cv.height = Math.max(1, Math.ceil(h));
+        const c = cv.getContext('2d');
+        c.imageSmoothingEnabled = false;
+        return [cv, c];
+    }
+
+    // Vertical dithered gradient.
+    function ditherFill(c, x0, y0, w, h, ramp, from = 0, to = 1) {
+        for (let y = 0; y < h; y++) {
+            const t = from + (to - from) * (y / Math.max(1, h - 1));
+            for (let x = 0; x < w; x++) {
+                c.fillStyle = rampAt(ramp, t, x0 + x, y0 + y);
+                c.fillRect(x0 + x, y0 + y, 1, 1);
+            }
+        }
+    }
+
+    // Small fixed-seed generator for scenery, so backdrops never touch the contest RNG.
+    function sceneryRng(seed) {
+        let a = seed >>> 0;
+        return () => {
+            a = (a + 0x6D2B79F5) >>> 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
+        };
+    }
+
+    // --- Bitmap fonts (uppercase arcade style) ---
+    const BIG_FONT = {
+        A: '01110 10001 10001 10001 11111 10001 10001', B: '11110 10001 10001 11110 10001 10001 11110',
+        C: '01110 10001 10000 10000 10000 10001 01110', D: '11100 10010 10001 10001 10001 10010 11100',
+        E: '11111 10000 10000 11110 10000 10000 11111', F: '11111 10000 10000 11110 10000 10000 10000',
+        G: '01110 10001 10000 10111 10001 10001 01111', H: '10001 10001 10001 11111 10001 10001 10001',
+        I: '01110 00100 00100 00100 00100 00100 01110', J: '00111 00010 00010 00010 00010 10010 01100',
+        K: '10001 10010 10100 11000 10100 10010 10001', L: '10000 10000 10000 10000 10000 10000 11111',
+        M: '10001 11011 10101 10101 10001 10001 10001', N: '10001 10001 11001 10101 10011 10001 10001',
+        O: '01110 10001 10001 10001 10001 10001 01110', P: '11110 10001 10001 11110 10000 10000 10000',
+        Q: '01110 10001 10001 10001 10101 10010 01101', R: '11110 10001 10001 11110 10100 10010 10001',
+        S: '01111 10000 10000 01110 00001 00001 11110', T: '11111 00100 00100 00100 00100 00100 00100',
+        U: '10001 10001 10001 10001 10001 10001 01110', V: '10001 10001 10001 10001 10001 01010 00100',
+        W: '10001 10001 10001 10101 10101 10101 01010', X: '10001 10001 01010 00100 01010 10001 10001',
+        Y: '10001 10001 10001 01010 00100 00100 00100', Z: '11111 00001 00010 00100 01000 10000 11111',
+        0: '01110 10001 10011 10101 11001 10001 01110', 1: '00100 01100 00100 00100 00100 00100 01110',
+        2: '01110 10001 00001 00010 00100 01000 11111', 3: '11111 00010 00100 00010 00001 10001 01110',
+        4: '00010 00110 01010 10010 11111 00010 00010', 5: '11111 10000 11110 00001 00001 10001 01110',
+        6: '00110 01000 10000 11110 10001 10001 01110', 7: '11111 00001 00010 00100 01000 01000 01000',
+        8: '01110 10001 10001 01110 10001 10001 01110', 9: '01110 10001 10001 01111 00001 00010 01100',
+        ' ': '00000 00000 00000 00000 00000 00000 00000', '!': '00100 00100 00100 00100 00100 00000 00100',
+        '?': '01110 10001 00001 00010 00100 00000 00100', '.': '00000 00000 00000 00000 00000 01100 01100',
+        ',': '00000 00000 00000 00000 01100 00100 01000', '-': '00000 00000 00000 11111 00000 00000 00000',
+        "'": '01100 00100 01000 00000 00000 00000 00000', '&': '01100 10010 10100 01000 10101 10010 01101',
+        '+': '00000 00100 00100 11111 00100 00100 00000', ':': '00000 01100 01100 00000 01100 01100 00000',
+        '/': '00000 00001 00010 00100 01000 10000 00000', '(': '00010 00100 01000 01000 01000 00100 00010',
+        ')': '01000 00100 00010 00010 00010 00100 01000', '#': '01010 01010 11111 01010 11111 01010 01010',
+        '>': '01000 00100 00010 00001 00010 00100 01000', '<': '00010 00100 01000 10000 01000 00100 00010',
+        '=': '00000 00000 11111 00000 11111 00000 00000', '_': '00000 00000 00000 00000 00000 00000 11111',
+        '"': '01010 01010 01010 00000 00000 00000 00000', '*': '00000 00100 10101 01110 10101 00100 00000',
+        '%': '11000 11001 00010 00100 01000 10011 00011', '@': '01110 10001 10111 10101 10111 10000 01111',
+    };
+    const SMALL_FONT = {
+        A: '010 101 111 101 101', B: '110 101 110 101 110', C: '011 100 100 100 011', D: '110 101 101 101 110',
+        E: '111 100 110 100 111', F: '111 100 110 100 100', G: '011 100 101 101 011', H: '101 101 111 101 101',
+        I: '111 010 010 010 111', J: '001 001 001 101 010', K: '101 101 110 101 101', L: '100 100 100 100 111',
+        M: '101 111 111 101 101', N: '110 101 101 101 101', O: '010 101 101 101 010', P: '110 101 110 100 100',
+        Q: '010 101 101 110 011', R: '110 101 110 101 101', S: '011 100 010 001 110', T: '111 010 010 010 010',
+        U: '101 101 101 101 111', V: '101 101 101 101 010', W: '101 101 111 111 101', X: '101 101 010 101 101',
+        Y: '101 101 010 010 010', Z: '111 001 010 100 111',
+        0: '111 101 101 101 111', 1: '010 110 010 010 111', 2: '110 001 010 100 111', 3: '110 001 010 001 110',
+        4: '101 101 111 001 001', 5: '111 100 110 001 110', 6: '011 100 111 101 111', 7: '111 001 010 010 010',
+        8: '111 101 111 101 111', 9: '111 101 111 001 110',
+        ' ': '000 000 000 000 000', '!': '010 010 010 000 010', '?': '110 001 010 000 010', '.': '000 000 000 000 010',
+        ',': '000 000 000 010 100', '-': '000 000 111 000 000', "'": '010 010 000 000 000', '&': '010 101 010 101 011',
+        '+': '000 010 111 010 000', ':': '000 010 000 010 000', '/': '001 001 010 100 100', '(': '010 100 100 100 010',
+        ')': '010 001 001 001 010', '#': '101 111 101 111 101', '>': '100 010 001 010 100', '<': '001 010 100 010 001',
+        '=': '000 111 000 111 000', '_': '000 000 000 000 111', '"': '101 101 000 000 000', '*': '101 010 101 000 000',
+        '%': '101 001 010 100 101', '@': '111 101 111 100 011',
+    };
+    function parseFont(src, w, h) {
+        const glyphs = {};
+        for (const [ch, rows] of Object.entries(src)) glyphs[ch] = rows.split(' ').map(r => [...r].map(b => b === '1'));
+        return { w, h, glyphs };
+    }
+    const FONTS = { big: parseFont(BIG_FONT, 5, 7), small: parseFont(SMALL_FONT, 3, 5) };
+
+    // Names are shown in arcade capitals; accents are dropped so they map onto the font.
+    const toArcade = text => String(text).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+    const [, measureCtx] = makeCanvas(1, 1);
+    function layoutText(text, font, scale) {
+        const f = FONTS[font];
+        let x = 0;
+        const items = [...toArcade(text)].map(ch => {
+            const glyph = f.glyphs[ch] || null;
+            const item = { ch, glyph, x };
+            if (glyph) x += (f.w + 1) * scale;
+            else {
+                // Characters outside the font (e.g. non-Latin names) fall back to a system glyph, hardened to pixels.
+                measureCtx.font = `bold ${f.h * scale + 2}px sans-serif`;
+                x += Math.ceil(measureCtx.measureText(ch).width) + scale;
+            }
+            return item;
+        });
+        return { items, width: Math.max(0, x - scale), height: f.h * scale };
+    }
+    const textWidth = (text, font = 'big', scale = 1) => layoutText(text, font, scale).width;
+
+    function silhouette(src, color) {
+        const [cv, c] = makeCanvas(src.width, src.height);
+        c.drawImage(src, 0, 0);
+        c.globalCompositeOperation = 'source-in';
+        c.fillStyle = color;
+        c.fillRect(0, 0, cv.width, cv.height);
+        return cv;
+    }
+
+    const spriteCache = new Map();
+    function textSprite(text, { font = 'big', scale = 1, color = PAL.white, ramp = null, outline = PAL.black, shadow = 0, drips = 0 } = {}) {
+        const key = [text, font, scale, color, ramp && ramp.join(), outline, shadow, drips].join('|');
+        const cached = spriteCache.get(key);
+        if (cached) return cached;
+        if (spriteCache.size > 900) spriteCache.clear();
+        const f = FONTS[font];
+        const L = layoutText(text, font, scale);
+        const pad = outline ? 1 : 0;
+        const [mask, m] = makeCanvas(L.width + pad * 2, L.height + pad * 2 + drips);
+        let fallback = false;
+        for (const it of L.items) {
+            if (it.glyph) {
+                it.glyph.forEach((row, r) => row.forEach((on, col) => {
+                    if (!on) return;
+                    m.fillStyle = ramp ? ramp[Math.min(ramp.length - 1, Math.floor(r * ramp.length / f.h))] : color;
+                    m.fillRect(pad + it.x + col * scale, pad + r * scale, scale, scale);
+                }));
+            } else if (it.ch.trim()) {
+                fallback = true;
+                m.fillStyle = ramp ? ramp[2] : color;
+                m.font = `bold ${f.h * scale + 2}px sans-serif`;
+                m.textBaseline = 'bottom';
+                m.fillText(it.ch, pad + it.x, pad + L.height + 1);
+            }
+        }
+        if (fallback) {
+            const img = m.getImageData(0, 0, mask.width, mask.height);
+            for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] < 110 ? 0 : 255;
+            m.putImageData(img, 0, 0);
+        }
+        if (drips) {
+            // Spray-paint runs: some columns drip down from their lowest painted pixel.
+            const img = m.getImageData(0, 0, mask.width, mask.height);
+            let seed = 0;
+            for (const ch of text) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+            for (let x = 0; x < mask.width; x++) {
+                const h = (Math.imul(x + 1, 2654435761) ^ seed) >>> 0;
+                if ((h >>> 3) % 4 !== 0) continue;
+                for (let y = mask.height - drips - 1; y >= 0; y--) {
+                    const i = (y * mask.width + x) * 4;
+                    if (img.data[i + 3] < 128) continue;
+                    m.fillStyle = `rgb(${img.data[i]}, ${img.data[i + 1]}, ${img.data[i + 2]})`;
+                    m.fillRect(x, y + 1, 1, 1 + ((h >>> 7) % drips));
+                    break;
+                }
+            }
+        }
+        const [cv, c] = makeCanvas(mask.width + shadow, mask.height + shadow);
+        if (shadow) c.drawImage(silhouette(mask, PAL.black), shadow, shadow);
+        if (outline) {
+            const sil = silhouette(mask, outline);
+            for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) c.drawImage(sil, dx, dy);
+        }
+        c.drawImage(mask, 0, 0);
+        spriteCache.set(key, cv);
+        return cv;
+    }
+
+    // Longest prefix of `text` that fits in maxW pixels, with a trailing dot if cut.
+    function fitText(text, font, maxW, scale = 1) {
+        if (textWidth(text, font, scale) <= maxW) return text;
+        let t = toArcade(text);
+        while (t.length > 1 && textWidth(t + '.', font, scale) > maxW) t = t.slice(0, -1);
+        return t + '.';
+    }
+
+    // Largest scale (up to maxScale) at which text fits in maxW.
+    function bestScale(text, maxW, maxScale = 3) {
+        for (let s = maxScale; s > 1; s--) if (textWidth(text, 'big', s) <= maxW) return s;
+        return 1;
+    }
+
+    const blit = (sprite, x, y) => ctx.drawImage(sprite, Math.round(x - sprite.width / 2), Math.round(y - sprite.height / 2));
+
+    // Menu window: dark, lime frame, hot-pink inner line, checkerboard strip on top.
+    const windowCache = new Map();
+    function windowBox(w, h) {
+        w = Math.round(w); h = Math.round(h);
+        const key = w + 'x' + h;
+        if (windowCache.has(key)) return windowCache.get(key);
+        const [cv, c] = makeCanvas(w, h);
+        ditherFill(c, 0, 0, w, h, RAMPS.window);
+        const ring = (i, color) => {
+            c.fillStyle = color;
+            c.fillRect(i, i, w - 2 * i, 1);
+            c.fillRect(i, h - 1 - i, w - 2 * i, 1);
+            c.fillRect(i, i, 1, h - 2 * i);
+            c.fillRect(w - 1 - i, i, 1, h - 2 * i);
+        };
+        ring(0, PAL.black);
+        ring(1, PAL.lime);
+        ring(2, PAL.hot);
+        for (let x = 3; x < w - 3; x += 2) {
+            c.fillStyle = Math.floor(x / 2) % 2 ? PAL.white : PAL.black;
+            c.fillRect(x, 3, 2, 2);
+        }
+        for (const [x, y] of [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]]) c.clearRect(x, y, 1, 1);
+        windowCache.set(key, cv);
+        return cv;
+    }
+
+    // =====================================================================
+    // Skater sprites (inline pixel art, coloured per skater)
+    // H helmet, S skin, T shirt, P pants, K shoes, D deck, W wheels
+    // =====================================================================
+    const POSES = {
+        roll: [
+            '....HHHH....', '...HHHHHH...', '...HHHHHSS..', '....SSSSSS..', '....SSSSS...', '.....SS.....',
+            '....TTTT....', '...TTTTTT...', '..STTTTTTS..', '..S.TTTT.S..', '....TTTT....', '....PPPP....',
+            '...PP..PP...', '...PP..PP...', '..PP....PP..', '..PP....PP..', '..KK....KK..', 'DDDDDDDDDDDD', '.WW......WW.',
+        ],
+        push: [
+            '....HHHH....', '...HHHHHH...', '...HHHHHSS..', '....SSSSSS..', '....SSSSS...', '.....SS.....',
+            '....TTTT....', '...TTTTTT...', '..STTTTTTS..', '..S.TTTT.S..', '....TTTT....', '....PPPP....',
+            '...PP..PP...', '..PP...PP...', '.PP....PP...', 'PP.....PP...', 'KK.....KK...', '...DDDDDDDDD', '....WW...WW.',
+        ],
+        air: [
+            '............', '............', '....HHHH....', '...HHHHHH...', '...HHHHHSS..', '....SSSSSS..',
+            '....SSSSS...', '...TTTTTT...', '..STTTTTTT..', '..S.TTTTTS..', '...PPPPP.S..', '..PPPPPPPS..',
+            '..PP...PPS..', '..PP....PS..', '..KK....KK..', 'DDDDDDDDDDDD', '.WW......WW.', '............', '............',
+        ],
+        grind: [
+            '....HHHH....', '...HHHHHH...', '...HHHHHSS..', '....SSSSSS..', '....SSSSS...', '.....SS.....',
+            '....TTTT....', 'SSTTTTTTTTSS', '....TTTT....', '....TTTT....', '....TTTT....', '....PPPP....',
+            '...PP..PP...', '...PP..PP...', '..PP....PP..', '..PP....PP..', '..KK....KK..', 'DDDDDDDDDDDD', '.WW......WW.',
+        ],
+        wobble: [
+            '....HHHH....', '...HHHHHH...', 'S..HHHHHSS.S', 'S...SSSSSS.S', '.S..SSSSS.S.', '.S...SS..S..',
+            '..STTTTTTS..', '...TTTTTT...', '....TTTT....', '....TTTT....', '....TTTT....', '....PPPP....',
+            '...PP..PP...', '..PP....PP..', '..PP....PP..', '.PP......PP.', '.KK......KK.', 'DDDDDDDDDDDD', '.WW......WW.',
+        ],
+        board: ['DDDDDDDDDDDD', '.WW......WW.'],
+    };
+
+    function hashName(name) {
+        let h = 2166136261;
+        for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+        return h >>> 0;
+    }
+
+    function skaterLook(name) {
+        const h = hashName(name);
+        const i = participants.indexOf(name);
+        return {
+            T: SHIRTS[(i >= 0 ? i : h) % SHIRTS.length],
+            H: HELMETS[(h >>> 3) % HELMETS.length],
+            S: SKINS[(h >>> 7) % SKINS.length],
+            P: PANTS[(h >>> 11) % PANTS.length],
+            D: DECKS[(h >>> 15) % DECKS.length],
+            K: PAL.white, W: PAL.cream,
+        };
+    }
+
+    // Pose to sprite with a 1px black outline. Feet (wheel outline) sit on the bottom row.
+    const skaterCache = new Map();
+    function skaterSprite(name, pose, noBoard = false) {
+        const key = name + '|' + pose + '|' + noBoard;
+        if (skaterCache.has(key)) return skaterCache.get(key);
+        const rows = POSES[pose];
+        const look = skaterLook(name);
+        const [mask, m] = makeCanvas(rows[0].length + 2, rows.length + 2);
+        rows.forEach((row, y) => [...row].forEach((k, x) => {
+            if (k === '.' || (noBoard && (k === 'D' || k === 'W'))) return;
+            m.fillStyle = look[k];
+            m.fillRect(x + 1, y + 1, 1, 1);
+        }));
+        const [cv, c] = makeCanvas(mask.width, mask.height);
+        const sil = silhouette(mask, PAL.black);
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) c.drawImage(sil, dx, dy);
+        c.drawImage(mask, 0, 0);
+        skaterCache.set(key, cv);
+        return cv;
+    }
+
+    // Draws a sprite anchored at its bottom-centre.
+    function drawSprite(spr, x, y, { scale = 1, angle = 0, mirror = false } = {}) {
+        ctx.save();
+        ctx.translate(Math.round(x), Math.round(y));
+        if (angle) ctx.rotate(angle);
+        ctx.scale(mirror ? -scale : scale, scale);
+        ctx.drawImage(spr, -Math.floor(spr.width / 2), -spr.height + 1);
+        ctx.restore();
+    }
+
+    // =====================================================================
+    // Backdrops (generated once)
+    // =====================================================================
+    const GROUND_Y = 122;                    // top of the road
+    const scenery = {};
+
+    function buildScenery() {
+        // Dusk sky with a striped 80s sun.
+        let [cv, c] = makeCanvas(SW, 112);
+        ditherFill(c, 0, 0, SW, 112, RAMPS.dusk);
+        const sun = { x: 290, y: 86, r: 30 };
+        for (let y = sun.y - sun.r; y < sun.y + sun.r; y++) {
+            const band = y - (sun.y - sun.r);
+            if (band > sun.r * 0.9 && (band % 6) < 2 + (band - sun.r) / 8) continue;
+            const half = Math.sqrt(Math.max(0, sun.r * sun.r - (y - sun.y) ** 2));
+            for (let x = Math.round(sun.x - half); x < sun.x + half; x++) {
+                c.fillStyle = rampAt(['#f8f080', '#f8c040', '#f88838', '#f04870'], band / (sun.r * 2), x, y);
+                c.fillRect(x, y, 1, 1);
+            }
+        }
+        const sr = sceneryRng(7);
+        c.fillStyle = PAL.white;
+        for (let i = 0; i < 40; i++) c.fillRect(Math.floor(sr() * SW), Math.floor(sr() * 30), 1, 1);
+        scenery.sky = cv;
+
+        // Skyline tile: two rows of buildings with lit windows.
+        [cv, c] = makeCanvas(512, 72);
+        const skyline = (color, minH, maxH, step, lit) => {
+            for (let x = 0; x < 512;) {
+                const w = 18 + Math.floor(sr() * step), h = minH + Math.floor(sr() * (maxH - minH));
+                c.fillStyle = color;
+                c.fillRect(x, 72 - h, w, h);
+                if (sr() < 0.25) c.fillRect(x + 4, 72 - h - 6, 6, 6);   // water tower / roof box
+                for (let wy = 72 - h + 4; wy < 68; wy += 5) {
+                    for (let wx = x + 3; wx < x + w - 3; wx += 4) {
+                        const on = sr();
+                        if (on < lit) { c.fillStyle = on < lit * 0.3 ? PAL.windowLit : PAL.windowDim; c.fillRect(wx, wy, 2, 2); }
+                    }
+                }
+                x += w + Math.floor(sr() * 4);
+            }
+        };
+        skyline('#281848', 30, 66, 30, 0.35);
+        skyline('#140c28', 14, 40, 22, 0.25);
+        scenery.skyline = cv;
+
+        // Brick wall tile with graffiti, chain-link sections and a few tags.
+        [cv, c] = makeCanvas(512, 36);
+        c.fillStyle = '#1c0c0a';
+        c.fillRect(0, 0, 512, 36);
+        for (let row = 0; row < 6; row++) {
+            for (let col = -1; col < 44; col++) {
+                c.fillStyle = [PAL.brick1, PAL.brick2, PAL.brick0][(row * 3 + col * 7 + 30) % 3];
+                c.fillRect(col * 12 + (row % 2 ? 6 : 0) + 1, row * 6 + 1, 11, 5);
+            }
+        }
+        for (let i = 0; i < 9; i++) {
+            const gx = 20 + i * 56 + Math.floor(sr() * 20), gy = 8 + Math.floor(sr() * 18), r = 6 + Math.floor(sr() * 8);
+            const col = [PAL.hot, PAL.lime, PAL.cyan, PAL.yellow, PAL.purple][i % 5];
+            for (let y = -r; y <= r; y++) for (let x = -r * 2; x <= r * 2; x++) {
+                if ((x * x) / 4 + y * y <= r * r && dither(gx + x, gy + y) < 0.55) { c.fillStyle = col; c.fillRect(gx + x, gy + y, 1, 1); }
+            }
+        }
+        ['RAD', 'SK8', 'GNAR', '88', 'ZAP!', 'SHRED'].forEach((tag, i) => {
+            const spr = textSprite(tag, { ramp: [RAMPS.graffiti, RAMPS.hot, RAMPS.chrome][i % 3], drips: 3 });
+            c.drawImage(spr, 30 + i * 82, 6 + (i % 2) * 12);
+        });
+        // Chain-link fence over part of the wall.
+        c.fillStyle = PAL.steel1;
+        for (let x = 300; x < 420; x++) for (let y = 0; y < 36; y++) if ((x + y) % 6 === 0 || (x - y + 600) % 6 === 0) c.fillRect(x, y, 1, 1);
+        c.fillStyle = PAL.steel2;
+        c.fillRect(300, 0, 2, 36);
+        c.fillRect(418, 0, 2, 36);
+        scenery.wall = cv;
+
+        // Crowd tile: heads and shoulders.
+        [cv, c] = makeCanvas(256, 18);
+        for (let x = 2, i = 0; x < 256; x += 7 + Math.floor(sr() * 3), i++) {
+            const col = ['#2a2040', '#3a2850', '#202030', '#40304a'][i % 4];
+            const h = 8 + Math.floor(sr() * 4);
+            c.fillStyle = col;
+            c.fillRect(x, 18 - h + 4, 6, h);
+            c.fillRect(x + 1, 18 - h, 4, 4);
+        }
+        scenery.crowd = cv;
+
+        // Asphalt tile.
+        [cv, c] = makeCanvas(64, 64);
+        for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+            const r = sr();
+            c.fillStyle = r < 0.06 ? PAL.asphalt3 : r < 0.3 ? PAL.asphalt2 : PAL.asphalt1;
+            c.fillRect(x, y, 1, 1);
+        }
+        scenery.asphalt = ctx.createPattern(cv, 'repeat');
+
+        scenery.vert = buildVertScene(sr);
+    }
+
+    // --- Halfpipe geometry (canvas pixels) ---
+    const V = { copL: 58, copR: 326, copY: 88, vert: 14, r: 64, cL: 122, cR: 262, flatY: 166, baseY: 196 };
+    const ARC = Math.PI / 2 * V.r;
+    const PATH_LEN = V.vert * 2 + ARC * 2 + (V.cR - V.cL);
+    const CENTER_S = PATH_LEN / 2;
+    const arcY = V.copY + V.vert;
+
+    function rampTop(x) {
+        if (x < V.copL || x > V.copR) return V.copY;
+        if (x < V.cL) return arcY + Math.sqrt(Math.max(0, V.r * V.r - (V.cL - x) ** 2));
+        if (x > V.cR) return arcY + Math.sqrt(Math.max(0, V.r * V.r - (x - V.cR) ** 2));
+        return V.flatY;
+    }
+
+    // Position on the pipe surface for a distance s from the left coping; `a` is the board angle.
+    function pipePoint(s) {
+        s = Math.max(0, Math.min(PATH_LEN, s));
+        if (s <= V.vert) return { x: V.copL + 1, y: V.copY + s, a: Math.PI / 2 };
+        s -= V.vert;
+        if (s <= ARC) {
+            const phi = Math.PI - s / V.r;
+            return { x: V.cL + V.r * Math.cos(phi), y: arcY + V.r * Math.sin(phi), a: phi - Math.PI / 2 };
+        }
+        s -= ARC;
+        if (s <= V.cR - V.cL) return { x: V.cL + s, y: V.flatY, a: 0 };
+        s -= V.cR - V.cL;
+        if (s <= ARC) {
+            const phi = Math.PI / 2 - s / V.r;
+            return { x: V.cR + V.r * Math.cos(phi), y: arcY + V.r * Math.sin(phi), a: phi - Math.PI / 2 };
+        }
+        s -= ARC;
+        return { x: V.copR - 1, y: arcY - s, a: -Math.PI / 2 };
+    }
+
+    function buildVertScene(sr) {
+        const [cv, c] = makeCanvas(SW, SH);
+        ditherFill(c, 0, 0, SW, 150, RAMPS.night);
+        c.fillStyle = PAL.white;
+        for (let i = 0; i < 60; i++) c.fillRect(Math.floor(sr() * SW), Math.floor(sr() * 70), 1, 1);
+        // Distant city.
+        c.globalAlpha = 1;
+        c.drawImage(scenery.skyline, 0, 0, 512, 72, 0, 70, 512, 72);
+        c.fillStyle = 'rgba(4, 4, 12, 0.45)';
+        c.fillRect(0, 70, SW, 80);
+        // Stadium light towers with dithered beams.
+        for (const tx of [30, 354]) {
+            c.fillStyle = PAL.steel1;
+            c.fillRect(tx - 1, 24, 3, 130);
+            c.fillStyle = PAL.steel2;
+            c.fillRect(tx - 8, 18, 17, 7);
+            c.fillStyle = PAL.cream;
+            for (let k = 0; k < 4; k++) c.fillRect(tx - 7 + k * 4, 19, 3, 3);
+            for (let y = 25; y < 160; y++) {
+                const spread = (y - 25) * 0.55;
+                for (let x = Math.floor(tx - spread); x < tx + spread; x++) {
+                    const t = 1 - (y - 25) / 135;
+                    if (dither(x, y) < t * 0.18) { c.fillStyle = '#f8f0c8'; c.fillRect(x, y, 1, 1); }
+                }
+            }
+        }
+        // Sponsor-free banners on the back fence.
+        const banner = textSprite('VERT FINAL', { ramp: RAMPS.graffiti, drips: 2 });
+        c.fillStyle = PAL.black;
+        c.fillRect(140, 52, 104, 16);
+        c.fillStyle = PAL.hot;
+        c.fillRect(141, 53, 102, 14);
+        c.drawImage(banner, Math.round(192 - banner.width / 2), 56);
+        // Ground.
+        ditherFill(c, 0, 150, SW, SH - 150, RAMPS.concrete, 0.2, 0.7);
+        // Ramp body: plywood side panel under the surface line, with frame beams.
+        for (let x = 20; x <= 364; x++) {
+            const top = Math.round(rampTop(x));
+            for (let y = top; y < V.baseY; y++) {
+                const beam = (x - 20) % 24 < 2 || (y - V.baseY) % 22 === 0;
+                c.fillStyle = beam ? PAL.wood0 : rampAt(RAMPS.wood, 0.75 - (y - V.copY) / 180, x, y);
+                c.fillRect(x, y, 1, 1);
+            }
+            c.fillStyle = PAL.wood3;
+            c.fillRect(x, top, 1, 2);
+            c.fillStyle = PAL.black;
+            c.fillRect(x, top - 1, 1, 1);
+        }
+        c.fillStyle = PAL.black;
+        c.fillRect(19, V.copY - 1, 1, V.baseY - V.copY + 1);
+        c.fillRect(365, V.copY - 1, 1, V.baseY - V.copY + 1);
+        c.fillRect(19, V.baseY, 347, 1);
+        // Steel coping.
+        for (const x of [V.copL, V.copR]) {
+            c.fillStyle = PAL.black;
+            c.fillRect(x - 2, V.copY - 2, 5, 5);
+            c.fillStyle = PAL.steel3;
+            c.fillRect(x - 1, V.copY - 1, 3, 3);
+            c.fillStyle = PAL.white;
+            c.fillRect(x - 1, V.copY - 1, 1, 1);
+        }
+        return cv;
+    }
+
+    // =====================================================================
+    // Audio (Web Audio, synthesised; created on the first user gesture)
+    // =====================================================================
+    let ac = null, master = null, sfx = null, musicBus = null, noiseBuffer = null, roll = null;
+    let muted = false;
+
+    function audio() {
+        if (!ac) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return null;
+            ac = new AC();
+            master = ac.createGain();
+            master.gain.value = muted ? 0 : 1;
+            master.connect(ac.destination);
+            sfx = ac.createGain();
+            sfx.connect(master);
+            musicBus = ac.createGain();
+            musicBus.gain.value = 0.55;
+            musicBus.connect(master);
+            noiseBuffer = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+            const d = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;   // cosmetic randomness
+            // Wheel roll: looped noise through a low-pass whose cutoff follows speed.
+            const src = ac.createBufferSource();
+            src.buffer = noiseBuffer;
+            src.loop = true;
+            const filter = ac.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 300;
+            const gain = ac.createGain();
+            gain.gain.value = 0;
+            src.connect(filter);
+            filter.connect(gain);
+            gain.connect(sfx);
+            src.start();
+            roll = { filter, gain };
+        }
+        if (ac.state === 'suspended') ac.resume();
+        return ac;
+    }
+
+    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0, bus = null, at = null }) {
+        if (!ac) return;
+        const t0 = at !== null ? at : ac.currentTime + delay;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(from, t0);
+        if (to !== from) osc.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(bus || sfx);
+        osc.start(t0);
+        osc.stop(t0 + dur + 0.02);
+    }
+
+    function noise({ dur, vol = 0.1, from = 1000, to = from, q = 1, type = 'bandpass', delay = 0, attack = 0, bus = null, at = null }) {
+        if (!ac) return;
+        const t0 = at !== null ? at : ac.currentTime + delay;
+        const src = ac.createBufferSource();
+        src.buffer = noiseBuffer;
+        const filter = ac.createBiquadFilter();
+        filter.type = type;
+        filter.Q.value = q;
+        filter.frequency.setValueAtTime(from, t0);
+        if (to !== from) filter.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        const gain = ac.createGain();
+        if (attack) {
+            gain.gain.setValueAtTime(0.001, t0);
+            gain.gain.exponentialRampToValueAtTime(vol, t0 + attack);
+        } else gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(bus || sfx);
+        src.start(t0, Math.random());
+        src.stop(t0 + dur + 0.02);
+    }
+
+    const lastSound = {};
+    function throttled(kind, ms) {
+        const now = performance.now();
+        if (now - (lastSound[kind] || 0) < ms) return true;
+        lastSound[kind] = now;
+        return false;
+    }
+
+    function playSound(kind, arg = 0) {
+        if (!ac || muted) return;
+        switch (kind) {
+            case 'pop':
+                if (throttled('pop', 60)) return;
+                tone({ from: 900, to: 180, dur: 0.05, vol: 0.1 });
+                noise({ dur: 0.06, vol: 0.14, from: 2500, to: 1200 });
+                break;
+            case 'grind':
+                noise({ dur: Math.max(0.2, arg), vol: 0.05, from: 2600, to: 3400, q: 4 });
+                break;
+            case 'land':
+                if (throttled('land', 60)) return;
+                tone({ type: 'sine', from: 140, to: 50, dur: 0.12, vol: 0.2 });
+                noise({ dur: 0.05, vol: 0.08, from: 600, type: 'lowpass' });
+                break;
+            case 'bail':
+                noise({ dur: 0.35, vol: 0.2, from: 1500, to: 250, type: 'lowpass' });
+                tone({ type: 'sine', from: 90, to: 40, dur: 0.25, vol: 0.25 });
+                for (let i = 0; i < 4; i++) tone({ from: 300 + Math.random() * 600, dur: 0.04, vol: 0.05, delay: 0.08 + i * 0.07 });
+                break;
+            case 'wobble':
+                if (throttled('wobble', 120)) return;
+                tone({ type: 'triangle', from: 500, to: 380, dur: 0.12, vol: 0.05 });
+                break;
+            case 'cheer':
+                if (throttled('cheer', 400)) return;
+                noise({ dur: 1.6, vol: 0.12 + arg * 0.08, from: 900, to: 1300, q: 0.6, attack: 0.3 });
+                for (let i = 0; i < 3; i++) tone({ type: 'sine', from: 500 + Math.random() * 300, to: 900 + Math.random() * 300, dur: 0.3, vol: 0.02, delay: 0.1 + i * 0.25 });
+                break;
+            case 'card':
+                noise({ dur: 0.05, vol: 0.12, from: 3000 });
+                tone({ from: 1200, to: 1500, dur: 0.04, vol: 0.04 });
+                break;
+            case 'tick':
+                tone({ from: 1400, dur: 0.03, vol: 0.04 });
+                break;
+            case 'go':
+                tone({ from: 440, dur: 0.12, vol: 0.08 });
+                tone({ from: 880, dur: 0.3, vol: 0.08, delay: 0.14 });
+                break;
+            case 'horn':
+                tone({ type: 'sawtooth', from: 330, dur: 0.18, vol: 0.06 });
+                tone({ type: 'sawtooth', from: 440, dur: 0.35, vol: 0.06, delay: 0.18 });
+                break;
+            case 'fanfare': {
+                // Power-chord stabs climbing up, then a crash.
+                [[82.4, 0], [82.4, 0.14], [110, 0.28], [123.5, 0.42], [146.8, 0.56], [164.8, 0.7]].forEach(([f, d]) => {
+                    tone({ type: 'sawtooth', from: f * 2, dur: 0.12, vol: 0.07, delay: d });
+                    tone({ type: 'square', from: f * 3, dur: 0.12, vol: 0.035, delay: d });
+                });
+                noise({ dur: 1.0, vol: 0.14, from: 7000, to: 2500, delay: 0.84 });
+                tone({ type: 'sawtooth', from: 329.6, dur: 1.0, vol: 0.07, delay: 0.84 });
+                tone({ type: 'square', from: 494, dur: 1.0, vol: 0.04, delay: 0.84 });
+                break;
+            }
+        }
+    }
+
+    function setRoll(level) {
+        if (!roll || !ac) return;
+        const l = Math.max(0, Math.min(1, level));
+        roll.gain.gain.setTargetAtTime(l * 0.07, ac.currentTime, 0.08);
+        roll.filter.frequency.setTargetAtTime(250 + l * 1400, ac.currentTime, 0.08);
+    }
+
+    // --- Punk chiptune loop (original): square bass power chords, square lead, noise drums ---
+    const N = { B1: 61.74, D2: 73.42, E2: 82.41, G2: 98.0, A2: 110.0, D4: 293.66, E4: 329.63, G4: 392.0, A4: 440.0, B4: 493.88, D5: 587.33 };
+    const BASS = ['E2', 'E2', 'E2', 'E2', 'E2', 'E2', 'G2', 'A2', 'E2', 'E2', 'E2', 'E2', 'D2', 'D2', 'B1', 'B1'];
+    const LEAD = ['E4', 0, 0, 'G4', 0, 'E4', 'A4', 0, 'B4', 0, 'A4', 'G4', 'E4', 0, 'D4', 0,
+                  'E4', 0, 0, 'G4', 0, 'E4', 'A4', 0, 'B4', 0, 'D5', 'B4', 'A4', 'G4', 'E4', 0];
+    const music = { on: false, step: 0, next: 0, timer: null };
+    const STEP = 60 / 172 / 2;
+
+    function startMusic() {
+        if (!audio() || music.on) return;
+        music.on = true;
+        music.step = 0;
+        music.next = ac.currentTime + 0.05;
+        music.timer = setInterval(scheduleMusic, 30);
+    }
+    function stopMusic() {
+        music.on = false;
+        clearInterval(music.timer);
+    }
+    function scheduleMusic() {
+        if (!music.on) return;
+        while (music.next < ac.currentTime + 0.15) {
+            const at = music.next, i = music.step;
+            const bass = N[BASS[i % 16]];
+            tone({ from: bass, dur: STEP * 0.85, vol: 0.035, at, bus: musicBus });
+            tone({ from: bass * 1.5, dur: STEP * 0.85, vol: 0.025, at, bus: musicBus });
+            const lead = LEAD[i % 32];
+            if (lead && i >= 32) tone({ from: N[lead], dur: STEP * 0.8, vol: 0.022, at, bus: musicBus });
+            noise({ dur: 0.03, vol: 0.025, from: 8000, type: 'highpass', at, bus: musicBus });
+            if (i % 8 === 4) noise({ dur: 0.12, vol: 0.09, from: 1800, q: 0.8, at, bus: musicBus });
+            if (i % 8 === 0 || i % 16 === 10) tone({ type: 'sine', from: 130, to: 45, dur: 0.12, vol: 0.16, at, bus: musicBus });
+            music.next += STEP;
+            music.step = (music.step + 1) % 64;
+        }
+    }
+
+    function toggleMute() {
+        muted = !muted;
+        if (master) master.gain.setValueAtTime(muted ? 0 : 1, ac.currentTime);
+        muteBtn.setAttribute('aria-pressed', String(muted));
+        muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
+    }
+    muteBtn.addEventListener('click', toggleMute);
+
+    // =====================================================================
+    // Names & settings
+    // =====================================================================
+    function saveNames() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(participants)); } catch { /* storage unavailable */ }
+    }
+    function loadNames() {
+        try { return BailCore.parseSavedNames(localStorage.getItem(STORAGE_KEY)); } catch { return []; }
+    }
+    function saveSettings() {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* storage unavailable */ }
+    }
+    function loadSettings() {
+        try {
+            const s = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            return { mode: s && s.mode === 'quick' ? 'quick' : 'full' };
+        } catch { return { mode: 'full' }; }
+    }
+
+    const isPlaying = () => game !== null && game.phase !== 'podium';
+
+    function updateList() {
+        const playing = isPlaying();
+        const c = game && game.contest;
+        const qualified = c && c.heatIndex >= 0 && !c.quick ? new Set(c.qualifiers) : null;
+        const heatsDone = c && c.finalists;
+        nameList.innerHTML = '';
+        participants.forEach((name, index) => {
+            const li = document.createElement('li');
+            li.style.setProperty('--swatch', skaterLook(name).T);
+            if (heatsDone && qualified && !qualified.has(name)) li.classList.add('out');
+            if (c && c.winner === name && game.phase === 'podium') li.classList.add('winner');
+            const span = document.createElement('span');
+            span.className = 'name';
+            span.textContent = name;
+            const rmBtn = document.createElement('button');
+            rmBtn.textContent = 'X';
+            rmBtn.className = 'remove-btn';
+            rmBtn.setAttribute('aria-label', `Remove ${name}`);
+            rmBtn.disabled = playing;
+            rmBtn.onclick = () => {
+                participants.splice(index, 1);
+                skaterCache.clear();
+                namesChanged();
+            };
+            li.append(span, rmBtn);
+            nameList.appendChild(li);
+        });
+        nameCount.textContent = participants.length ? `${participants.length} / ${C.MAX_NAMES} skaters` : '';
+        nameInput.disabled = addBtn.disabled = playing;
+        modeFull.disabled = modeQuick.disabled = playing;
+        startBtn.disabled = playing || participants.length < 2;
+        skipBtn.hidden = !(playing && c && !c.finalists && c.heatPlan.length);
+        modeFull.setAttribute('aria-pressed', String(settings.mode === 'full'));
+        modeQuick.setAttribute('aria-pressed', String(settings.mode === 'quick'));
+        modeHelp.textContent = settings.mode === 'full'
+            ? 'Downhill heats (top 2-3 qualify), then a vert final. Highest judges\' total wins.'
+            : `Straight to the vert final, one short run each. Up to ${C.QUICK_CAP} skaters; more go through heats.`;
+    }
+
+    function namesChanged() {
+        saveNames();
+        if (game && game.phase === 'podium') resetGame();
+        updateList();
+    }
+
+    // Accepts one name, or several separated by commas/semicolons.
+    function addName() {
+        const parts = nameInput.value.split(/[,;\n]/).filter(p => p.trim());
+        if (!parts.length) { nameError.textContent = 'Type a name first.'; return; }
+        const errors = [];
+        for (const part of parts) {
+            const result = BailCore.validateName(part, participants);
+            if (result.error) errors.push(result.error);
+            else participants.push(result.name);
+        }
+        nameError.textContent = errors[0] || '';
+        nameInput.value = '';
+        namesChanged();
+    }
+    addBtn.addEventListener('click', addName);
+    nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addName(); } });
+
+    function setMode(mode) {
+        if (isPlaying()) return;
+        settings.mode = mode;
+        saveSettings();
+        resetGame();
+        updateList();
+    }
+    modeFull.addEventListener('click', () => setMode('full'));
+    modeQuick.addEventListener('click', () => setMode('quick'));
+
+    // =====================================================================
+    // Contest flow
+    // phases: heatIntro -> heat -> heatOutro (repeat) -> finalIntro -> runIntro -> run -> cards (repeat)
+    //         -> coin (only on a tie) -> podium
+    // =====================================================================
+    function startContest() {
+        if (participants.length < 2) { nameError.textContent = 'Add at least 2 skaters to start.'; return; }
+        if (isPlaying()) return;
+        audio();
+        resetGame();
+        const contest = BailCore.createContest(participants, settings.mode);
+        BailCore.planContest(contest, rng);
+        game = { contest, phase: null, t: 0, dur: 0, acc: 0, cam: -40 };
+        nameError.textContent = '';
+        startMusic();
+        if (BailCore.heatsLeft(contest)) beginHeat();
+        else beginFinal();
+        updateList();
+    }
+
+    function resetGame() {
+        stopMusic();
+        setRoll(0);
+        game = null;
+        fx.banner = null;
+        fx.popups = [];
+        fx.confetti = [];
+        fx.timeScale = 1;
+        winnerOverlay.hidden = true;
+    }
+
+    function setPhase(phase, dur = 0) {
+        game.phase = phase;
+        game.t = 0;
+        game.dur = dur;
+    }
+
+    function banner(text, sub = '', life = 1.4, ramp = RAMPS.graffiti) {
+        fx.banner = { text, sub, life, max: life, ramp };
+    }
+
+    function popup(text, x, y, color = PAL.white, opts = {}) {
+        fx.popups.push({ text, x, y, color, life: opts.life || 1.1, scale: opts.scale || 1, world: !!opts.world });
+    }
+
+    function beginHeat() {
+        const c = game.contest;
+        game.heat = BailCore.startHeat(c, rng, { events: true });
+        game.acc = 0;
+        game.cam = -60;
+        game.photo = false;
+        setPhase('heatIntro', C.TIMING.heatIntro);
+        banner(`HEAT ${c.heatIndex + 1}!`, `TOP ${Math.min(c.qualify, game.heat.skaters.length)} QUALIFY`, C.TIMING.heatIntro);
+        playSound('horn');
+    }
+
+    function endHeat() {
+        const c = game.contest;
+        const quals = BailCore.finishHeat(c);
+        game.heatQuals = quals;
+        setPhase('heatOutro', C.TIMING.heatOutro);
+        setRoll(0);
+        playSound('cheer', 0.5);
+        updateList();
+    }
+
+    // Finish the remaining heats instantly with the same logic, then go to the final.
+    function skipToFinal() {
+        const c = game && game.contest;
+        if (!c || c.finalists || !['heatIntro', 'heat', 'heatOutro'].includes(game.phase)) return;
+        if (game.phase !== 'heatOutro') {
+            game.heat.events = null;
+            BailCore.runHeatToEnd(c, rng);
+        }
+        while (BailCore.heatsLeft(c)) {
+            BailCore.startHeat(c, rng);
+            BailCore.runHeatToEnd(c, rng);
+        }
+        beginFinal();
+    }
+
+    function beginFinal() {
+        const c = game.contest;
+        BailCore.startFinal(c, rng);
+        game.heat = null;
+        setRoll(0);
+        setPhase('finalIntro', C.TIMING.finalIntro);
+        banner(c.quick ? 'VERT JAM!' : 'VERT FINAL!', `${c.order.length} SKATERS - ${c.airs} AIRS EACH`, C.TIMING.finalIntro);
+        playSound('horn');
+        updateList();
+    }
+
+    function beginRun() {
+        const c = game.contest;
+        game.run = BailCore.startRun(c, rng);
+        game.timeline = buildTimeline(game.run);
+        game.fired = new Set();
+        game.lastRun = c.runs.length === c.order.length;
+        setPhase('runIntro', C.TIMING.runIntro);
+        banner('DROPPING IN', game.run.name, C.TIMING.runIntro, RAMPS.chrome);
+    }
+
+    function finishContest() {
+        const c = game.contest;
+        BailCore.finishFinal(c, rng);
+        if (c.coinFlip) {
+            setPhase('coin', C.TIMING.coinFlip);
+            banner('TIE BREAK!', 'COIN FLIP', 1.2);
+        } else showPodium();
+    }
+
+    function showPodium() {
+        const c = game.contest;
+        setPhase('podium');
+        stopMusic();
+        setRoll(0);
+        fx.banner = null;
+        fx.timeScale = 1;
+        playSound('fanfare');
+        playSound('cheer', 1);
+        if (!reducedMotion()) {
+            // Confetti motion is cosmetic, so Math.random is fine here.
+            for (let i = 0; i < 160; i++) {
+                fx.confetti.push({
+                    x: 192 + (Math.random() - 0.5) * 60, y: 110,
+                    vx: (Math.random() - 0.5) * 3.2, vy: -2 - Math.random() * 3.5,
+                    color: CONFETTI[i % CONFETTI.length], life: 1, rot: Math.random() * 4,
+                });
+            }
+        }
+        winnerNameEl.textContent = c.winner;
+        winnerOverlay.hidden = false;
+        updateList();
+    }
+
+    function backToNames() {
+        resetGame();
+        updateList();
+        nameInput.focus();
+    }
+
+    // Space / Enter: start, or hurry past a pause.
+    function primaryAction() {
+        if (!isPlaying()) { startContest(); return; }
+        if (['heatIntro', 'heatOutro', 'finalIntro', 'runIntro', 'cards'].includes(game.phase)) game.t = game.dur;
+    }
+
+    // --- Per-frame update ---
+    function update(dt) {
+        fx.hype = Math.max(0, fx.hype - dt * 0.8);
+        if (fx.banner && (fx.banner.life -= dt) <= 0) fx.banner = null;
+        if (!game) return;
+        const g = game;
+        const target = fx.slowmo && !reducedMotion() ? 0.4 : 1;
+        fx.timeScale += (target - fx.timeScale) * Math.min(1, dt * 6);
+        fx.slowmo = false;
+        const sdt = dt * fx.timeScale;
+        g.t += g.phase === 'run' || g.phase === 'heat' ? sdt : dt;
+
+        switch (g.phase) {
+            case 'heatIntro':
+                if (g.t >= g.dur) {
+                    setPhase('heat');
+                    banner('GO!', '', 0.7, RAMPS.hot);
+                    playSound('go');
+                }
+                break;
+            case 'heat': {
+                g.acc += sdt;
+                let steps = 0;
+                while (g.acc >= C.DT && steps < 30) {
+                    BailCore.stepHeat(g.heat, rng);
+                    g.acc -= C.DT;
+                    steps++;
+                    handleHeatEvents(g);
+                    if (g.heat.done) { endHeat(); return; }
+                }
+                if (steps === 30) g.acc = 0;
+                const avgV = g.heat.skaters.reduce((s, k) => s + k.v, 0) / g.heat.skaters.length;
+                setRoll(avgV / C.CRUISE);
+                checkPhotoFinish(g);
+                break;
+            }
+            case 'heatOutro':
+                if (g.heat) for (let i = 0; i < 2; i++) coast(g.heat);
+                if (g.t >= g.dur) {
+                    if (BailCore.heatsLeft(g.contest)) beginHeat();
+                    else beginFinal();
+                }
+                break;
+            case 'finalIntro':
+                if (g.t >= g.dur) beginRun();
+                break;
+            case 'runIntro':
+                if (g.t >= g.dur) setPhase('run', BailCore.runDuration(g.contest.airs));
+                break;
+            case 'run':
+                runEvents(g);
+                if (g.t >= g.dur) {
+                    setRoll(0);
+                    setPhase('cards', C.TIMING.cards);
+                    g.cardsShown = 0;
+                }
+                break;
+            case 'cards': {
+                const shown = [0.2, 0.55, 0.9].filter(t => g.t >= t).length;
+                if (shown > g.cardsShown) { g.cardsShown = shown; playSound('card'); }
+                if (g.t >= 1.3 && !g.totalShown) {
+                    g.totalShown = true;
+                    popup(`TOTAL ${fmt(g.run.total)}`, 192, 100, PAL.yellow, { scale: 2, life: 1 });
+                }
+                if (g.t >= g.dur) {
+                    g.totalShown = false;
+                    updateList();
+                    if (g.contest.runs.length < g.contest.order.length) beginRun();
+                    else finishContest();
+                }
+                break;
+            }
+            case 'coin':
+                if (Math.floor(g.t * 8) !== Math.floor((g.t - dt) * 8) && g.t < g.dur - 0.8) playSound('tick');
+                if (g.t >= g.dur) showPodium();
+                break;
+        }
+    }
+
+    // Keep finished skaters rolling during the results pause (cosmetic).
+    function coast(heat) {
+        for (const s of heat.skaters) { s.prevX = s.x; s.v *= 0.99; s.x += s.v * C.DT; }
+    }
+
+    const fmt = tenths => (tenths / 10).toFixed(1);
+
+    function handleHeatEvents(g) {
+        const events = g.heat.events;
+        if (!events || !events.length) return;
+        g.heat.events = [];
+        for (const e of events) {
+            const s = e.skater;
+            switch (e.type) {
+                case 'trick':
+                    if (e.action === 'grind') playSound('grind', C.RAIL_LENGTH / Math.max(40, s.v));
+                    else if (e.action === 'air') playSound('pop');
+                    popup(s.trick, s.x, laneY(g, s.lane) - 34, skaterLook(s.name).T, { world: true, life: 0.9 });
+                    if (s.big) { fx.hype = Math.min(1, fx.hype + 0.5); if (!fx.banner) banner(['RAD!', 'GNARLY!', 'SICK!'][Math.floor(Math.random() * 3)], '', 0.8); }
+                    break;
+                case 'land':
+                    playSound('land');
+                    if (s.big && !reducedMotion()) fx.shake = Math.max(fx.shake, 2);
+                    break;
+                case 'wobble':
+                    playSound('wobble');
+                    break;
+                case 'bail':
+                    playSound('bail');
+                    if (!reducedMotion()) fx.shake = Math.max(fx.shake, 4);
+                    popup('BAIL!', s.x, laneY(g, s.lane) - 34, PAL.red, { world: true });
+                    if (!fx.banner) banner(Math.random() < 0.5 ? 'WIPEOUT!' : 'SLAM!', '', 0.9, RAMPS.hot);
+                    break;
+                case 'finish':
+                    if (e.place === 1) { playSound('cheer', 0.6); fx.hype = 1; }
+                    if (e.place <= Math.min(g.contest.qualify, g.heat.skaters.length)) popup(`Q${e.place}`, s.x, laneY(g, s.lane) - 34, PAL.lime, { world: true });
+                    break;
+            }
+        }
+    }
+
+    // Slow-mo when the last qualifying place is being fought out at the line.
+    function checkPhotoFinish(g) {
+        const order = BailCore.standings(g.heat);
+        const q = Math.min(g.contest.qualify, order.length);
+        if (q >= order.length) return;
+        const a = order[q - 1], b = order[q];
+        const L = g.heat.course.length;
+        if (a.finish === null && b.finish === null && a.x > L - 70 && Math.abs(a.x - b.x) < 12) {
+            fx.slowmo = true;
+            if (!g.photo) { g.photo = true; banner('PHOTO FINISH!', '', 1.2, RAMPS.chrome); }
+        }
+    }
+
+    // =====================================================================
+    // Vert run timeline (pre-rolled run -> animation)
+    // =====================================================================
+    function buildTimeline(run) {
+        const segs = [];
+        let t = C.DROP_IN, pos = 0;
+        segs.push({ type: 'deck', t0: 0, dur: C.DROP_IN });
+        const ride = C.AIR_CYCLE - C.VERT_AIR_TIME;
+        run.airs.forEach((air, i) => {
+            const target = pos <= CENTER_S && pos !== PATH_LEN ? PATH_LEN : 0;
+            const toSide = pos === CENTER_S ? (i % 2 ? 0 : PATH_LEN) : target;
+            segs.push({ type: 'ride', t0: t, dur: ride, s0: pos, s1: toSide });
+            t += ride;
+            segs.push({ type: 'air', t0: t, dur: C.VERT_AIR_TIME, s: toSide, air, index: i });
+            t += C.VERT_AIR_TIME;
+            pos = air.landed ? toSide : CENTER_S;
+        });
+        segs.push({ type: 'end', t0: t, dur: C.END_ROLL, s0: pos, s1: CENTER_S });
+        return segs;
+    }
+
+    const easeInOut = t => (1 - Math.cos(Math.PI * Math.max(0, Math.min(1, t)))) / 2;
+    const easeOut = t => 1 - (1 - Math.max(0, Math.min(1, t))) ** 2;
+
+    function currentSeg(g) {
+        const segs = g.timeline;
+        for (let i = segs.length - 1; i >= 0; i--) if (g.t >= segs[i].t0) return segs[i];
+        return segs[0];
+    }
+
+    // Fires sounds/banners as the run clock passes each moment.
+    function runEvents(g) {
+        const seg = currentSeg(g);
+        const fire = (key, fn) => { if (!g.fired.has(key)) { g.fired.add(key); fn(); } };
+        if (seg.type === 'ride' || seg.type === 'end') {
+            const u = (g.t - seg.t0) / seg.dur;
+            setRoll(Math.sin(Math.PI * Math.min(1, u)) * 1.1);
+        } else setRoll(0.1);
+        if (seg.type !== 'air') return;
+        const { air, index } = seg;
+        const tau = (g.t - seg.t0) / seg.dur;
+        const lastAir = g.lastRun && index === g.timeline.filter(s => s.type === 'air').length - 1;
+        if (lastAir) fx.slowmo = true;
+        fire(`up${index}`, () => playSound('pop'));
+        if (tau >= 0.45) fire(`trick${index}`, () => {
+            const scale = bestScale(air.trick.name + '!', 300, 2);
+            popup(air.trick.name + '!', 192, 30, PAL.yellow, { scale, life: 1.1 });
+            if (air.landed && air.trick.diff >= 7) banner('HUGE AIR!', '', 1, RAMPS.hot);
+            if (!air.landed) {
+                playSound('bail');
+                if (!reducedMotion()) fx.shake = 5;
+                banner(index % 2 ? 'WIPEOUT!' : 'SLAM!', '', 1, RAMPS.hot);
+            }
+        });
+        if (tau >= 0.98) fire(`land${index}`, () => {
+            if (!air.landed) return;
+            playSound('land');
+            popup(`+${air.pts.toFixed(1)}`, 192, 58, PAL.lime, { life: 0.9 });
+            if (air.trick.diff >= 5) { fx.hype = 1; playSound('cheer', air.trick.diff / 10); }
+            if (air.trick.diff >= 7 && !reducedMotion()) fx.shake = 3;
+        });
+    }
+
+    // Where the skater is, and how they're drawn, at the current run time.
+    function runPose(g) {
+        const seg = currentSeg(g);
+        const u = Math.max(0, Math.min(1, (g.t - seg.t0) / seg.dur));
+        if (g.phase === 'runIntro' || (g.phase === 'run' && seg.type === 'deck')) {
+            const k = g.phase === 'run' ? u : 0;
+            if (k > 0.8) {
+                const p = pipePoint(0);
+                return { x: p.x, y: p.y, angle: p.a * (k - 0.8) / 0.2, pose: 'roll', mirror: false };
+            }
+            return { x: 26 + (V.copL - 26) * (k / 0.8), y: V.copY, angle: 0, pose: 'roll', mirror: false };
+        }
+        if (g.phase !== 'run' && g.phase !== 'cards') return null;
+        if (g.phase === 'cards') {
+            const p = pipePoint(CENTER_S);
+            return { x: p.x, y: p.y, angle: 0, pose: 'wobble', mirror: false };
+        }
+        if (seg.type === 'ride' || seg.type === 'end') {
+            const e = seg.type === 'end' ? easeOut(u) : easeInOut(u);
+            const p = pipePoint(seg.s0 + (seg.s1 - seg.s0) * e);
+            return { x: p.x, y: p.y, angle: p.a, pose: 'roll', mirror: seg.s1 < seg.s0 };
+        }
+        // Air above the coping.
+        const right = seg.s === PATH_LEN;
+        const { air } = seg;
+        const height = 24 + air.trick.diff * 4;
+        const baseX = right ? V.copR - 8 : V.copL + 8;
+        if (!air.landed && u > 0.5) {
+            // Bail: tumble back down the ramp to the flat.
+            const k = (u - 0.5) / 0.5;
+            const p = pipePoint(seg.s + (CENTER_S - seg.s) * (k * k));
+            const drop = (1 - k) * height * 0.4;
+            return { x: p.x, y: p.y - drop, angle: Math.floor(k * 10) * Math.PI / 2, pose: 'roll', noBoard: true, mirror: right, board: { k, right, height } };
+        }
+        const flips = air.trick.spin / 180;
+        const outward = !right;
+        let mirror = Math.floor(u * (flips + 1)) % 2 === 0 ? outward : !outward;
+        if (u > 0.85) mirror = right;
+        let angle = 0;
+        if (u < 0.1) angle = right ? -Math.PI / 2 : Math.PI / 2;
+        if (air.trick.invert && u > 0.35 && u < 0.65) angle = Math.PI;
+        return { x: baseX, y: V.copY - height * Math.sin(Math.PI * u), angle, pose: 'air', mirror };
+    }
+
+    // =====================================================================
+    // Rendering
+    // =====================================================================
+    const laneY = (g, lane) => {
+        const n = g.heat.skaters.length;
+        return n === 1 ? 170 : Math.round(140 + lane * (68 / (n - 1)));
+    };
+
+    function drawStreetBackdrop(cam, time) {
+        ctx.drawImage(scenery.sky, 0, 12);
+        const tile = (img, factor, y) => {
+            const off = ((cam * factor) % img.width + img.width) % img.width;
+            for (let x = -off; x < SW; x += img.width) ctx.drawImage(img, Math.round(x), y);
+        };
+        tile(scenery.skyline, 0.15, 42);
+        tile(scenery.wall, 0.5, 78);
+        // Crowd behind the barrier, bouncing when hyped.
+        const off = ((cam * 0.9) % 256 + 256) % 256;
+        const bounce = reducedMotion() ? 0 : fx.hype;
+        for (let x = -off, k = 0; x < SW; x += 256, k++) {
+            const b = Math.round(Math.abs(Math.sin(time * 14 + k)) * 2 * bounce);
+            ctx.drawImage(scenery.crowd, Math.round(x), 96 - b);
+        }
+        // Barrier and sidewalk.
+        const boff = ((cam % 16) + 16) % 16;
+        for (let x = -boff; x < SW; x += 16) {
+            ctx.fillStyle = Math.floor((x + cam) / 16) % 2 ? PAL.red : PAL.white;
+            ctx.fillRect(Math.round(x), 110, 16, 4);
+        }
+        ctx.fillStyle = PAL.black;
+        ctx.fillRect(0, 109, SW, 1);
+        ctx.fillRect(0, 114, SW, 1);
+        ctx.fillStyle = PAL.concrete2;
+        ctx.fillRect(0, 115, SW, 5);
+        ctx.fillStyle = PAL.concrete3;
+        ctx.fillRect(0, 115, SW, 1);
+        ctx.fillStyle = PAL.concrete0;
+        for (let x = -(((cam) % 24) + 24) % 24; x < SW; x += 24) ctx.fillRect(Math.round(x), 115, 1, 5);
+        ctx.fillStyle = PAL.concrete0;
+        ctx.fillRect(0, 120, SW, 2);
+        // Road.
+        ctx.save();
+        ctx.translate(-Math.round(cam) % 64, 0);
+        ctx.fillStyle = scenery.asphalt;
+        ctx.fillRect(0, GROUND_Y, SW + 64, SH - GROUND_Y);
+        ctx.restore();
+    }
+
+    function drawObstacle(kind, sx, yb) {
+        sx = Math.round(sx);
+        switch (kind) {
+            case 'kerb':
+                ctx.fillStyle = PAL.black; ctx.fillRect(sx - 1, yb - 6, 18, 7);
+                ctx.fillStyle = PAL.concrete2; ctx.fillRect(sx, yb - 5, 16, 5);
+                ctx.fillStyle = PAL.yellow; ctx.fillRect(sx, yb - 5, 16, 1);
+                break;
+            case 'ramp':
+                for (let i = 0; i < 20; i++) {
+                    const h = Math.round(i * 0.5);
+                    ctx.fillStyle = PAL.black; ctx.fillRect(sx + i, yb - h - 1, 1, h + 1);
+                    ctx.fillStyle = i % 5 ? PAL.wood2 : PAL.wood1; ctx.fillRect(sx + i, yb - h, 1, h);
+                }
+                ctx.fillStyle = PAL.steel3; ctx.fillRect(sx + 18, yb - 11, 2, 1);
+                ctx.fillStyle = PAL.wood0; ctx.fillRect(sx + 19, yb - 10, 1, 10);
+                break;
+            case 'rail':
+                ctx.fillStyle = PAL.black;
+                ctx.fillRect(sx - 1, yb - 9, C.RAIL_LENGTH + 2, 4);
+                ctx.fillRect(sx + 3, yb - 7, 3, 7);
+                ctx.fillRect(sx + C.RAIL_LENGTH - 6, yb - 7, 3, 7);
+                ctx.fillStyle = PAL.steel3; ctx.fillRect(sx, yb - 8, C.RAIL_LENGTH, 1);
+                ctx.fillStyle = PAL.steel2; ctx.fillRect(sx, yb - 7, C.RAIL_LENGTH, 1);
+                ctx.fillStyle = PAL.steel1; ctx.fillRect(sx + 4, yb - 6, 1, 6); ctx.fillRect(sx + C.RAIL_LENGTH - 5, yb - 6, 1, 6);
+                break;
+            case 'cone':
+                ctx.fillStyle = PAL.black; ctx.fillRect(sx - 1, yb - 9, 7, 10);
+                ctx.fillStyle = PAL.orange;
+                for (let i = 0; i < 8; i++) ctx.fillRect(sx + 2 - Math.floor(i / 3), yb - 8 + i, 1 + 2 * Math.floor(i / 3), 1);
+                ctx.fillStyle = PAL.white; ctx.fillRect(sx + 1, yb - 5, 3, 1);
+                ctx.fillStyle = PAL.orange; ctx.fillRect(sx - 1, yb, 7, 1);
+                break;
+            case 'pothole':
+                ctx.fillStyle = PAL.black; ctx.fillRect(sx, yb - 1, 14, 3); ctx.fillRect(sx + 2, yb - 2, 10, 5);
+                ctx.fillStyle = PAL.asphalt3; ctx.fillRect(sx + 2, yb - 2, 10, 1);
+                break;
+            case 'puddle':
+                ctx.fillStyle = PAL.water; ctx.fillRect(sx, yb - 1, 18, 3); ctx.fillRect(sx + 3, yb - 2, 12, 5);
+                ctx.fillStyle = PAL.water2; ctx.fillRect(sx + 5, yb - 1, 5, 1);
+                break;
+        }
+    }
+
+    function drawTrolley(sx, yb) {
+        sx = Math.round(sx);
+        ctx.fillStyle = PAL.black; ctx.fillRect(sx - 1, yb - 13, 17, 11);
+        ctx.fillStyle = PAL.steel2;
+        for (let x = 0; x < 15; x += 3) ctx.fillRect(sx + x, yb - 12, 1, 9);
+        for (let y = 0; y < 9; y += 3) ctx.fillRect(sx, yb - 12 + y, 15, 1);
+        ctx.fillStyle = PAL.red; ctx.fillRect(sx + 14, yb - 15, 3, 2);
+        ctx.fillStyle = PAL.black; ctx.fillRect(sx + 1, yb - 2, 3, 3); ctx.fillRect(sx + 11, yb - 2, 3, 3);
+    }
+
+    function drawFinishLine(sx) {
+        sx = Math.round(sx);
+        for (let y = GROUND_Y; y < SH; y += 3) {
+            for (let k = 0; k < 2; k++) {
+                ctx.fillStyle = (Math.floor(y / 3) + k) % 2 ? PAL.white : PAL.black;
+                ctx.fillRect(sx + k * 3, y, 3, 3);
+            }
+        }
+        // Gantry.
+        ctx.fillStyle = PAL.steel1;
+        ctx.fillRect(sx - 2, 60, 2, 62);
+        const spr = textSprite('FINISH', { ramp: RAMPS.graffiti });
+        ctx.fillStyle = PAL.black;
+        ctx.fillRect(sx - 2, 58, spr.width + 8, 13);
+        ctx.fillStyle = PAL.hot;
+        ctx.fillRect(sx - 1, 59, spr.width + 6, 11);
+        ctx.drawImage(spr, sx + 2, 61);
+    }
+
+    function drawHeatScene(g, time, alpha) {
+        const heat = g.heat;
+        const L = heat.course.length;
+        const xs = heat.skaters.map(s => s.prevX + (s.x - s.prevX) * alpha);
+        const lead = Math.max(...xs), last = Math.min(...xs);
+        // Camera: frame the pack, but always keep the leader on screen.
+        const want = Math.max(lead - 330, Math.min(lead - 140, (lead + last) / 2 - SW / 2));
+        g.cam += (want - g.cam) * Math.min(1, 0.08);
+        const cam = Math.round(g.cam);
+        drawStreetBackdrop(cam, time);
+
+        // Lane lines.
+        const n = heat.skaters.length;
+        ctx.fillStyle = 'rgba(248, 240, 200, 0.5)';
+        for (let l = 0; l < n - 1; l++) {
+            const y = Math.round((laneY(g, l) + laneY(g, l + 1)) / 2) + 1;
+            for (let x = -((cam % 24) + 24) % 24; x < SW; x += 24) ctx.fillRect(Math.round(x), y, 10, 1);
+        }
+        // Start and finish.
+        ctx.fillStyle = PAL.white;
+        if (-cam > -4 && -cam < SW) ctx.fillRect(-cam, GROUND_Y, 2, SH - GROUND_Y);
+        if (L - cam < SW + 10) drawFinishLine(L - cam);
+
+        const tx = BailCore.trolleyX(heat.course, heat.t);
+        heat.skaters.forEach((s, lane) => {
+            const yb = laneY(g, lane);
+            for (const ob of heat.course.obstacles) {
+                const sx = ob.x - cam;
+                if (sx > -70 && sx < SW + 10) drawObstacle(ob.kind, sx, yb);
+            }
+            if (!s.trolleyDone && tx - cam > -20 && tx - cam < SW + 10) drawTrolley(tx - cam, yb);
+            drawHeatSkater(g, s, xs[lane] - cam, yb, time, xs);
+        });
+
+        // Names over everyone.
+        heat.skaters.forEach((s, lane) => {
+            const sx = xs[lane] - cam, yb = laneY(g, lane);
+            const look = skaterLook(s.name);
+            if (sx < -6) {
+                const spr = textSprite('<' + fitText(s.name, 'small', 50), { font: 'small', color: look.T });
+                ctx.drawImage(spr, 2, yb - 12);
+                return;
+            }
+            const lift = s.state === 'air' ? Math.sin(Math.PI * (1 - s.timer / s.airTime)) * (s.big ? 22 : 12) : 0;
+            blit(textSprite(fitText(s.name, 'small', 60), { font: 'small', color: look.T }), sx, yb - 27 - lift);
+        });
+        drawHeatHud(g, xs);
+    }
+
+    function drawHeatSkater(g, s, sx, yb, time, xs) {
+        if (sx < -20 || sx > SW + 20) return;
+        // Shadow.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillRect(Math.round(sx) - 6, yb, 13, 2);
+        const name = s.name;
+        if (s.state === 'bailing') {
+            const k = 1 - s.timer / C.BAIL_TIME;
+            const body = skaterSprite(name, 'roll', true);
+            const hop = Math.abs(Math.sin(k * Math.PI * 3)) * 6 * (1 - k);
+            drawSprite(body, sx, yb - hop, { angle: k < 0.8 ? Math.floor(k * 10) * Math.PI / 2 : 0 });
+            const board = skaterSprite(name, 'board');
+            const bk = Math.min(1, k * 1.4);
+            drawSprite(board, sx + 30 * bk, yb - 16 * Math.sin(Math.PI * bk), { angle: bk < 1 ? Math.floor(bk * 8) * Math.PI / 2 : 0 });
+            return;
+        }
+        let pose = 'roll', y = yb, angle = 0, jx = 0;
+        if (s.state === 'air') {
+            const k = 1 - s.timer / s.airTime;
+            y = yb - Math.sin(Math.PI * k) * (s.big ? 22 : 12);
+            pose = 'air';
+        } else if (s.state === 'grind') {
+            y = yb - 8;
+            pose = 'grind';
+        } else if (s.state === 'manual') {
+            angle = -0.25;
+        } else if (s.state === 'wobble') {
+            pose = 'wobble';
+            jx = Math.round(Math.sin(time * 40));
+        } else if (s.finish !== null) {
+            pose = 'wobble';
+        } else {
+            // Jostling: skaters side by side in neighbouring lanes throw a comic wobble (render only).
+            const near = g.heat.skaters.some((o, i) => o !== s && Math.abs(o.lane - s.lane) === 1 && Math.abs(xs[i] - (sx + g.cam)) < 9 && o.state === 'rolling');
+            if (near && Math.sin(time * 9 + s.lane) > 0.3) { pose = 'wobble'; jx = Math.round(Math.sin(time * 30 + s.lane)); }
+            else if (((time * 1.1 + s.lane * 0.37) % 1) < 0.25) pose = 'push';
+        }
+        drawSprite(skaterSprite(name, pose), sx + jx, y, { angle });
+    }
+
+    function drawHeatHud(g, xs) {
+        const c = g.contest, heat = g.heat;
+        ctx.fillStyle = PAL.black;
+        ctx.fillRect(0, 0, SW, 12);
+        ctx.fillStyle = PAL.hot;
+        ctx.fillRect(0, 12, SW, 1);
+        ctx.drawImage(textSprite(`HEAT ${c.heatIndex + 1}/${c.heatPlan.length}`, { color: PAL.yellow, outline: null }), 4, 3);
+        // Contest progress strip: one box per heat, then the final.
+        const boxes = [...c.heatPlan.map((_, i) => `H${i + 1}`), 'F'];
+        boxes.forEach((label, i) => {
+            const x = SW - 4 - (boxes.length - i) * 16;
+            const state = i < c.heatIndex ? PAL.lime : i === c.heatIndex ? PAL.hot : PAL.concrete0;
+            ctx.fillStyle = state;
+            ctx.fillRect(x, 2, 14, 8);
+            ctx.drawImage(textSprite(label, { font: 'small', color: PAL.black, outline: null }), x + 2, 4);
+        });
+        // Course progress: each skater as a dot between start and finish.
+        const x0 = 70, x1 = SW - 12 - boxes.length * 16;
+        ctx.fillStyle = PAL.concrete1;
+        ctx.fillRect(x0, 6, x1 - x0, 1);
+        ctx.fillStyle = PAL.white;
+        ctx.fillRect(x1, 3, 1, 7);
+        heat.skaters.forEach((s, i) => {
+            const px = x0 + Math.min(1, xs[i] / heat.course.length) * (x1 - x0);
+            ctx.fillStyle = PAL.black;
+            ctx.fillRect(Math.round(px) - 2, 3 + (i % 2) * 2, 5, 5);
+            ctx.fillStyle = skaterLook(s.name).T;
+            ctx.fillRect(Math.round(px) - 1, 4 + (i % 2) * 2, 3, 3);
+        });
+        // Live positions.
+        const order = BailCore.standings(heat);
+        const q = Math.min(c.qualify, order.length);
+        const w = 92, h = 9 + order.length * 7;
+        ctx.drawImage(windowBox(w, h), SW - w - 3, 15);
+        order.forEach((s, i) => {
+            const color = i < q ? PAL.lime : PAL.concrete2;
+            const line = `${i + 1} ${fitText(s.name, 'small', 64)}`;
+            ctx.drawImage(textSprite(line, { font: 'small', color, outline: null }), SW - w + 2, 21 + i * 7);
+            ctx.fillStyle = skaterLook(s.name).T;
+            ctx.fillRect(SW - 9, 21 + i * 7, 3, 5);
+        });
+    }
+
+    function drawHeatOutro(g) {
+        const quals = g.heatQuals || [];
+        const w = 170, h = 26 + quals.length * 12;
+        const x = Math.round(SW / 2 - w / 2), y = 40;
+        ctx.drawImage(windowBox(w, h), x, y);
+        blit(textSprite('QUALIFIED', { ramp: RAMPS.graffiti, drips: 2 }), SW / 2, y + 12);
+        quals.forEach((name, i) => {
+            blit(textSprite(`${i + 1}. ${fitText(name, 'big', 140)}`, { color: skaterLook(name).T }), SW / 2, y + 26 + i * 12);
+        });
+    }
+
+    // --- Vert scene ---
+    function drawCrowd(time, xs, y) {
+        const bounce = reducedMotion() ? 0 : fx.hype;
+        for (const [x0, x1] of xs) {
+            for (let x = x0, k = 0; x < x1; x += 7, k++) {
+                const b = Math.round(Math.abs(Math.sin(time * 13 + k * 1.7)) * 3 * bounce);
+                ctx.fillStyle = ['#2a2040', '#3a2850', '#202030', '#40304a'][k % 4];
+                ctx.fillRect(x, y - 8 - b, 6, 14);
+                ctx.fillRect(x + 1, y - 12 - b, 4, 4);
+                if (bounce > 0.4 && k % 3 === 0) ctx.fillRect(x + (k % 2 ? 5 : -1), y - 16 - b, 1, 5);   // arms up
+            }
+        }
+    }
+
+    function drawJudges(g) {
+        const tableX = 132, tableY = 200;
+        const showCards = g.phase === 'cards';
+        for (let j = 0; j < 3; j++) {
+            const jx = tableX + 18 + j * 40;
+            ctx.fillStyle = PAL.black;
+            ctx.fillRect(jx - 5, tableY - 14, 10, 14);
+            ctx.fillStyle = '#383848';
+            ctx.fillRect(jx - 4, tableY - 13, 8, 13);
+            ctx.fillStyle = SKINS[(j * 2) % SKINS.length];
+            ctx.fillRect(jx - 3, tableY - 19, 6, 6);
+            if (showCards) {
+                const start = [0.2, 0.55, 0.9][j];
+                const p = Math.max(0, Math.min(1, (g.t - start) / 0.25));
+                if (g.t < start) continue;
+                const wide = Math.max(1, Math.round(Math.abs(Math.cos(Math.PI * p)) * 22));
+                const cy = tableY - 36;
+                ctx.fillStyle = PAL.black;
+                ctx.fillRect(jx - Math.ceil(wide / 2) - 1, cy - 1, wide + 2, 17);
+                ctx.fillStyle = p < 0.5 ? PAL.red : PAL.white;
+                ctx.fillRect(jx - Math.ceil(wide / 2), cy, wide, 15);
+                if (p >= 1) blit(textSprite(fmt(g.run.cards[j]), { color: PAL.black, outline: null }), jx, cy + 8);
+                ctx.fillStyle = PAL.steel1;
+                ctx.fillRect(jx, cy + 15, 1, 6);
+            }
+        }
+        ctx.fillStyle = PAL.black;
+        ctx.fillRect(tableX - 1, tableY - 1, 122, 18);
+        ctx.fillStyle = PAL.hot;
+        ctx.fillRect(tableX, tableY, 120, 16);
+        blit(textSprite('JUDGES', { font: 'small', color: PAL.white, outline: PAL.black }), tableX + 60, tableY + 8);
+    }
+
+    function drawLeaderboard(g) {
+        const c = g.contest;
+        const done = c.runs.filter(r => r !== g.run || g.phase === 'cards' && g.t >= 1.3).sort((a, b) => b.total - a.total);
+        const pending = c.order.filter(n => !done.some(r => r.name === n));
+        const rows = [...done.map(r => ({ name: r.name, score: fmt(r.total) })), ...pending.map(n => ({ name: n, score: '--', pending: true }))];
+        const w = 108, h = 14 + rows.length * 7;
+        ctx.drawImage(windowBox(w, h), 3, 3);
+        ctx.drawImage(textSprite('LEADERBOARD', { font: 'small', color: PAL.yellow, outline: null }), 8, 8);
+        rows.forEach((r, i) => {
+            const current = g.run && r.name === g.run.name && g.phase !== 'cards';
+            const color = current ? PAL.cyan : r.pending ? PAL.concrete1 : i === 0 ? PAL.lime : PAL.concrete3;
+            ctx.drawImage(textSprite(`${current ? '>' : ' '}${fitText(r.name, 'small', 66)}`, { font: 'small', color, outline: null }), 6, 15 + i * 7);
+            const sc = textSprite(r.score, { font: 'small', color, outline: null });
+            ctx.drawImage(sc, 3 + w - 6 - sc.width, 15 + i * 7);
+        });
+    }
+
+    function drawVertScene(g, time) {
+        ctx.drawImage(scenery.vert, 0, 0);
+        drawCrowd(time, [[0, 20], [366, 384]], 200);
+        drawCrowd(time, [[4, 120], [264, 380]], 216);
+        const name = g.run ? g.run.name : null;
+        const pose = name && runPose(g);
+        if (pose) {
+            const spr = skaterSprite(name, pose.pose, pose.noBoard);
+            drawSprite(spr, pose.x, pose.y, { scale: 2, angle: pose.angle, mirror: pose.mirror });
+            if (pose.board) {
+                const { k, right, height } = pose.board;
+                const bx = (right ? V.copR + 10 : V.copL - 10) + (right ? 1 : -1) * 20 * k;
+                const by = V.copY - height * 0.6 * Math.sin(Math.PI * Math.min(1, k)) - 2;
+                drawSprite(skaterSprite(name, 'board'), bx, by, { scale: 2, angle: Math.floor(k * 8) * Math.PI / 2 });
+            }
+            blit(textSprite(fitText(name, 'big', 120), { color: skaterLook(name).T }), pose.x, pose.y - (pose.pose === 'air' ? 40 : 48));
+        }
+        drawJudges(g);
+        if (g.contest.order) drawLeaderboard(g);
+        if (g.phase === 'finalIntro') drawRunningOrder(g);
+    }
+
+    function drawRunningOrder(g) {
+        const order = g.contest.order;
+        const w = 160, h = 22 + order.length * 9;
+        const x = Math.round(SW / 2 - w / 2), y = Math.max(14, Math.min(92, SH - h - 4));
+        ctx.drawImage(windowBox(w, h), x, y);
+        blit(textSprite('RUNNING ORDER', { font: 'small', color: PAL.yellow, outline: null }), SW / 2, y + 11);
+        order.forEach((name, i) => blit(textSprite(`${i + 1}. ${fitText(name, 'big', 130)}`, { color: skaterLook(name).T }), SW / 2, y + 21 + i * 9));
+    }
+
+    function drawCoin(g, time) {
+        const flip = g.contest.coinFlip;
+        const settled = g.t > g.dur - 0.8;
+        const spin = settled ? 1 : Math.abs(Math.cos(time * 14));
+        const r = 18, cy = 110;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(0, 0, SW, SH);
+        for (let y = -r; y <= r; y++) {
+            const half = Math.round(Math.sqrt(r * r - y * y));
+            const yy = Math.round(cy + y * Math.max(0.08, spin));
+            ctx.fillStyle = PAL.black;
+            ctx.fillRect(192 - half - 1, yy, half * 2 + 2, 1);
+            ctx.fillStyle = rampAt(['#886000', '#c89800', '#f8d000', '#fff080'], 1 - (y + r) / (2 * r), 192, yy);
+            ctx.fillRect(192 - half, yy, half * 2, 1);
+        }
+        const label = settled ? flip.winner : flip.tied[Math.floor(time * 8) % flip.tied.length];
+        blit(textSprite(fitText(label, 'big', 300, 2), { scale: 2, ramp: settled ? RAMPS.hot : RAMPS.chrome, shadow: 1 }), 192, 150);
+        blit(textSprite(flip.tied.map(n => fitText(n, 'small', 80)).join(' VS '), { font: 'small', color: PAL.cyan }), 192, 172);
+    }
+
+    function drawPodium(g, time) {
+        const c = g.contest;
+        ctx.drawImage(scenery.vert, 0, 0);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(0, 0, SW, SH);
+        drawCrowd(time, [[0, 384]], 216);
+        const spots = [{ x: 192, top: 126, label: '1', color: PAL.yellow }, { x: 132, top: 140, label: '2', color: PAL.steel3 }, { x: 252, top: 150, label: '3', color: PAL.orange }];
+        c.podium.forEach((run, i) => {
+            const sp = spots[i];
+            ctx.fillStyle = PAL.black;
+            ctx.fillRect(sp.x - 29, sp.top - 1, 58, 178 - sp.top);
+            ctx.fillStyle = sp.color;
+            ctx.fillRect(sp.x - 28, sp.top, 56, 176 - sp.top);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.fillRect(sp.x + 14, sp.top, 14, 176 - sp.top);
+            blit(textSprite(sp.label, { scale: 2, color: PAL.black, outline: null }), sp.x, sp.top + 12);
+            const pose = i === 0 && Math.floor(time * 3) % 2 && !reducedMotion() ? 'wobble' : i === 0 ? 'wobble' : 'roll';
+            drawSprite(skaterSprite(run.name, pose), sp.x, sp.top - 1, { scale: 2 });
+            blit(textSprite(fitText(run.name, 'big', 70), { color: i === 0 ? PAL.yellow : PAL.white }), sp.x, sp.top - 50);
+            blit(textSprite(fmt(run.total), { font: 'small', color: PAL.cyan }), sp.x, sp.top + 26);
+        });
+        const title = `${c.winner} WINS!`;
+        const scale = bestScale(title, 360, 3);
+        blit(textSprite(fitText(title, 'big', 360, scale), { scale, ramp: RAMPS.graffiti, shadow: 1, drips: scale + 1 }), 192, 26);
+    }
+
+    function drawTitle(time) {
+        const cam = time * 40;
+        drawStreetBackdrop(cam, time);
+        // Attract mode: a few skaters cruising, hopping now and then.
+        const names = participants.length ? participants.slice(0, 5) : ['SKATER 1', 'SKATER 2', 'SKATER 3'];
+        names.forEach((name, i) => {
+            const yb = 150 + i * 13;
+            const x = ((time * (60 + i * 9) + i * 97) % (SW + 60)) - 30;
+            const hopT = (time * 0.7 + i * 0.31) % 1;
+            const hop = hopT < 0.18 ? Math.sin(Math.PI * hopT / 0.18) * 12 : 0;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            ctx.fillRect(Math.round(x) - 6, yb, 13, 2);
+            drawSprite(skaterSprite(name, hop ? 'air' : (time + i) % 1 < 0.25 ? 'push' : 'roll'), x, yb - hop);
+        });
+        blit(textSprite('BAIL OUT!', { scale: 5, ramp: RAMPS.graffiti, shadow: 2, drips: 6 }), 192, 44);
+        blit(textSprite('SKATE CONTEST NAME PICKER', { font: 'small', color: PAL.cyan }), 192, 76);
+        const prompt = participants.length < 2 ? ['ADD 2+ SKATERS', 'TO START THE CONTEST'] : ['PRESS SPACE', 'TO DROP IN'];
+        if (reducedMotion() || Math.floor(time * 2) % 2 === 0 || participants.length < 2) {
+            blit(textSprite(prompt[0], { scale: 2, ramp: RAMPS.hot, shadow: 1 }), 192, 96);
+        }
+        blit(textSprite(prompt[1], { color: PAL.white }), 192, 110);
+    }
+
+    function drawOverlays(dt) {
+        // Pop-ups: trick names and points.
+        fx.popups = fx.popups.filter(p => p.life > 0);
+        for (const p of fx.popups) {
+            const x = p.world && game && game.heat ? p.x - Math.round(game.cam) : p.x;
+            blit(textSprite(p.text, { scale: p.scale, color: p.color, shadow: p.scale > 1 ? 1 : 0 }), x, p.y);
+            p.y -= 18 * dt;
+            p.life -= dt;
+        }
+        // Announcer banner.
+        const b = fx.banner;
+        if (b) {
+            const scale = bestScale(b.text, 340, 3);
+            const blink = !reducedMotion() && b.life < 0.25 && Math.floor(b.life * 20) % 2;
+            if (!blink) {
+                blit(textSprite(fitText(b.text, 'big', 340, scale), { scale, ramp: b.ramp, shadow: 2, drips: scale }), 192, 60);
+                if (b.sub) blit(textSprite(fitText(b.sub, 'big', 340), { color: PAL.white }), 192, 60 + scale * 5 + 8);
+            }
+        }
+        // Confetti.
+        fx.confetti = fx.confetti.filter(c => c.life > 0 && c.y < SH + 4);
+        for (const c of fx.confetti) {
+            c.vy += 0.08;
+            c.x += c.vx;
+            c.y += c.vy;
+            c.rot += 0.3;
+            c.life -= 0.004;
+            ctx.fillStyle = c.color;
+            const flat = Math.floor(c.rot) % 2 === 0;
+            ctx.fillRect(Math.round(c.x), Math.round(c.y), flat ? 2 : 1, flat ? 1 : 2);
+        }
+    }
+
+    function draw(time, dt) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = PAL.black;
+        ctx.fillRect(0, 0, SW, SH);
+        if (fx.shake > 0.3 && !reducedMotion()) {
+            ctx.translate(Math.round((Math.random() - 0.5) * fx.shake), Math.round((Math.random() - 0.5) * fx.shake));
+        }
+        fx.shake *= 0.86;
+        const g = game;
+        if (!g) drawTitle(time);
+        else if (g.phase === 'podium') drawPodium(g, time);
+        else if (g.heat && ['heatIntro', 'heat', 'heatOutro'].includes(g.phase)) {
+            drawHeatScene(g, time, g.phase === 'heat' ? g.acc / C.DT : 1);
+            if (g.phase === 'heatOutro') drawHeatOutro(g);
+        } else {
+            drawVertScene(g, time);
+            if (g.phase === 'coin') drawCoin(g, time);
+        }
+        drawOverlays(dt);
+    }
+
+    // --- Main loop: fixed-step logic inside update(), drawn every animation frame ---
+    let lastNow = performance.now();
+    function frame(now) {
+        const dt = Math.min(0.05, Math.max(0, (now - lastNow) / 1000));
+        lastNow = now;
+        update(dt);
+        draw(now / 1000, dt);
+        requestAnimationFrame(frame);
+    }
+
+    // --- Controls ---
+    startBtn.addEventListener('click', startContest);
+    againBtn.addEventListener('click', startContest);
+    editBtn.addEventListener('click', backToNames);
+    skipBtn.addEventListener('click', skipToFinal);
+    canvas.addEventListener('click', () => { if (!game || game.phase !== 'podium') primaryAction(); });
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { if (game) backToNames(); return; }
+        if (e.target === nameInput) return;
+        const k = e.key.toLowerCase();
+        if (k === 'm') { if (!e.repeat) toggleMute(); return; }
+        if (k === 's') { if (!e.repeat) skipToFinal(); return; }
+        if (e.key === ' ' || e.key === 'Enter') {
+            // A focused button keeps its own Space/Enter.
+            if (e.target.closest && e.target.closest('button, input, a')) return;
+            e.preventDefault();
+            if (!e.repeat) primaryAction();
+        }
+    });
+
+    // =====================================================================
+    // Debug: headless fairness check (?debug=1, optional &seed=123)
+    // =====================================================================
+    function setupDebug() {
+        $('debugPanel').hidden = false;
+        $('backLink').href = location.pathname;
+        const runBtn = $('debugRun'), out = $('debugResults');
+        const TOTAL = 10000;
+        const names = () => participants.length >= 2 ? [...participants] : Array.from({ length: 8 }, (_, i) => `Skater ${i + 1}`);
+        $('debugIntro').textContent =
+            `Runs the full contest logic headless (heats at ${C.HZ} Hz, final runs, judges, tie-breaks) with no drawing, ` +
+            `using ${participants.length >= 2 ? 'your names' : '8 sample names'} in ${settings.mode === 'quick' ? 'Quick' : 'Full contest'} mode. ` +
+            (SEED === null ? 'Randomness: sfc32 seeded from crypto.getRandomValues.' : `Randomness: seeded (seed ${SEED}) — repeatable.`);
+        runBtn.addEventListener('click', () => {
+            const sim = BailCore.createSimulation(names(), settings.mode, rng, TOTAL);
+            runBtn.disabled = true;
+            const t0 = performance.now();
+            const chunk = () => {
+                const done = sim.run(200);
+                out.textContent = `Simulating… ${done.toLocaleString()} / ${TOTAL.toLocaleString()} contests`;
+                if (!sim.done()) return setTimeout(chunk, 0);
+                runBtn.disabled = false;
+                renderDebug(out, sim.result(), (performance.now() - t0) / 1000);
+            };
+            chunk();
+        });
+        if (params.has('selftest')) runBtn.click();
+    }
+
+    function renderDebug(out, r, seconds) {
+        const pct = x => (x * 100).toFixed(2) + '%';
+        const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const maxWins = Math.max(...r.wins);
+        const rows = r.names.map((n, i) =>
+            `<tr><td>${esc(n)}</td><td>${r.wins[i]}</td><td>${pct(r.wins[i] / r.contests)}</td>` +
+            `<td><span class="bar" style="width:${Math.round(160 * r.wins[i] / maxWins)}px"></span></td></tr>`).join('');
+        const bails = Object.entries(r.heat).map(([k, v]) => `<tr><td>Downhill: ${k}</td><td>${v.encounters.toLocaleString()}</td><td>${pct(v.bails / v.encounters)}</td></tr>`).join('');
+        out.innerHTML =
+            `<div class="summary ${r.passed ? 'pass' : 'fail'}">${r.passed ? 'FAIR: no evidence of bias' : 'CHECK FAILED'}</div>` +
+            `<p>${r.contests.toLocaleString()} contests in ${seconds.toFixed(1)}s. χ² = ${r.chi.toFixed(2)} with ${r.df} degrees of freedom ` +
+            `(fails above ${r.limit} at p = 0.001). Each name should win about ${pct(1 / r.names.length)}.</p>` +
+            `<table><tr><th>Name</th><th>Wins</th><th>Share</th><th></th></tr>${rows}</table>` +
+            `<p>Average contest: ${r.avgDuration.toFixed(1)}s (range ${r.minDuration.toFixed(1)}–${r.maxDuration.toFixed(1)}s), not counting slow-mo or skipped pauses. ` +
+            `Coin-flip tie breaks: ${r.coinFlips} (${pct(r.coinFlips / r.contests)}).</p>` +
+            `<table><tr><th>Event</th><th>Attempts</th><th>Bail rate</th></tr>${bails}` +
+            `<tr><td>Vert airs</td><td>${r.vert.airs.toLocaleString()}</td><td>${pct(r.vert.bails / r.vert.airs)}</td></tr></table>`;
+    }
+
+    // --- Start up ---
+    function syncPixelSize() {
+        const h = canvas.getBoundingClientRect().height;
+        if (h) document.documentElement.style.setProperty('--px', `${h / SH}px`);
+    }
+    participants = loadNames();
+    settings = loadSettings();
+    buildScenery();
+    syncPixelSize();
+    if (window.ResizeObserver) new ResizeObserver(syncPixelSize).observe(canvas);
+    else window.addEventListener('resize', syncPixelSize);
+    updateList();
+    if (DEBUG) setupDebug();
+    requestAnimationFrame(frame);
+</script>
+</body>
+</html>
