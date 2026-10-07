@@ -1,0 +1,2670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mousetrap Name Picker</title>
+    <style>
+        :root {
+            --bg-color: #17224a;
+            --panel-color: #fff4d6;
+            --ink: #3a2410;
+            --toy-red: #e63b2e;
+            --toy-red-dark: #9e2116;
+            --toy-yellow: #ffc93c;
+            --toy-yellow-dark: #c9921a;
+            --toy-blue: #2f7de1;
+            --toy-green: #43b047;
+            --error-color: #c0154a;
+        }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+            background:
+                radial-gradient(circle at 50% -10%, #2c3d7a 0%, transparent 60%),
+                radial-gradient(rgba(255, 255, 255, 0.05) 2px, transparent 2px) 0 0 / 28px 28px,
+                var(--bg-color);
+            background-color: var(--bg-color);
+            color: var(--ink);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-family: 'Arial Black', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif;
+            font-weight: 900;
+            font-size: 44px;
+            letter-spacing: 3px;
+            margin: 0 0 16px;
+            text-align: center;
+            line-height: 1.1;
+        }
+        h1 .word { display: inline-block; white-space: nowrap; }
+        h1 .word span { display: inline-block; text-shadow: 0 4px 0 #0b1230, 3px 3px 0 #0b1230; }
+        h1 .word span:nth-child(4n+1) { color: var(--toy-red); transform: rotate(-4deg); }
+        h1 .word span:nth-child(4n+2) { color: var(--toy-yellow); transform: translateY(-3px) rotate(3deg); }
+        h1 .word span:nth-child(4n+3) { color: var(--toy-blue); transform: rotate(-2deg); }
+        h1 .word span:nth-child(4n+4) { color: var(--toy-green); transform: translateY(2px) rotate(4deg); }
+        .container {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            max-width: 1300px;
+            width: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            min-width: 230px;
+            max-width: 300px;
+            background: var(--panel-color);
+            padding: 20px;
+            border: 3px solid var(--toy-red);
+            border-radius: 16px;
+            box-shadow: 0 6px 0 var(--toy-red-dark);
+        }
+        .game-area {
+            flex: 4;
+            position: relative;
+            min-width: 0;
+        }
+        canvas {
+            background: #6b3f1f;
+            border: 4px solid var(--toy-yellow);
+            border-radius: 16px;
+            box-shadow: 0 6px 0 var(--toy-yellow-dark);
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 10 / 7;
+            box-sizing: border-box;
+        }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fff;
+            color: var(--ink);
+            border: 2px solid #c9b48a;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 16px;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--toy-blue); }
+        button {
+            width: 100%;
+            padding: 10px;
+            background: var(--toy-yellow);
+            color: var(--ink);
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 0 var(--toy-yellow-dark);
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            transition: background 0.15s, transform 0.05s, box-shadow 0.05s;
+        }
+        button:hover:not(:disabled) { background: #ffd866; }
+        button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--toy-yellow-dark); }
+        button:disabled, input:disabled { opacity: 0.45; cursor: not-allowed; }
+        #startBtn { background: var(--toy-red); color: #fff; box-shadow: 0 4px 0 var(--toy-red-dark); }
+        #startBtn:hover:not(:disabled) { background: #f45a4e; }
+        #startBtn:active:not(:disabled) { box-shadow: 0 1px 0 var(--toy-red-dark); }
+        #muteBtn { background: transparent; color: var(--ink); border: 2px solid #c9b48a; box-shadow: none; font-size: 13px; }
+        #muteBtn:hover { background: #f3e3b8; }
+        #nameError {
+            min-height: 1.2em;
+            margin: -4px 0 8px;
+            color: var(--error-color);
+            font-size: 13px;
+            font-weight: bold;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 4px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background: #fff;
+            margin-bottom: 5px;
+            border: 1px solid #e3d3a8;
+            border-left: 8px solid var(--swatch, #888);
+            border-radius: 6px;
+        }
+        li .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; }
+        .count { font-size: 12px; color: #8a6d45; margin-bottom: 4px; }
+        .remove-btn {
+            width: auto;
+            margin: 0;
+            padding: 4px 8px;
+            background: var(--toy-red);
+            color: #fff;
+            font-size: 12px;
+            box-shadow: none;
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+        .remove-btn:hover:not(:disabled) { background: #f45a4e; }
+        hr { border: none; border-top: 2px dashed #e3d3a8; margin: 16px 0; }
+        .fair-note { font-size: 12px; line-height: 1.5; color: #8a6d45; margin: 6px 0 0; }
+        .fair-note a { color: var(--toy-blue); }
+        #winnerOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(10, 14, 40, 0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding-top: 5%;
+            border-radius: 16px;
+            text-align: center;
+        }
+        .winner-card {
+            background: var(--panel-color);
+            border: 4px solid var(--toy-red);
+            border-radius: 18px;
+            box-shadow: 0 8px 0 var(--toy-red-dark), 0 18px 40px rgba(0, 0, 0, 0.4);
+            padding: 14px 28px 4px;
+            max-width: 80%;
+        }
+        #winnerOverlay .label {
+            font-family: 'Arial Black', 'Trebuchet MS', sans-serif;
+            font-size: 26px;
+            letter-spacing: 6px;
+            color: var(--toy-red);
+        }
+        #winnerName {
+            font-family: 'Arial Black', 'Trebuchet MS', sans-serif;
+            font-size: 48px;
+            font-weight: 900;
+            color: var(--ink);
+            margin: 4px 0 14px;
+            word-break: break-word;
+        }
+        #playAgainBtn { width: 220px; }
+        /* Read out by screen readers; shown as text under the board on small screens. */
+        #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        #selftestPanel {
+            max-width: 820px;
+            width: 100%;
+            background: var(--panel-color);
+            border: 3px solid var(--toy-red);
+            border-radius: 16px;
+            padding: 20px 24px;
+            box-sizing: border-box;
+        }
+        #selftestPanel a { color: var(--toy-blue); }
+        .check { padding: 10px 0; border-bottom: 1px solid #e3d3a8; }
+        .check .title { font-weight: bold; }
+        .check .detail { font-size: 13px; color: #8a6d45; margin-top: 4px; }
+        .check.pass .title::before { content: '✔ '; color: #2a8a2e; }
+        .check.fail .title::before { content: '✖ '; color: var(--error-color); }
+        .summary { font-size: 22px; font-weight: bold; margin: 16px 0 8px; }
+        .summary.pass { color: #2a8a2e; }
+        .summary.fail { color: var(--error-color); }
+        @media (max-width: 820px) {
+            body { padding: 12px; }
+            h1 { font-size: 30px; }
+            .container { flex-direction: column-reverse; align-items: stretch; }
+            .sidebar { max-width: none; }
+            #winnerOverlay { padding-top: 3%; }
+            .winner-card { padding: 6px 16px 0; border-width: 3px; box-shadow: 0 4px 0 var(--toy-red-dark); }
+            #winnerName { font-size: 22px; margin: 0 0 6px; }
+            #winnerOverlay .label { font-size: 13px; letter-spacing: 4px; }
+            #playAgainBtn { width: auto; padding: 6px 14px; font-size: 13px; margin-bottom: 8px; }
+            #status {
+                position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal;
+                margin-top: 8px; padding: 6px 10px; background: var(--panel-color); border: 2px solid var(--toy-red);
+                border-radius: 12px; text-align: center; font-weight: bold; font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 aria-label="Mousetrap Picker"><span class="word"><span>M</span><span>O</span><span>U</span><span>S</span><span>E</span><span>T</span><span>R</span><span>A</span><span>P</span></span> <span class="word"><span>P</span><span>I</span><span>C</span><span>K</span><span>E</span><span>R</span></span></h1>
+
+    <div class="container" id="gameView">
+        <div class="sidebar">
+            <input type="text" id="nameInput" placeholder="Enter participant name..." autocomplete="off" maxlength="18">
+            <div id="nameError" role="alert" aria-live="polite"></div>
+            <button id="addBtn">Add Mouse</button>
+            <div class="count" id="nameCount"></div>
+            <ul id="nameList"></ul>
+            <hr>
+            <button id="startBtn" disabled>Start Game</button>
+            <button id="skipBtn" hidden>Skip to result</button>
+            <button id="muteBtn" aria-pressed="false">Sound: on</button>
+            <p class="fair-note">
+                The mouse that gets caught is drawn with your browser's secure random generator before anyone rolls,
+                so every name has exactly the same chance. <a href="?selftest">Run the fairness self-test</a>
+            </p>
+        </div>
+
+        <div class="game-area">
+            <canvas id="gameCanvas" width="1000" height="700" aria-label="Mousetrap board"></canvas>
+            <div id="status" aria-live="polite"></div>
+            <div id="winnerOverlay" hidden aria-live="polite">
+                <div class="winner-card">
+                    <div class="label">CAUGHT!</div>
+                    <div id="winnerName"></div>
+                    <button id="playAgainBtn">Play Again</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="selftestPanel" hidden>
+        <h2>Fairness self-test</h2>
+        <div id="selftestResults">Running…</div>
+        <p><a id="backLink" href="?">Back to the game</a></p>
+    </div>
+
+<script id="mouse-core">
+    // --- Fairness core: decides every game before any mouse moves. No DOM access. ---
+    const MouseCore = (() => {
+        const MAX_NAMES = 15;
+        const MAX_NAME_LENGTH = 18;
+        // The board: a loop of squares that every mouse starts on square 0 of.
+        const TRACK_LENGTH = 32;
+        const CRANK = 14;           // the first mouse to land here turns the crank
+        const CHEESE = 26;          // the cage drops onto this square
+        const TRAP_ROUNDS = 5;      // rounds the contraption takes to drop the cage
+        const MAX_RACE_ROUNDS = 8;  // a race where nobody has turned the crank by then is redrawn
+        const MAX_ATTEMPTS = 1000000;
+        // Chi-square critical values at p = 0.001, indexed by degrees of freedom.
+        const CHI_CRITICAL = [NaN, 10.828, 13.816, 16.266, 18.467, 20.515, 22.458, 24.322,
+            26.124, 27.877, 29.588, 31.264, 32.909, 34.528, 36.123];
+
+        const pool = new Uint32Array(1024);
+        let poolPos = pool.length;
+        function cryptoU32() {
+            if (poolPos === pool.length) {
+                crypto.getRandomValues(pool);
+                poolPos = 0;
+            }
+            return pool[poolPos++];
+        }
+
+        // Uniform integer in [0, n). Draws from the top of the 2^32 range that would
+        // make some results more likely (modulo bias) are thrown away and redrawn.
+        function secureInt(n, nextU32 = cryptoU32) {
+            if (!Number.isInteger(n) || n < 1) throw new RangeError(`secureInt needs a positive integer, got ${n}`);
+            const limit = 2 ** 32 - (2 ** 32 % n);
+            let x;
+            do { x = nextU32(); } while (x >= limit);
+            return x % n;
+        }
+
+        // Fisher-Yates on a copy.
+        function shuffle(items, rng = secureInt) {
+            const out = [...items];
+            for (let i = out.length - 1; i > 0; i--) {
+                const j = rng(i + 1);
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+
+        function chiSquare(observed, expected) {
+            return observed.reduce((sum, o, i) => sum + (o - expected[i]) ** 2 / expected[i], 0);
+        }
+
+        function criticalValue(df) {
+            if (!(df in CHI_CRITICAL) || df < 1) throw new RangeError(`No critical value for df=${df}`);
+            return CHI_CRITICAL[df];
+        }
+
+        // Names that look the same on screen must count as the same person, or one
+        // person could run two mice: unify accents, drop zero-width characters, collapse spaces.
+        function normalizeName(raw) {
+            return String(raw).normalize('NFC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function validateName(raw, existing) {
+            const name = normalizeName(raw);
+            if (!name) return { error: 'Type a name first.' };
+            if (name.length > MAX_NAME_LENGTH) return { error: `Names can be up to ${MAX_NAME_LENGTH} characters.` };
+            const lower = name.toLowerCase();
+            if (existing.some(e => normalizeName(e).toLowerCase() === lower)) return { error: `${name} is already on the board.` };
+            if (existing.length >= MAX_NAMES) return { error: `The board fits ${MAX_NAMES} mice at most.` };
+            return { name };
+        }
+
+        function parseSavedNames(json) {
+            let data;
+            try { data = JSON.parse(json); } catch { return []; }
+            if (!Array.isArray(data)) return [];
+            const names = [];
+            for (const item of data) {
+                if (typeof item !== 'string') continue;
+                const result = validateName(item, names);
+                if (result.name) names.push(result.name);
+            }
+            return names;
+        }
+
+        // Can a mouse `gap` squares short of a square land exactly on it in `rounds` rolls?
+        function canReach(gap, rounds) {
+            for (let d = gap; d <= 6 * rounds; d += TRACK_LENGTH) if (d >= rounds) return true;
+            return false;
+        }
+
+        // One race with fair dice: every mouse rolls each round and moves round the loop.
+        // The crank turns in the first round anyone lands on it (if several do, the first
+        // in `order` turned it), and the cage drops TRAP_ROUNDS rounds later. Returns the
+        // race if the cage catches `target` alone, otherwise null. A race is abandoned as
+        // soon as `target` can no longer finish on the cheese; that only skips rolling dice
+        // for races that would be thrown away anyway.
+        function rollRace(n, order, target, rng) {
+            const pos = new Array(n).fill(0);
+            const rolls = [];
+            let crankRound = -1, cranker = -1;
+            for (let r = 0; ; r++) {
+                const round = new Array(n);
+                for (let i = 0; i < n; i++) {
+                    round[i] = 1 + rng(6);
+                    pos[i] = (pos[i] + round[i]) % TRACK_LENGTH;
+                }
+                rolls.push(round);
+                if (crankRound < 0) {
+                    const first = order.find(i => pos[i] === CRANK);
+                    if (first !== undefined) {
+                        crankRound = r;
+                        cranker = first;
+                    } else if (r + 1 >= MAX_RACE_ROUNDS) {
+                        return null;
+                    }
+                }
+                if (crankRound < 0) continue;
+                const left = crankRound + TRAP_ROUNDS - r;
+                if (left > 0) {
+                    if (!canReach((CHEESE - pos[target] + TRACK_LENGTH) % TRACK_LENGTH, left)) return null;
+                    continue;
+                }
+                for (let i = 0; i < n; i++) {
+                    if ((pos[i] === CHEESE) !== (i === target)) return null;
+                }
+                return { rolls, crankRound, cranker };
+            }
+        }
+
+        // The winner is one uniform draw. The race shown is then a genuine fair-dice race:
+        // races are rolled until one ends with exactly that mouse under the cage, so no roll
+        // is ever nudged. Any one race catches each mouse equally often (they all start on
+        // the same square), so this redraw only picks among races that look like any other.
+        function planGame(names, rng = secureInt) {
+            const n = names.length;
+            if (n < 2) throw new RangeError('planGame needs at least 2 names');
+            const winnerIndex = rng(n);
+            const order = shuffle([...Array(n).keys()], rng);
+            for (let attempts = 1; attempts <= MAX_ATTEMPTS; attempts++) {
+                const race = rollRace(n, order, winnerIndex, rng);
+                if (race) {
+                    const { rolls, crankRound, cranker } = race;
+                    return { winnerIndex, order, rolls, crankRound, cranker, attempts };
+                }
+            }
+            throw new Error(`No race ended with ${names[winnerIndex]} caught after ${MAX_ATTEMPTS} tries`);
+        }
+
+        // The square every mouse is on after each round.
+        function replay(plan, n) {
+            const pos = new Array(n).fill(0);
+            return plan.rolls.map(round => round.map((d, i) => (pos[i] = (pos[i] + d) % TRACK_LENGTH)));
+        }
+
+        // Re-checks a plan square by square against the rules above.
+        function planIsValid(plan, n) {
+            if (plan.rolls.length !== plan.crankRound + 1 + TRAP_ROUNDS) return false;
+            if (plan.rolls.some(round => round.length !== n || round.some(d => !Number.isInteger(d) || d < 1 || d > 6))) return false;
+            const after = replay(plan, n);
+            const firstCrank = after.findIndex(squares => squares.includes(CRANK));
+            if (firstCrank !== plan.crankRound || after[firstCrank][plan.cranker] !== CRANK) return false;
+            const caught = after.at(-1).flatMap((sq, i) => (sq === CHEESE ? [i] : []));
+            return caught.length === 1 && caught[0] === plan.winnerIndex;
+        }
+
+        const pct = x => (x * 100).toFixed(1) + '%';
+
+        // Plans `trials` games for each size and checks them. Runs in slices (step plans at
+        // most `budget` games) so a page can show progress; runSelfTest does it all at once.
+        function startSelfTest({ trials = 5000, plan = planGame, sizes = [2, 5, 10, 15] } = {}) {
+            const checks = [];
+            const total = trials * sizes.length;
+            let sizeIdx = 0, t = 0, wins = null;
+            let broken = 0, plans = 0, attemptTotal = 0, attemptMax = 0, crankRoundTotal = 0;
+
+            function finishSize(n) {
+                const chi = chiSquare(wins, new Array(n).fill(trials / n));
+                const limit = criticalValue(n - 1);
+                checks.push({
+                    name: `Every name equally likely to be caught (${n} names)`,
+                    passed: chi < limit,
+                    detail: `lowest ${pct(Math.min(...wins) / trials)} · highest ${pct(Math.max(...wins) / trials)} · ` +
+                        `target ${pct(1 / n)} · χ² ${chi.toFixed(1)} (limit ${limit})`,
+                });
+            }
+
+            function step(budget) {
+                while (budget-- > 0 && sizeIdx < sizes.length) {
+                    const n = sizes[sizeIdx];
+                    if (t === 0) wins = new Array(n).fill(0);
+                    const p = plan(Array.from({ length: n }, (_, i) => `P${i}`));
+                    plans++;
+                    wins[p.winnerIndex]++;
+                    if (!planIsValid(p, n)) broken++;
+                    attemptTotal += p.attempts;
+                    attemptMax = Math.max(attemptMax, p.attempts);
+                    crankRoundTotal += p.crankRound + 1;
+                    if (++t === trials) {
+                        finishSize(n);
+                        sizeIdx++;
+                        t = 0;
+                    }
+                }
+                return sizeIdx === sizes.length;
+            }
+
+            function result() {
+                const all = [...checks];
+                all.push({
+                    name: 'Every race follows the board rules and the cage lands on the winner alone',
+                    passed: broken === 0,
+                    detail: `${broken} broken out of ${plans.toLocaleString()} games, each replayed square by square`,
+                });
+                all.push({
+                    name: 'Fair-dice races are found quickly, far below the redraw cap',
+                    passed: attemptMax < MAX_ATTEMPTS / 100,
+                    detail: `average ${(attemptTotal / plans).toFixed(1)} races rolled per game · most ${attemptMax.toLocaleString()} · ` +
+                        `cap ${MAX_ATTEMPTS.toLocaleString()} · crank turned in round ${(crankRoundTotal / plans).toFixed(1)} on average`,
+                });
+                return { passed: all.every(c => c.passed), checks: all, plans };
+            }
+
+            return { step, result, progress: () => ({ done: plans, total }) };
+        }
+
+        function runSelfTest(options) {
+            const test = startSelfTest(options);
+            while (!test.step(Infinity));
+            return test.result();
+        }
+
+        return {
+            MAX_NAMES, MAX_NAME_LENGTH, TRACK_LENGTH, CRANK, CHEESE, TRAP_ROUNDS, MAX_RACE_ROUNDS, MAX_ATTEMPTS,
+            secureInt, shuffle, chiSquare, criticalValue,
+            validateName, parseSavedNames, planGame, replay, planIsValid, startSelfTest, runSelfTest,
+        };
+    })();
+</script>
+
+<script>
+    // --- UI Elements ---
+    const nameInput = document.getElementById('nameInput');
+    const nameError = document.getElementById('nameError');
+    const addBtn = document.getElementById('addBtn');
+    const nameCount = document.getElementById('nameCount');
+    const nameList = document.getElementById('nameList');
+    const startBtn = document.getElementById('startBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const statusEl = document.getElementById('status');
+    const winnerOverlay = document.getElementById('winnerOverlay');
+    const winnerNameEl = document.getElementById('winnerName');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+
+    // --- Canvas & Context ---
+    // Everything is drawn in a 1000 x 700 world; the backing store is scaled up on
+    // high-DPI screens so the artwork stays crisp.
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 1000, H = 700;
+    const TAU = Math.PI * 2;
+    let pixelRatio = 0;
+    let groundLayer = null;
+
+    function sizeCanvas() {
+        const ratio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        if (ratio === pixelRatio) return;
+        pixelRatio = ratio;
+        canvas.width = W * ratio;
+        canvas.height = H * ratio;
+        groundLayer = null;
+    }
+    window.addEventListener('resize', sizeCanvas);
+
+    const UI_FONT = "'Trebuchet MS', 'Segoe UI', system-ui, sans-serif";
+    const LOGO_FONT = "'Arial Black', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif";
+    const STORAGE_KEY = 'mousetrapNames';
+    const { TRACK_LENGTH, CRANK, CHEESE } = MouseCore;
+
+    // --- Board geometry ---
+    const BOARD = { x: 20, y: 16, w: 960, h: 668 };
+    const TRACK = { left: 92, right: 908, top: 112, bottom: 616 };
+    const SQ_W = 66, SQ_H = 50;
+    const CHEESE_TOP = 9; // how far a mouse on the cheese stands above the board
+
+    // Square 0 is the bottom-left corner. The loop runs up the left side, along the top,
+    // down the right side and back along the bottom.
+    function squareCentre(i) {
+        const { left, right, top, bottom } = TRACK;
+        const dx = (right - left) / 9, dy = (bottom - top) / 7;
+        if (i <= 6) return { x: left, y: bottom - i * dy };
+        if (i <= 16) return { x: left + (i - 7) * dx, y: top };
+        if (i <= 22) return { x: right, y: top + (i - 16) * dy };
+        return { x: right - (i - 23) * dx, y: bottom };
+    }
+    const SQUARES = Array.from({ length: TRACK_LENGTH }, (_, i) => squareCentre(i));
+    const CHEESE_SQ = SQUARES[CHEESE];
+
+    // Mice face the way the loop runs: left up the left side, right along the top and
+    // down the right side, left along the bottom.
+    const facingOn = sq => (sq >= 7 && sq <= 22 ? 1 : -1);
+
+    // The mouse hole: mice wait in front of it before a game, in staggered rows of up
+    // to five so every name tag can be read.
+    const PEN = { x: 268, y: 538 };
+    function penSpots(n, order) {
+        const rows = Math.ceil(n / 5);
+        const spots = new Array(n);
+        let k = 0;
+        for (let r = 0; r < rows; r++) {
+            const inRow = Math.ceil((n - k) / (rows - r));
+            const stagger = rows > 1 ? (r % 2 ? 14 : -14) : 0;
+            for (let c = 0; c < inRow; c++, k++) {
+                spots[order[k]] = { x: PEN.x + (c - (inRow - 1) / 2) * 56 + stagger, y: PEN.y + (r - (rows - 1) / 2) * 28, z: 0, lift: 0 };
+            }
+        }
+        return spots;
+    }
+
+    // Where k mice sharing a square stand, relative to its centre (back row first).
+    function clusterOffsets(k) {
+        const cols = k <= 2 ? k : k <= 4 ? 2 : 3;
+        const rows = Math.ceil(k / cols);
+        return Array.from({ length: k }, (_, i) => {
+            const r = Math.floor(i / cols), c = i % cols;
+            const inRow = Math.min(cols, k - r * cols);
+            return { dx: (c - (inRow - 1) / 2) * 27, dy: (r - (rows - 1) / 2) * 11 };
+        });
+    }
+    // On the cheese the pole is in the middle, so mice sit round it.
+    const CHEESE_SEATS = [{ dx: -24, dy: 3 }, { dx: 24, dy: 3 }, { dx: 0, dy: 11 }, { dx: -38, dy: -4 },
+        { dx: 38, dy: -4 }, { dx: -14, dy: 13 }, { dx: 14, dy: 13 }, { dx: -30, dy: 10 }];
+
+    // Where every mouse stands, given the square each one is on. `order` breaks ties
+    // for who stands where on a shared square. Neighbours' name tags sit at alternating
+    // heights (`lift`) so they don't cover each other.
+    function spotsFor(squares, order) {
+        const groups = new Map();
+        for (const i of order) {
+            if (!groups.has(squares[i])) groups.set(squares[i], []);
+            groups.get(squares[i]).push(i);
+        }
+        const spots = new Array(squares.length);
+        for (const [sq, list] of groups) {
+            const c = SQUARES[sq];
+            const seats = sq === CHEESE && list.length <= CHEESE_SEATS.length ? CHEESE_SEATS : clusterOffsets(list.length);
+            list.forEach((i, k) => {
+                spots[i] = { x: c.x + seats[k].dx, y: c.y + seats[k].dy, z: sq === CHEESE ? CHEESE_TOP : 0, lift: (k % 2) * 16 };
+            });
+        }
+        return spots;
+    }
+
+    // A mouse passing over a square without stopping. Small per-mouse offsets stop a
+    // pack of mice merging into one; on the cheese they pass in front of the pole.
+    function passSpot(sq, i) {
+        const c = SQUARES[sq];
+        if (sq === CHEESE) return { x: c.x + ((i * 7) % 5 - 2) * 6, y: c.y + 10, z: CHEESE_TOP, lift: 0 };
+        return { x: c.x + ((i * 7) % 5 - 2) * 5, y: c.y + ((i * 3) % 3 - 1) * 5, z: 0, lift: 0 };
+    }
+
+    // --- Timing (seconds) ---
+    const INTRO = 1.6;            // mice run back to the mouse hole while the trap rewinds
+    const INTRO_WAIT = 0.4;       // ...after the cage has lifted off the caught mouse
+    const ROLL = 0.45;            // dice tumble before anyone moves
+    const HOP = 0.14;             // one square
+    const RACE_GAP = 1.55;        // round to round before the crank turns
+    const CRANK_DELAY = 1.55;     // start of the crank round to the crank turning
+    const TRAP_FIRST = 0.3;       // crank turning to the first round of the trap
+    const TRAP_GAP = 1.95;        // round to round while the contraption runs
+    // Seconds after the crank turns:
+    const CAGE_DROP = 9.9, CAGE_LAND = 10.5, TRAP_END = 12.2;
+
+    // --- Small helpers ---
+    const clamp01 = x => Math.max(0, Math.min(1, x));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const easeInOut = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    const easeIn = t => t * t;
+    const easeOut = t => 1 - (1 - t) ** 2;
+    const phase = (T, a, b) => clamp01((T - a) / (b - a));
+
+    function polyline(points) {
+        const cum = [0];
+        for (let k = 1; k < points.length; k++) {
+            cum.push(cum[k - 1] + Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y));
+        }
+        return { points, cum, total: cum[cum.length - 1] };
+    }
+
+    // Point a fraction f of the way along a polyline, with the direction it is heading.
+    function along(path, f) {
+        const { points, cum, total } = path;
+        if (total === 0) return { ...points[0], dx: 0, dy: 0 };
+        const d = clamp01(f) * total;
+        let k = 1;
+        while (k < points.length - 1 && cum[k] < d) k++;
+        const a = points[k - 1], b = points[k];
+        const seg = cum[k] - cum[k - 1] || 1;
+        const u = (d - cum[k - 1]) / seg;
+        return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), z: lerp(a.z || 0, b.z || 0, u), dx: b.x - a.x, dy: b.y - a.y };
+    }
+
+    // --- State ---
+    let participants = [];
+    let mice = [];      // drawing info per participant: { name, hue, tag }
+    let rest = null;    // where everything sits between games
+    let run = null;     // the game in progress
+    let confetti = [];
+    let lastStatus = '';
+
+    // --- Audio Context (created on user interaction) ---
+    let audioCtx;
+    let muted = false;
+    let noiseBuffer = null;
+    function audio() {
+        if (muted) return null;
+        if (!audioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return null;
+            audioCtx = new AC();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+    }
+
+    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0 }) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime + delay;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(from, t0);
+        osc.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur);
+    }
+
+    // Filtered white noise for splashes, thwacks and rattles.
+    function noise({ dur, vol = 0.1, delay = 0, filter = 'lowpass', from = 1200, to = from, q = 1 }) {
+        const ac = audio();
+        if (!ac) return;
+        if (!noiseBuffer) {
+            noiseBuffer = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            // Noise is cosmetic, so Math.random is fine here.
+            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        }
+        const t0 = ac.currentTime + delay;
+        const src = ac.createBufferSource();
+        src.buffer = noiseBuffer;
+        const f = ac.createBiquadFilter();
+        f.type = filter;
+        f.Q.value = q;
+        f.frequency.setValueAtTime(from, t0);
+        f.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        src.connect(f);
+        f.connect(gain);
+        gain.connect(ac.destination);
+        src.start(t0);
+        src.stop(t0 + dur);
+    }
+
+    function playSound(kind) {
+        switch (kind) {
+            case 'start':
+                [392, 523, 659].forEach((f, i) => tone({ type: 'triangle', from: f, dur: 0.12, vol: 0.12, delay: i * 0.08 }));
+                break;
+            case 'rewind':
+                tone({ type: 'sawtooth', from: 900, to: 120, dur: 1.2, vol: 0.03 });
+                break;
+            case 'scurry':
+                for (let i = 0; i < 10; i++) noise({ dur: 0.04, vol: 0.05, delay: i * 0.12, filter: 'bandpass', from: 3000, q: 4 });
+                break;
+            case 'dice':
+                for (let i = 0; i < 5; i++) noise({ dur: 0.05, vol: 0.12, delay: i * 0.075, filter: 'bandpass', from: 2400 + i * 300, q: 6 });
+                break;
+            case 'hop':
+                tone({ type: 'sine', from: 1300, to: 1800, dur: 0.06, vol: 0.03 });
+                break;
+            case 'ding':
+                tone({ type: 'triangle', from: 1568, dur: 0.5, vol: 0.12 });
+                tone({ type: 'triangle', from: 2093, dur: 0.6, vol: 0.08, delay: 0.1 });
+                break;
+            case 'slam':
+                noise({ dur: 0.35, vol: 0.4, from: 900, to: 120 });
+                tone({ type: 'sine', from: 140, to: 45, dur: 0.35, vol: 0.35 });
+                break;
+            case 'caught':
+                tone({ type: 'sine', from: 1800, to: 2600, dur: 0.12, vol: 0.08 });
+                tone({ type: 'sine', from: 2600, to: 1600, dur: 0.15, vol: 0.08, delay: 0.13 });
+                [523, 659, 784, 1047].forEach((f, i) => tone({ type: 'square', from: f, dur: 0.16, vol: 0.06, delay: 0.35 + i * 0.12 }));
+                tone({ type: 'square', from: 1047, dur: 0.6, vol: 0.06, delay: 0.83 });
+                break;
+            default:
+                contraptionSound(kind);
+        }
+    }
+
+    muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.setAttribute('aria-pressed', String(muted));
+        muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
+    });
+
+    // --- Logic: Name Management ---
+    function saveNames() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(participants)); } catch { /* storage unavailable */ }
+    }
+
+    function loadNames() {
+        try { return MouseCore.parseSavedNames(localStorage.getItem(STORAGE_KEY)); } catch { return []; }
+    }
+
+    function hueFor(index) {
+        return Math.round((index * 137.508) % 360);
+    }
+
+    const TAG_FONT = `bold 10.5px ${UI_FONT}`;
+    const TAG_MAX = 66;
+    function fitTag(name) {
+        ctx.font = TAG_FONT;
+        let text = name;
+        if (ctx.measureText(text).width > TAG_MAX) {
+            while (text.length > 1 && ctx.measureText(text + '…').width > TAG_MAX) text = text.slice(0, -1);
+            text += '…';
+        }
+        return { text, w: ctx.measureText(text).width + 12 };
+    }
+
+    function updateList() {
+        const playing = run !== null;
+        nameList.innerHTML = '';
+        participants.forEach((name, index) => {
+            const li = document.createElement('li');
+            li.style.setProperty('--swatch', `hsl(${hueFor(index)}, 72%, 52%)`);
+            const span = document.createElement('span');
+            span.className = 'name';
+            span.textContent = name;
+            const rmBtn = document.createElement('button');
+            rmBtn.textContent = 'X';
+            rmBtn.className = 'remove-btn';
+            rmBtn.setAttribute('aria-label', `Remove ${name}`);
+            rmBtn.disabled = playing;
+            rmBtn.onclick = () => {
+                participants.splice(index, 1);
+                namesChanged();
+            };
+            li.append(span, rmBtn);
+            nameList.appendChild(li);
+        });
+        nameCount.textContent = participants.length ? `${participants.length} / ${MouseCore.MAX_NAMES} mice` : '';
+        nameInput.disabled = playing;
+        addBtn.disabled = playing;
+        startBtn.disabled = playing || participants.length < 2;
+        skipBtn.hidden = !playing;
+    }
+
+    // Every mouse back in the mouse hole, trap reset.
+    function resetBoard() {
+        mice = participants.map((name, i) => ({ name, hue: hueFor(i), tag: fitTag(name) }));
+        const n = mice.length;
+        const order = [...Array(n).keys()];
+        rest = { squares: new Array(n).fill(0), spots: penSpots(n, order), trapT: 0, caught: -1 };
+        confetti = [];
+    }
+
+    function namesChanged() {
+        saveNames();
+        winnerOverlay.hidden = true;
+        resetBoard();
+        updateList();
+    }
+
+    function addName() {
+        const result = MouseCore.validateName(nameInput.value, participants);
+        if (result.error) {
+            nameError.textContent = result.error;
+            return;
+        }
+        nameError.textContent = '';
+        participants.push(result.name);
+        nameInput.value = '';
+        namesChanged();
+    }
+
+    addBtn.addEventListener('click', addName);
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addName(); });
+
+    // --- Building a game's timeline ---
+    // A game is a fixed timeline worked out from the plan before anything moves. Every
+    // frame just asks "where is everything at time t?", so Skip only has to jump to the end.
+    function introPath(i, penSpot) {
+        const from = rest.spots[i];
+        const points = [from];
+        const sq = rest.squares[i];
+        if (sq !== 0) {
+            // Run back along the track the short way round.
+            const step = sq <= TRACK_LENGTH / 2 ? -1 : 1;
+            for (let s = sq + step; s % TRACK_LENGTH !== 0; s += step) points.push(passSpot(s, i));
+            points.push(passSpot(0, i));
+        }
+        points.push(penSpot);
+        return polyline(points);
+    }
+
+    function buildRun(plan) {
+        const n = mice.length;
+        const after = MouseCore.replay(plan, n);
+        const crankRoundStart = INTRO + plan.crankRound * RACE_GAP;
+        const crankAt = crankRoundStart + CRANK_DELAY;
+        const pen = penSpots(n, plan.order);
+        let from = new Array(n).fill(0), fromSpots = pen;
+        const rounds = plan.rolls.map((rolls, r) => {
+            const start = r <= plan.crankRound
+                ? INTRO + r * RACE_GAP
+                : crankAt + TRAP_FIRST + (r - plan.crankRound - 1) * TRAP_GAP;
+            const toSpots = spotsFor(after[r], plan.order);
+            const round = { start, rolls, from, to: after[r], fromSpots, toSpots };
+            from = after[r];
+            fromSpots = toSpots;
+            return round;
+        });
+        const game = {
+            plan, rounds, crankAt,
+            crankLandAt: crankRoundStart + ROLL + plan.rolls[plan.crankRound][plan.cranker] * HOP,
+            intro: mice.map((_, i) => introPath(i, pen[i])),
+            rewindFrom: rest.trapT,
+            end: crankAt + TRAP_END,
+            t: 0,
+            events: [],
+            nextEvent: 0,
+            skipped: false,
+        };
+        game.events = buildEvents(game);
+        return game;
+    }
+
+    function buildEvents(game) {
+        const ev = [{ t: 0, kind: 'start' }, { t: 0.15, kind: 'scurry' }];
+        if (game.rewindFrom > 0) ev.push({ t: 0.05, kind: 'rewind' });
+        for (const R of game.rounds) {
+            ev.push({ t: R.start, kind: 'dice' });
+            const most = Math.max(...R.rolls);
+            for (let j = 1; j <= most; j++) ev.push({ t: R.start + ROLL + j * HOP - 0.03, kind: 'hop' });
+        }
+        ev.push({ t: game.crankLandAt, kind: 'ding' });
+        for (const [at, kind] of CONTRAPTION_SOUNDS) ev.push({ t: game.crankAt + at, kind });
+        ev.push({ t: game.crankAt + CAGE_LAND, kind: 'slam' });
+        ev.push({ t: game.crankAt + CAGE_LAND + 0.25, kind: 'caught' });
+        return ev.sort((a, b) => a.t - b.t);
+    }
+
+    // --- Where everything is at time t ---
+    function roundAt(game, t) {
+        let r = game.rounds.length - 1;
+        while (r > 0 && game.rounds[r].start > t) r--;
+        return r;
+    }
+
+    function hopPoint(R, i, j) {
+        if (j === 0) return R.fromSpots[i];
+        if (j === R.rolls[i]) return R.toSpots[i];
+        return passSpot((R.from[i] + j) % TRACK_LENGTH, i);
+    }
+
+    // Position, facing and squash of mouse i during a game.
+    function mouseInGame(game, i, t) {
+        if (t < INTRO) {
+            const f = easeInOut(clamp01((t - INTRO_WAIT) / (INTRO - INTRO_WAIT)));
+            const p = along(game.intro[i], f);
+            const moving = f > 0 && f < 1;
+            return { x: p.x, y: p.y, z: p.z + (moving ? Math.abs(Math.sin(t * 26 + i)) * 4 : 0), lift: f >= 1 ? 0 : (1 - f) * (rest.spots[i].lift || 0),
+                     facing: p.dx > 0.5 ? 1 : -1, sx: 1, sy: 1 };
+        }
+        const R = game.rounds[roundAt(game, t)];
+        const d = R.rolls[i];
+        const hops = (t - R.start - ROLL) / HOP;
+        if (hops <= 0) return { ...R.fromSpots[i], facing: facingOn(R.from[i]), sx: 1, sy: 1 };
+        if (hops >= d) {
+            // A little squash as it lands.
+            const s = Math.max(0, 1 - (hops - d) * 4) * 0.14;
+            return { ...R.toSpots[i], facing: facingOn(R.to[i]), sx: 1 + s, sy: 1 - s };
+        }
+        const j = Math.floor(hops), f = hops - j;
+        const a = hopPoint(R, i, j), b = hopPoint(R, i, j + 1);
+        const arc = Math.sin(f * Math.PI);
+        const dx = b.x - a.x;
+        return {
+            x: lerp(a.x, b.x, f), y: lerp(a.y, b.y, f), z: lerp(a.z, b.z, f) + arc * 16, lift: lerp(a.lift, b.lift, f),
+            facing: dx > 1 ? 1 : dx < -1 ? -1 : facingOn((R.from[i] + j + 1) % TRACK_LENGTH),
+            sx: 1 - arc * 0.08, sy: 1 + arc * 0.12,
+        };
+    }
+
+    // The die above mouse i: null when none is showing.
+    function dieInGame(game, i, t) {
+        if (t < INTRO) return null;
+        const R = game.rounds[roundAt(game, t)];
+        const local = t - R.start;
+        const d = R.rolls[i];
+        const shownUntil = ROLL + d * HOP + 0.5;
+        if (local < 0 || local > shownUntil) return null;
+        if (local < ROLL) {
+            // Tumbling faces are cosmetic; the real roll is already in the plan.
+            const tick = Math.floor(local * 22);
+            return { face: 1 + ((tick * 5 + i * 3 + tick * tick) % 6), spin: (1 - local / ROLL) * 7 + i, pop: easeOut(clamp01(local / 0.12)), alpha: 1 };
+        }
+        return { face: d, spin: 0, pop: 1, alpha: clamp01((shownUntil - local) / 0.25) };
+    }
+
+    // Seconds since the crank turned (<= 0: the trap is set). During the intro the
+    // previous game's trap rewinds back to the start.
+    function trapTime(game, t) {
+        if (t < INTRO) return game.rewindFrom * (1 - easeInOut(t / INTRO));
+        return t - game.crankAt;
+    }
+
+    // Everything the renderer needs for this frame.
+    function scene() {
+        if (!run) {
+            return {
+                mice: rest.spots.map((s, i) => ({ ...s, facing: facingOn(rest.squares[i]), sx: 1, sy: 1 })),
+                dice: [], trapT: rest.trapT, caught: rest.caught, cranker: -1, crankCallout: 0,
+            };
+        }
+        const t = run.t;
+        const trapT = trapTime(run, t);
+        return {
+            mice: mice.map((_, i) => mouseInGame(run, i, t)),
+            dice: mice.map((_, i) => dieInGame(run, i, t)),
+            trapT,
+            caught: t >= INTRO && trapT >= CAGE_LAND ? run.plan.winnerIndex : -1,
+            cranker: run.plan.cranker,
+            crankCallout: t >= run.crankLandAt && t < run.crankAt + 1.2 ? clamp01((t - run.crankLandAt) / 0.2) : 0,
+        };
+    }
+
+    function statusText() {
+        if (!run) {
+            if (rest.caught >= 0) return `${mice[rest.caught].name} was caught! Press Play Again for another go`;
+            return participants.length < 2 ? 'Add at least two names, then press Start' : 'Press Start to roll the dice';
+        }
+        const t = run.t;
+        if (t < INTRO) return 'Everybody back in the mouse hole!';
+        const cranker = mice[run.plan.cranker].name;
+        if (t < run.crankLandAt) return `Round ${roundAt(run, t) + 1}: land on TURN CRANK to set off the trap`;
+        if (t < run.crankAt + 1.6) return `${cranker} landed on TURN CRANK!`;
+        const T = t - run.crankAt;
+        if (T < CAGE_DROP) {
+            // Rounds still to finish moving; the count ticks down as each round lands.
+            const left = run.rounds.filter(R => R.start + ROLL + Math.max(...R.rolls) * HOP > t).length;
+            if (left > 1) return `The cage drops in ${left} rounds…`;
+            if (left === 1) return 'Last roll before the cage drops!';
+            return 'Here comes the cage…';
+        }
+        if (T < CAGE_LAND) return 'Look out!';
+        return `${mice[run.plan.winnerIndex].name} is caught!`;
+    }
+
+    // --- Main Game ---
+    function startGame() {
+        if (run || participants.length < 2) return;
+        audio(); // unlock audio on this click
+        const plan = MouseCore.planGame(participants);
+        run = buildRun(plan);
+        winnerOverlay.hidden = true;
+        confetti = [];
+        updateList();
+    }
+
+    function advanceRun(dt) {
+        const game = run;
+        game.t = Math.min(game.end, game.t + dt);
+        while (game.nextEvent < game.events.length && game.events[game.nextEvent].t <= game.t) {
+            if (!game.skipped) playSound(game.events[game.nextEvent].kind);
+            game.nextEvent++;
+        }
+        if (game.t >= game.crankAt + CAGE_LAND && !game.celebrated) celebrate(game);
+        if (game.t >= game.end) finishGame(game);
+    }
+
+    // Leaves everything where the plan ends: the winner under the cage, the rest where they stopped.
+    function finishGame(game) {
+        if (run !== game) return;
+        const last = game.rounds[game.rounds.length - 1];
+        rest = { squares: last.to, spots: last.toSpots, trapT: TRAP_END, caught: game.plan.winnerIndex };
+        if (!game.celebrated) celebrate(game);
+        run = null;
+        winnerNameEl.textContent = mice[game.plan.winnerIndex].name;
+        winnerOverlay.hidden = false;
+        updateList();
+    }
+
+    function celebrate(game) {
+        game.celebrated = true;
+        if (game.skipped) playSound('caught');
+        // Confetti motion is cosmetic, so Math.random is fine here.
+        const colors = ['#e63b2e', '#ffc93c', '#2f7de1', '#43b047', '#ffffff'];
+        for (let i = 0; i < 160; i++) {
+            confetti.push({
+                x: CHEESE_SQ.x + (Math.random() - 0.5) * 80, y: CHEESE_SQ.y - 60,
+                vx: (Math.random() - 0.5) * 10, vy: -5 - Math.random() * 10,
+                rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.3,
+                color: colors[i % colors.length], cheese: i % 6 === 0, life: 1,
+            });
+        }
+    }
+
+    startBtn.addEventListener('click', startGame);
+    playAgainBtn.addEventListener('click', startGame);
+    skipBtn.addEventListener('click', () => {
+        if (!run) return;
+        run.skipped = true;
+        run.t = run.end;
+        advanceRun(0);
+    });
+
+    // --- Drawing: the board (drawn once into an offscreen layer) ---
+    function roundRect(g, x, y, w, h, r) {
+        g.beginPath();
+        g.roundRect(x, y, w, h, r);
+    }
+
+    // Deterministic pseudo-random numbers for decoration, so the board looks the same every time.
+    function decorRandom(seed) {
+        let s = seed >>> 0;
+        return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    }
+
+    function drawTable(g) {
+        const rnd = decorRandom(7);
+        g.fillStyle = '#7a4a24';
+        g.fillRect(0, 0, W, H);
+        const plank = 125;
+        for (let x = 0; x < W; x += plank) {
+            const shade = 0.85 + rnd() * 0.25;
+            g.fillStyle = `rgb(${Math.round(128 * shade)}, ${Math.round(78 * shade)}, ${Math.round(38 * shade)})`;
+            g.fillRect(x, 0, plank, H);
+            g.strokeStyle = 'rgba(40, 20, 5, 0.35)';
+            for (let k = 0; k < 7; k++) {
+                const gx = x + 10 + rnd() * (plank - 20);
+                g.lineWidth = 0.6 + rnd();
+                g.beginPath();
+                g.moveTo(gx, 0);
+                for (let y = 0; y <= H; y += 20) g.lineTo(gx + Math.sin(y / 70 + k) * 4, y);
+                g.stroke();
+            }
+            g.fillStyle = 'rgba(30, 14, 3, 0.6)';
+            g.fillRect(x, 0, 2, H);
+        }
+    }
+
+    function drawBoard(g) {
+        g.save();
+        g.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        g.shadowBlur = 24;
+        g.shadowOffsetY = 10;
+        roundRect(g, BOARD.x, BOARD.y, BOARD.w, BOARD.h, 28);
+        g.fillStyle = '#c92f25';
+        g.fill();
+        g.restore();
+        roundRect(g, BOARD.x + 8, BOARD.y + 8, BOARD.w - 16, BOARD.h - 16, 22);
+        const grass = g.createLinearGradient(0, BOARD.y, 0, BOARD.y + BOARD.h);
+        grass.addColorStop(0, '#6cc24a');
+        grass.addColorStop(1, '#4aa23a');
+        g.fillStyle = grass;
+        g.fill();
+        // Polka dots, like the printed board.
+        g.save();
+        g.clip();
+        g.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        for (let y = BOARD.y + 20; y < BOARD.y + BOARD.h; y += 34) {
+            for (let x = BOARD.x + 20 + ((y / 34) % 2) * 17; x < BOARD.x + BOARD.w; x += 34) {
+                g.beginPath();
+                g.arc(x, y, 5, 0, TAU);
+                g.fill();
+            }
+        }
+        g.restore();
+        g.strokeStyle = '#ffd84a';
+        g.lineWidth = 3;
+        g.setLineDash([14, 9]);
+        roundRect(g, BOARD.x + 16, BOARD.y + 16, BOARD.w - 32, BOARD.h - 32, 18);
+        g.stroke();
+        g.setLineDash([]);
+    }
+
+    const SQUARE_EDGES = ['#e63b2e', '#2f7de1', '#ffc93c', '#43b047'];
+
+    function drawTrack(g) {
+        // A sandy path under the squares.
+        g.lineJoin = 'round';
+        g.lineCap = 'round';
+        g.beginPath();
+        SQUARES.forEach((s, i) => (i ? g.lineTo(s.x, s.y) : g.moveTo(s.x, s.y)));
+        g.closePath();
+        g.strokeStyle = '#b98a45';
+        g.lineWidth = 82;
+        g.stroke();
+        g.strokeStyle = '#f1d38c';
+        g.lineWidth = 72;
+        g.stroke();
+
+        SQUARES.forEach((s, i) => {
+            if (i === CHEESE) return;
+            const x = s.x - SQ_W / 2, y = s.y - SQ_H / 2;
+            g.save();
+            g.shadowColor = 'rgba(80, 50, 10, 0.45)';
+            g.shadowOffsetY = 3;
+            g.shadowBlur = 3;
+            roundRect(g, x, y, SQ_W, SQ_H, 9);
+            if (i === 0) g.fillStyle = '#43b047';
+            else if (i === CRANK) g.fillStyle = '#e63b2e';
+            else {
+                const face = g.createLinearGradient(0, y, 0, y + SQ_H);
+                face.addColorStop(0, '#fffdf3');
+                face.addColorStop(1, '#f1e6c6');
+                g.fillStyle = face;
+            }
+            g.fill();
+            g.restore();
+            roundRect(g, x + 2, y + 2, SQ_W - 4, SQ_H - 4, 7);
+            g.strokeStyle = i === 0 || i === CRANK ? '#fff4d6' : SQUARE_EDGES[i % SQUARE_EDGES.length];
+            g.lineWidth = 4;
+            g.stroke();
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            if (i === 0) {
+                g.fillStyle = '#fff';
+                g.font = `900 15px ${LOGO_FONT}`;
+                g.fillText('START', s.x, s.y + 1);
+            } else if (i === CRANK) {
+                g.fillStyle = '#ffd84a';
+                g.font = `900 12px ${LOGO_FONT}`;
+                g.fillText('TURN', s.x, s.y - 8);
+                g.fillText('CRANK', s.x, s.y + 9);
+            } else {
+                drawPaw(g, s.x, s.y + 2, SQUARE_EDGES[i % SQUARE_EDGES.length]);
+            }
+        });
+        drawCheeseWheel(g);
+    }
+
+    function drawPaw(g, x, y, color) {
+        g.save();
+        g.globalAlpha = 0.28;
+        g.fillStyle = color;
+        g.beginPath();
+        g.ellipse(x, y + 3, 6, 5, 0, 0, TAU);
+        g.fill();
+        for (const [dx, dy] of [[-7, -4], [-2.5, -8], [2.5, -8], [7, -4]]) {
+            g.beginPath();
+            g.arc(x + dx, y + dy, 2.4, 0, TAU);
+            g.fill();
+        }
+        g.restore();
+    }
+
+    // The cheese wheel sits on the track where the cage comes down.
+    function drawCheeseWheel(g) {
+        const { x, y } = CHEESE_SQ;
+        const rx = 50, ry = 19, top = y + 4 - CHEESE_TOP, bottom = y + 6;
+        g.save();
+        g.fillStyle = 'rgba(80, 50, 10, 0.35)';
+        g.beginPath();
+        g.ellipse(x, bottom + 4, rx + 4, ry + 3, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = '#d99a14';
+        g.beginPath();
+        g.ellipse(x, bottom, rx, ry, 0, 0, Math.PI);
+        g.lineTo(x - rx, top);
+        g.ellipse(x, top, rx, ry, 0, Math.PI, 0, true);
+        g.closePath();
+        g.fill();
+        const face = g.createRadialGradient(x - 12, top - 6, 4, x, top, rx);
+        face.addColorStop(0, '#ffe88a');
+        face.addColorStop(1, '#ffc93c');
+        g.fillStyle = face;
+        g.beginPath();
+        g.ellipse(x, top, rx, ry, 0, 0, TAU);
+        g.fill();
+        g.strokeStyle = '#b9790b';
+        g.lineWidth = 1.5;
+        g.stroke();
+        g.fillStyle = '#e0a420';
+        for (const [hx, hy, r] of [[-30, -4, 5], [-8, -11, 3.5], [20, -7, 4.5], [34, 5, 3], [-18, 9, 3.5], [8, 6, 2.5]]) {
+            g.beginPath();
+            g.ellipse(x + hx, top + hy, r, r * 0.55, 0, 0, TAU);
+            g.fill();
+        }
+        g.fillStyle = '#c4870f';
+        for (const [hx, r] of [[-36, 3], [-6, 4], [26, 3.5]]) {
+            g.beginPath();
+            g.ellipse(x + hx, top + ry * 0.85 + 4, r * 0.7, r, 0, 0, TAU);
+            g.fill();
+        }
+        g.restore();
+    }
+
+    function drawLogo(g) {
+        const words = [['MOUSE', 236, 186], ['TRAP', 236, 236]];
+        const colors = ['#e63b2e', '#ffc93c', '#2f7de1', '#ffffff', '#ff8a1f'];
+        g.save();
+        g.font = `900 44px ${LOGO_FONT}`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.lineJoin = 'round';
+        let k = 0;
+        for (const [word, cx, cy] of words) {
+            const widths = [...word].map(ch => g.measureText(ch).width);
+            const total = widths.reduce((a, b) => a + b, 0);
+            let x = cx - total / 2;
+            [...word].forEach((ch, i) => {
+                const lx = x + widths[i] / 2;
+                g.save();
+                g.translate(lx, cy + (i % 2 ? -3 : 3));
+                g.rotate((i % 2 ? 1 : -1) * 0.07);
+                g.lineWidth = 9;
+                g.strokeStyle = '#1b1b1b';
+                g.strokeText(ch, 0, 0);
+                g.fillStyle = colors[k++ % colors.length];
+                g.fillText(ch, 0, 0);
+                g.restore();
+                x += widths[i];
+            });
+        }
+        g.restore();
+    }
+
+    // A signpost and some flowers in the open corner of the board.
+    function drawDecor(g) {
+        const rnd = decorRandom(11);
+        for (const [fx, fy] of [[812, 470], [840, 520], [700, 330], [846, 300], [160, 300], [196, 420], [470, 520], [770, 350]]) {
+            for (let k = 0; k < 3; k++) {
+                const x = fx + (rnd() - 0.5) * 26, y = fy + (rnd() - 0.5) * 14;
+                g.strokeStyle = '#2f7a2a';
+                g.lineWidth = 2;
+                g.beginPath();
+                g.moveTo(x, y + 9);
+                g.lineTo(x, y);
+                g.stroke();
+                g.fillStyle = ['#ffffff', '#ffd84a', '#ff8ab0'][k];
+                for (let p = 0; p < 5; p++) {
+                    g.beginPath();
+                    g.arc(x + Math.cos(p * TAU / 5) * 3.2, y + Math.sin(p * TAU / 5) * 3.2, 2.4, 0, TAU);
+                    g.fill();
+                }
+                g.fillStyle = '#ff9a1f';
+                g.beginPath();
+                g.arc(x, y, 1.8, 0, TAU);
+                g.fill();
+            }
+        }
+        const px = 800, base = 452;
+        g.fillStyle = 'rgba(20, 50, 10, 0.28)';
+        g.beginPath();
+        g.ellipse(px, base, 18, 5, 0, 0, TAU);
+        g.fill();
+        g.fillStyle = '#9a6430';
+        g.strokeStyle = '#4a2a10';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.roundRect(px - 5, base - 120, 10, 120, 3);
+        g.fill();
+        g.stroke();
+        // An arrow-shaped board; dir -1 points left.
+        const board = (y, text, dir, tilt) => {
+            const w = 104, h = 26;
+            g.save();
+            g.translate(px, y);
+            g.rotate(tilt);
+            g.scale(dir, 1);
+            g.beginPath();
+            g.moveTo(-22, -h / 2);
+            g.lineTo(w - 36, -h / 2);
+            g.lineTo(w - 22, 0);
+            g.lineTo(w - 36, h / 2);
+            g.lineTo(-22, h / 2);
+            g.closePath();
+            g.fillStyle = '#f2d39a';
+            g.fill();
+            g.stroke();
+            g.scale(dir, 1);
+            g.fillStyle = '#7a1910';
+            g.font = `900 13px ${LOGO_FONT}`;
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillText(text, dir * 27, 1);
+            g.restore();
+        };
+        board(base - 104, 'CHEESE', -1, -0.12);
+        board(base - 70, 'DANGER!', 1, 0.08);
+    }
+
+    // A skirting board with a mouse hole behind the waiting mice.
+    function drawMouseHole(g) {
+        const x0 = 136, x1 = 412, top = 452, base = 498;
+        g.save();
+        g.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        g.fillRect(x0 + 4, base, x1 - x0, 6);
+        const wood = g.createLinearGradient(0, top, 0, base);
+        wood.addColorStop(0, '#f6ead0');
+        wood.addColorStop(1, '#d9c39a');
+        g.fillStyle = wood;
+        roundRect(g, x0, top, x1 - x0, base - top, 4);
+        g.fill();
+        g.fillStyle = '#b89a66';
+        g.fillRect(x0, top, x1 - x0, 5);
+        const hx = x0 + 52;
+        g.fillStyle = '#2a1a0e';
+        g.beginPath();
+        g.moveTo(hx - 24, base);
+        g.lineTo(hx - 24, base - 22);
+        g.arc(hx, base - 22, 24, Math.PI, 0);
+        g.lineTo(hx + 24, base);
+        g.closePath();
+        g.fill();
+        g.restore();
+    }
+
+    function buildGround() {
+        const layer = document.createElement('canvas');
+        layer.width = W * pixelRatio;
+        layer.height = H * pixelRatio;
+        const g = layer.getContext('2d');
+        g.scale(pixelRatio, pixelRatio);
+        drawTable(g);
+        drawBoard(g);
+        drawLogo(g);
+        drawDecor(g);
+        drawTrack(g);
+        drawMouseHole(g);
+        return layer;
+    }
+
+    // --- Drawing: mice ---
+    const MOUSE_SCALE = 1.2;
+    const overCheese = s => Math.abs(s.x - CHEESE_SQ.x) < 50 && Math.abs(s.y - CHEESE_SQ.y) < 22;
+
+    function drawMouse(s, hue, time, i, mood) {
+        const z = Math.max(0, s.z);
+        // Shadow on whatever it is over: the board, or the top of the cheese.
+        const floor = overCheese(s) ? CHEESE_TOP : 0;
+        ctx.fillStyle = 'rgba(40, 25, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(s.x, s.y - floor, Math.max(6, 16 - (z - floor) * 0.25), 5, 0, 0, TAU);
+        ctx.fill();
+
+        const shake = mood === 'scared' ? Math.sin(time * 60) * 1.5 : 0;
+        const breathe = 1 + Math.sin(time * 4 + i) * 0.02;
+        ctx.save();
+        ctx.translate(s.x + shake, s.y - z);
+        ctx.scale(MOUSE_SCALE * s.facing * s.sx, MOUSE_SCALE * s.sy * breathe);
+        const body = `hsl(${hue}, 72%, 52%)`;
+        const dark = `hsl(${hue}, 70%, 28%)`;
+        const light = `hsl(${hue}, 85%, 74%)`;
+
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#e88f9c';
+        ctx.lineWidth = 2.6;
+        const sway = Math.sin(time * 3 + i * 1.7) * 3;
+        ctx.beginPath();
+        ctx.moveTo(-12, -7);
+        ctx.bezierCurveTo(-22, -3, -24, -16 + sway, -33, -12 + sway);
+        ctx.stroke();
+
+        ctx.fillStyle = '#f3a7b2';
+        for (const fx of [-7, 6]) {
+            ctx.beginPath();
+            ctx.ellipse(fx, -1.5, 4, 2.2, 0, 0, TAU);
+            ctx.fill();
+        }
+
+        const grad = ctx.createRadialGradient(-4, -16, 2, 0, -10, 17);
+        grad.addColorStop(0, light);
+        grad.addColorStop(1, body);
+        ctx.fillStyle = grad;
+        ctx.strokeStyle = dark;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(-1, -10, 14, 10, 0, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+
+        const nibble = mood === 'nibble' ? Math.max(0, Math.sin(time * 14 + i)) * 2 : 0;
+        ctx.save();
+        ctx.translate(0, nibble);
+        ctx.beginPath();
+        ctx.ellipse(11, -14, 8.5, 7, -0.25, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(17, -12, 4.8, 3.6, -0.2, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(7, -21, 5.8, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#f7b8c2';
+        ctx.beginPath();
+        ctx.arc(7, -21, 3.4, 0, TAU);
+        ctx.fill();
+
+        if (mood === 'scared') {
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(14, -16, 3.4, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(14.5, -16, 1.6, 0, TAU);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(14, -16, 2, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(14.6, -16.7, 0.7, 0, TAU);
+            ctx.fill();
+        }
+        ctx.fillStyle = '#e85a78';
+        ctx.beginPath();
+        ctx.arc(21.6, -12.6, 2.1, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(40, 20, 10, 0.55)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        for (const wy of [-15, -11, -7]) {
+            ctx.moveTo(19, -11.5);
+            ctx.lineTo(28, wy);
+        }
+        ctx.stroke();
+        ctx.restore();
+        ctx.restore();
+    }
+
+    function drawTag(m, s) {
+        const y = s.y - Math.max(0, s.z) - 44 - (s.lift || 0);
+        const { text, w } = m.tag;
+        ctx.save();
+        ctx.font = TAG_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.93)';
+        roundRect(ctx, s.x - w / 2, y - 8, w, 16, 8);
+        ctx.fill();
+        ctx.strokeStyle = `hsl(${m.hue}, 72%, 45%)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#2a1a0e';
+        ctx.fillText(text, s.x, y + 0.5);
+        ctx.restore();
+    }
+
+    const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+        5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
+
+    function drawDie(x, y, die) {
+        const size = 20 * die.pop;
+        if (size < 1) return;
+        ctx.save();
+        ctx.globalAlpha = die.alpha;
+        ctx.translate(x, y);
+        ctx.rotate(die.spin);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        roundRect(ctx, -size / 2 + 1.5, -size / 2 + 2, size, size, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        roundRect(ctx, -size / 2, -size / 2, size, size, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = die.face === 1 ? '#e63b2e' : '#222';
+        for (const [px, py] of PIPS[die.face]) {
+            ctx.beginPath();
+            ctx.arc(px * size * 0.27, py * size * 0.27, size * (die.face === 1 ? 0.13 : 0.09), 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function drawBubble(x, y, text, pop) {
+        if (pop <= 0) return;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(pop, pop);
+        ctx.font = `900 13px ${LOGO_FONT}`;
+        const w = ctx.measureText(text).width + 20;
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = '#e63b2e';
+        ctx.lineWidth = 3;
+        roundRect(ctx, -w / 2, -34, w, 26, 13);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-6, -9);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(6, -9);
+        ctx.fill();
+        ctx.fillStyle = '#e63b2e';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 0, -20.5);
+        ctx.restore();
+    }
+
+    function drawConfetti() {
+        confetti = confetti.filter(c => c.life > 0 && c.y < H + 40);
+        for (const c of confetti) {
+            c.vy += 0.3;
+            c.x += c.vx;
+            c.y += c.vy;
+            c.rot += c.vr;
+            c.life -= 0.005;
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(c.rot);
+            ctx.globalAlpha = Math.max(0, c.life);
+            if (c.cheese) {
+                ctx.fillStyle = '#ffc93c';
+                ctx.beginPath();
+                ctx.moveTo(-6, 4);
+                ctx.lineTo(6, 4);
+                ctx.lineTo(4, -5);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                ctx.fillStyle = c.color;
+                ctx.fillRect(-4, -2, 8, 4);
+            }
+            ctx.restore();
+        }
+    }
+
+    function drawStatus(text) {
+        ctx.save();
+        ctx.font = `bold 17px ${UI_FONT}`;
+        const w = Math.min(W - 80, ctx.measureText(text).width + 40);
+        const y = 662;
+        ctx.fillStyle = 'rgba(255, 244, 214, 0.95)';
+        ctx.strokeStyle = '#e63b2e';
+        ctx.lineWidth = 3;
+        roundRect(ctx, W / 2 - w / 2, y - 15, w, 30, 15);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#3a2410';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, W / 2, y + 1);
+        ctx.restore();
+    }
+
+    // Once the cage is down the camera eases in on the cheese.
+    function cameraZoom(trapT) {
+        return easeInOut(phase(trapT, CAGE_LAND + 0.15, CAGE_LAND + 1.1));
+    }
+
+    // --- Frame ---
+    function draw(time) {
+        sizeCanvas();
+        if (!groundLayer) groundLayer = buildGround();
+        const sc = scene();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(groundLayer, 0, 0);
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+        const zoom = cameraZoom(sc.trapT);
+        if (zoom > 0) {
+            const fx = CHEESE_SQ.x, fy = CHEESE_SQ.y - 40;
+            ctx.translate(lerp(fx, 500, zoom), lerp(fy, 430, zoom));
+            ctx.scale(1 + 0.8 * zoom, 1 + 0.8 * zoom);
+            ctx.translate(-fx, -fy);
+            // The board layer has to be redrawn under the zoom.
+            ctx.drawImage(groundLayer, 0, 0, W, H);
+        }
+
+        // Back to front: anything further up the board is further away.
+        const items = contraptionItems(sc.trapT, time);
+        sc.mice.forEach((s, i) => {
+            const mood = i === sc.caught ? 'scared' : overCheese(s) && s.z <= CHEESE_TOP + 0.5 ? 'nibble' : 'idle';
+            items.push({ y: s.y, draw: () => drawMouse(s, mice[i].hue, time, i, mood) });
+        });
+        items.sort((a, b) => a.y - b.y);
+        for (const item of items) item.draw();
+
+        sc.mice.forEach((s, i) => drawTag(mice[i], s));
+        sc.dice.forEach((d, i) => {
+            if (d) drawDie(sc.mice[i].x, sc.mice[i].y - Math.max(0, sc.mice[i].z) - 68 - (sc.mice[i].lift || 0), d);
+        });
+        if (sc.cranker >= 0 && sc.crankCallout > 0) {
+            const s = sc.mice[sc.cranker];
+            drawBubble(s.x, s.y - s.z - 60 - (s.lift || 0), 'TURN CRANK!', easeOut(sc.crankCallout));
+        }
+        if (sc.caught >= 0) {
+            const s = sc.mice[sc.caught];
+            drawBubble(s.x, s.y - s.z - 60 - (s.lift || 0), 'EEK!', easeOut(phase(sc.trapT, CAGE_LAND, CAGE_LAND + 0.2)));
+        }
+        drawConfetti();
+
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        if (!mice.length) {
+            ctx.font = `bold 17px ${UI_FONT}`;
+            ctx.textAlign = 'center';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(30, 70, 20, 0.8)';
+            ctx.strokeText('Add names to fill the mouse hole', PEN.x, PEN.y + 4);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('Add names to fill the mouse hole', PEN.x, PEN.y + 4);
+        }
+        const status = statusText();
+        drawStatus(status);
+        if (status !== lastStatus) {
+            lastStatus = status;
+            statusEl.textContent = status;
+        }
+    }
+
+    let lastNow = null;
+    function frame(now) {
+        const dt = lastNow === null ? 0 : Math.min(0.05, (now - lastNow) / 1000);
+        lastNow = now;
+        if (run) advanceRun(dt);
+        draw(now / 1000);
+        requestAnimationFrame(frame);
+    }
+
+    // --- The contraption ---
+    // Every moving part is worked out from T, the seconds since the crank turned (T <= 0:
+    // the trap is set). So the trap can be drawn at any moment, skipped to the end, or
+    // rewound for the next game just by changing T. `floor` is where each piece stands
+    // on the board, which decides what it is drawn in front of.
+    const STAGE = {
+        crank: [0, 1.3], sign: [1.3, 1.65], boot: [1.6, 2.1], bucket: [2.05, 2.45],
+        spill: [2.2, 2.55], stairs: [2.55, 3.95], funnel: [3.95, 4.15], pipe: [4.15, 4.75], exit: [4.75, 5.05],
+        hand: [5.0, 5.3], push: [5.2, 5.45], ramp: [5.45, 7.2], tub: [7.2, 7.7],
+        board: [7.7, 7.82], dive: [7.76, 8.95], splash: [8.95, 9.8], shake: [9.0, 9.55], latch: [9.55, 9.75],
+    };
+    const STEP_TIME = (STAGE.stairs[1] - STAGE.stairs[0]) / 5;
+    const CONTRAPTION_SOUNDS = [
+        [0, 'crank'], [1.3, 'tick'], [1.62, 'thwack'], [2.08, 'clang'],
+        ...Array.from({ length: 6 }, (_, k) => [STAGE.stairs[0] + k * STEP_TIME, 'step']),
+        [STAGE.funnel[0], 'whoosh'], [4.98, 'clack'], [STAGE.push[1], 'rumble'], [7.28, 'plunk'],
+        [STAGE.board[0], 'boing'], [7.85, 'whee'], [STAGE.dive[1], 'splash'], [STAGE.latch[0], 'click'], [CAGE_DROP, 'rattle'],
+    ];
+
+    function contraptionSound(kind) {
+        switch (kind) {
+            case 'crank':
+                for (let i = 0; i < 14; i++) tone({ from: 520, to: 300, dur: 0.03, vol: 0.06, delay: i * 0.09 });
+                break;
+            case 'tick':
+                tone({ type: 'triangle', from: 900, to: 500, dur: 0.08, vol: 0.12 });
+                break;
+            case 'thwack':
+                noise({ dur: 0.12, vol: 0.3, from: 1500, to: 300 });
+                tone({ type: 'sine', from: 180, to: 70, dur: 0.12, vol: 0.2 });
+                break;
+            case 'clang':
+                tone({ type: 'triangle', from: 880, dur: 0.5, vol: 0.12 });
+                tone({ type: 'triangle', from: 1320, dur: 0.4, vol: 0.08 });
+                tone({ type: 'sine', from: 2093, dur: 0.3, vol: 0.05 });
+                break;
+            case 'step':
+                tone({ type: 'triangle', from: 1900, to: 1500, dur: 0.06, vol: 0.1 });
+                break;
+            case 'whoosh':
+                noise({ dur: 0.7, vol: 0.12, filter: 'bandpass', from: 400, to: 2400, q: 2 });
+                break;
+            case 'clack':
+                tone({ type: 'square', from: 700, to: 400, dur: 0.05, vol: 0.1 });
+                break;
+            case 'rumble':
+                tone({ type: 'sawtooth', from: 55, to: 75, dur: 1.8, vol: 0.05 });
+                noise({ dur: 1.8, vol: 0.06, from: 300, to: 500 });
+                break;
+            case 'plunk':
+                tone({ type: 'sine', from: 320, to: 120, dur: 0.25, vol: 0.25 });
+                break;
+            case 'boing':
+                tone({ type: 'sine', from: 220, to: 660, dur: 0.12, vol: 0.15 });
+                tone({ type: 'sine', from: 660, to: 300, dur: 0.25, vol: 0.12, delay: 0.12 });
+                break;
+            case 'whee':
+                tone({ type: 'sine', from: 500, to: 1400, dur: 0.5, vol: 0.06 });
+                tone({ type: 'sine', from: 1400, to: 900, dur: 0.4, vol: 0.06, delay: 0.5 });
+                break;
+            case 'splash':
+                noise({ dur: 0.6, vol: 0.35, filter: 'highpass', from: 800, to: 2500 });
+                noise({ dur: 0.3, vol: 0.2, from: 600, to: 200 });
+                break;
+            case 'click':
+                tone({ type: 'square', from: 1200, dur: 0.03, vol: 0.12 });
+                break;
+            case 'rattle':
+                for (let i = 0; i < 8; i++) tone({ type: 'square', from: 300 + i * 40, dur: 0.03, vol: 0.06, delay: i * 0.07 });
+                break;
+        }
+    }
+
+    // Geometry. Gear A carries the crank, gear B the lever that knocks the stop sign over.
+    const GEAR_A = { x: 818, y: 198, r: 24, teeth: 10, color: '#ffc93c', dark: '#a8770f' };
+    const GEAR_B = { x: 750, y: 202, r: 40, teeth: 16, color: '#2f7de1', dark: '#1b4f99' };
+    const GEAR_FLOOR = 266;
+    const MESH = Math.atan2(GEAR_B.y - GEAR_A.y, GEAR_B.x - GEAR_A.x);
+    const RATIO = GEAR_A.teeth / GEAR_B.teeth;
+    const CRANK_TURN = Math.PI * 2.5;
+    const LEVER = { len: 52, end: Math.PI }; // ends pointing left, at the stop sign
+    const SIGN = { x: 692, y: 264, len: 58, rest: 0.12, tipped: -1.0 };
+    const BOOT = { x: 612, y: 146, len: 34, post: 642, floor: 252 };
+    const BUCKET = { x: 506, y: 198, floor: 258 }; // tips over its bottom-left corner
+    const STAIRS = { x: 500, y: 212, w: 30, h: 17, n: 6, floor: 304 };
+    const PIPE = { x: 300, top: 300, bottom: 376, exitX: 342, exitY: 404, floor: 412 };
+    const POST = { x: 368, y: 434, len: 104, tipped: 0.38 };
+    const PERCH = { x: 397, y: 317 };
+    const RAMP_POINTS = [{ x: 412, y: 320 }, { x: 562, y: 348 }, { x: 570, y: 366 }, { x: 434, y: 390 },
+        { x: 428, y: 406 }, { x: 532, y: 424 }];
+    const RAMP = polyline(RAMP_POINTS);
+    const RAMP_FLOOR = 452;
+    const TUB = { x: 568, y: 452, rx: 40, floor: 506 };
+    const SEESAW = { x: 606, y: 522, half: 64, rest: 0.16, flipped: -0.2, floor: 540 };
+    const WASHTUB = { x: 750, y: 538, rx: 40, floor: 552 };
+    const POLE = { x: CHEESE_SQ.x, base: CHEESE_SQ.y - 12, top: 292 };
+    const CAGE = { rx: 56, ry: 15, h: 66, upTop: 304, downTop: CHEESE_SQ.y + 4 - CHEESE_TOP - 66 };
+    const BALL_R = 7, BOWL_R = 13;
+
+    // --- Poses ---
+    const crankAngle = T => CRANK_TURN * easeInOut(phase(T, ...STAGE.crank));
+    const leverAngle = T => LEVER.end + (CRANK_TURN - crankAngle(T)) * RATIO;
+
+    function signAngle(T) {
+        if (T < STAGE.sign[0]) return SIGN.rest - 0.06 * phase(T, 1.15, STAGE.crank[1]);
+        return lerp(SIGN.rest - 0.06, SIGN.tipped, easeIn(phase(T, ...STAGE.sign)));
+    }
+
+    // The boot is kicked forward, then swings back and settles like a pendulum.
+    function bootAngle(T) {
+        if (T < STAGE.boot[0]) return 0;
+        if (T < STAGE.boot[1]) return 1.05 * easeOut(phase(T, ...STAGE.boot));
+        const s = T - STAGE.boot[1];
+        return 1.05 * Math.cos(s * 6) * Math.exp(-s * 1.8);
+    }
+
+    const bucketAngle = T => -1.75 * easeOut(phase(T, ...STAGE.bucket));
+    function bucketPoint(T, lx, ly) {
+        const a = bucketAngle(T), c = Math.cos(a), s = Math.sin(a);
+        return { x: BUCKET.x + lx * c - ly * s, y: BUCKET.y + lx * s + ly * c };
+    }
+
+    const postAngle = T => POST.tipped * easeOut(phase(T, ...STAGE.hand));
+    const seesawAngle = T => lerp(SEESAW.rest, SEESAW.flipped, easeOut(phase(T, ...STAGE.board)));
+    // A point d along the plank from the pivot (right is positive), `up` above it.
+    function seesawPoint(T, d, up = 0) {
+        const a = seesawAngle(T);
+        return { x: SEESAW.x + d * Math.cos(a) + up * Math.sin(a), y: SEESAW.y + d * Math.sin(a) - up * Math.cos(a) };
+    }
+
+    const hopBetween = (a, b, f, height) => ({ x: lerp(a.x, b.x, f), y: lerp(a.y, b.y, f) - Math.sin(f * Math.PI) * height });
+    const stepLanding = k => ({ x: STAIRS.x - STAIRS.w * (k + 0.5), y: STAIRS.y + STAIRS.h * k - BALL_R });
+    const BALL_IN_BUCKET = [15, -24];
+    const BALL_AT_POST = { x: POST.x - 4 - BALL_R, y: POST.y - BALL_R - 2 };
+
+    // The steel ball. `layer` is the draw order it needs; null when another piece draws it.
+    function steelBall(T) {
+        if (T < STAGE.spill[0]) return { ...bucketPoint(T, ...BALL_IN_BUCKET), layer: null, inBucket: true };
+        if (T < STAGE.stairs[0]) {
+            const from = bucketPoint(STAGE.spill[0], ...BALL_IN_BUCKET);
+            return { ...hopBetween(from, stepLanding(0), phase(T, ...STAGE.spill), 16), layer: STAIRS.floor + 1 };
+        }
+        if (T < STAGE.funnel[0]) {
+            const u = (T - STAGE.stairs[0]) / STEP_TIME, k = Math.min(4, Math.floor(u));
+            return { ...hopBetween(stepLanding(k), stepLanding(k + 1), u - k, 12), layer: STAIRS.floor + 1 };
+        }
+        if (T < STAGE.pipe[0]) {
+            const f = phase(T, ...STAGE.funnel);
+            return { ...hopBetween(stepLanding(5), { x: PIPE.x, y: PIPE.top + 2 }, f, 10), layer: PIPE.floor - 1, sinking: f };
+        }
+        if (T < STAGE.exit[0]) return { x: PIPE.x, y: PIPE.bottom, layer: null };
+        const f = phase(T, ...STAGE.exit);
+        return { x: lerp(PIPE.exitX, BALL_AT_POST.x, easeOut(f)), y: lerp(PIPE.exitY, BALL_AT_POST.y, f), layer: POST.y + 1 };
+    }
+
+    function bowlingBall(T) {
+        const start = RAMP_POINTS[0];
+        if (T < STAGE.push[0]) return { ...PERCH, spin: 0, layer: RAMP_FLOOR + 1 };
+        if (T < STAGE.ramp[0]) {
+            const f = easeIn(phase(T, ...STAGE.push));
+            const x = lerp(PERCH.x, start.x, f);
+            return { x, y: lerp(PERCH.y, start.y, f), spin: (x - PERCH.x) / BOWL_R, layer: RAMP_FLOOR + 1 };
+        }
+        if (T < STAGE.tub[0]) {
+            const f = phase(T, ...STAGE.ramp);
+            const p = along(RAMP, 0.35 * f + 0.65 * f * f); // speeds up as it rolls down
+            return { x: p.x, y: p.y, spin: (p.x - PERCH.x) / BOWL_R, layer: RAMP_FLOOR + 1 };
+        }
+        const end = RAMP_POINTS[RAMP_POINTS.length - 1];
+        const f1 = phase(T, STAGE.tub[0], 7.45);
+        if (f1 < 1) {
+            const p = hopBetween(end, { x: TUB.x, y: TUB.y + 4 }, f1, 14);
+            return { ...p, spin: (p.x - PERCH.x) / BOWL_R, layer: null, inTub: true };
+        }
+        const landed = seesawPoint(STAGE.board[0], -38, BOWL_R);
+        const f2 = phase(T, 7.45, STAGE.tub[1]);
+        if (f2 < 1) return { x: TUB.x, y: lerp(TUB.y + 16, landed.y, easeIn(f2)), spin: 0, layer: SEESAW.floor + 1 };
+        return { ...seesawPoint(T, -38, BOWL_R), spin: 0, layer: SEESAW.floor + 1 };
+    }
+
+    function diver(T) {
+        if (T < STAGE.dive[0]) return { ...seesawPoint(T, 54), rot: seesawAngle(T), state: 'stand' };
+        if (T < STAGE.dive[1]) {
+            const f = phase(T, ...STAGE.dive);
+            const from = seesawPoint(STAGE.dive[0], 54);
+            return {
+                x: lerp(from.x, WASHTUB.x, f), y: lerp(from.y, WASHTUB.y + 6, f) - 4 * 120 * f * (1 - f),
+                rot: f * Math.PI * 3, state: 'fly',
+            };
+        }
+        return { state: 'tub' };
+    }
+
+    function poleShake(T) {
+        const f = phase(T, ...STAGE.shake);
+        return f > 0 && f < 1 ? Math.sin(f * 40) * 2.5 * (1 - f) : 0;
+    }
+
+    function cageTop(T) {
+        const f = phase(T, CAGE_DROP, CAGE_LAND);
+        let y = lerp(CAGE.upTop, CAGE.downTop, easeIn(f));
+        y -= Math.sin(phase(T, CAGE_LAND, CAGE_LAND + 0.22) * Math.PI) * 7;
+        return y;
+    }
+
+    // --- Drawing the contraption ---
+    function groundShadow(x, y, rx, ry = rx * 0.28) {
+        ctx.fillStyle = 'rgba(20, 50, 10, 0.28)';
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+        ctx.fill();
+    }
+
+    function outlined(fill, stroke = 'rgba(0, 0, 0, 0.55)', width = 2) {
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        ctx.stroke();
+    }
+
+    function drawGear(g, angle) {
+        const { x, y, r, teeth, color, dark } = g;
+        const w = TAU / teeth;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        for (let k = 0; k < teeth; k++) {
+            const a = k * w;
+            for (const [da, rr] of [[-0.5, r - 1], [-0.28, r], [-0.16, r + 6], [0.16, r + 6], [0.28, r]]) {
+                ctx.lineTo(Math.cos(a + da * w) * rr, Math.sin(a + da * w) * rr);
+            }
+        }
+        ctx.closePath();
+        const face = ctx.createRadialGradient(-r * 0.3, -r * 0.3, 2, 0, 0, r + 6);
+        face.addColorStop(0, '#ffffff');
+        face.addColorStop(0.25, color);
+        face.addColorStop(1, color);
+        outlined(face, dark, 2);
+        ctx.fillStyle = dark;
+        for (let k = 0; k < 4; k++) {
+            ctx.beginPath();
+            ctx.arc(Math.cos(k * TAU / 4) * r * 0.58, Math.sin(k * TAU / 4) * r * 0.58, r * 0.16, 0, TAU);
+            ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, r * 0.28, 0, TAU);
+        outlined('#e9e9ee', dark, 2);
+        ctx.restore();
+    }
+
+    function drawGears(T) {
+        const a = crankAngle(T);
+        groundShadow(784, GEAR_FLOOR, 78);
+        // Stand
+        ctx.beginPath();
+        ctx.roundRect(706, GEAR_FLOOR - 10, 152, 12, 4);
+        outlined('#43b047', '#2a7a2d');
+        for (const g of [GEAR_A, GEAR_B]) {
+            ctx.beginPath();
+            ctx.roundRect(g.x - 6, g.y, 12, GEAR_FLOOR - 8 - g.y, 3);
+            outlined('#43b047', '#2a7a2d');
+        }
+        drawGear(GEAR_B, MESH + Math.PI + Math.PI / GEAR_B.teeth - a * RATIO);
+        drawGear(GEAR_A, MESH + a);
+
+        // Lever on gear B
+        const la = leverAngle(T);
+        const lx = GEAR_B.x + Math.cos(la) * LEVER.len, ly = GEAR_B.y + Math.sin(la) * LEVER.len;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#7a1910';
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.moveTo(GEAR_B.x, GEAR_B.y);
+        ctx.lineTo(lx, ly);
+        ctx.stroke();
+        ctx.strokeStyle = '#e63b2e';
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(lx, ly, 6, 0, TAU);
+        outlined('#ffc93c', '#7a1910');
+
+        // Crank handle on gear A
+        const ca = a - Math.PI / 2;
+        const hx = GEAR_A.x + Math.cos(ca) * 30, hy = GEAR_A.y + Math.sin(ca) * 30;
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(GEAR_A.x, GEAR_A.y);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+        ctx.strokeStyle = '#c9ccd6';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(hx, hy - 4, 7, 10, 0, 0, TAU);
+        outlined('#e63b2e', '#7a1910');
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        ctx.arc(GEAR_A.x, GEAR_A.y, 5, 0, TAU);
+        outlined('#ffffff', '#555');
+    }
+
+    function drawStopSign(T) {
+        groundShadow(SIGN.x, SIGN.y, 14);
+        ctx.save();
+        ctx.translate(SIGN.x, SIGN.y);
+        ctx.beginPath();
+        ctx.roundRect(-9, -6, 18, 8, 3);
+        outlined('#ffc93c', '#a8770f');
+        ctx.rotate(signAngle(T));
+        ctx.beginPath();
+        ctx.rect(-2.5, -SIGN.len, 5, SIGN.len);
+        outlined('#c9ccd6', '#555', 1);
+        ctx.translate(0, -SIGN.len);
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+            const a = (k + 0.5) * TAU / 8;
+            ctx.lineTo(Math.cos(a) * 16, Math.sin(a) * 16);
+        }
+        ctx.closePath();
+        outlined('#e63b2e', '#ffffff', 2.5);
+        ctx.fillStyle = '#fff';
+        ctx.font = `900 8px ${LOGO_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('STOP', 0, 0.5);
+        ctx.restore();
+    }
+
+    function drawBoot(T) {
+        // Gallows post
+        groundShadow(BOOT.post, BOOT.floor, 14);
+        ctx.beginPath();
+        ctx.roundRect(BOOT.post - 5, BOOT.y - 10, 10, BOOT.floor - BOOT.y + 10, 3);
+        outlined('#ff8a1f', '#a8520a');
+        ctx.beginPath();
+        ctx.roundRect(BOOT.x - 6, BOOT.y - 12, BOOT.post - BOOT.x + 11, 9, 3);
+        outlined('#ff8a1f', '#a8520a');
+
+        ctx.save();
+        ctx.translate(BOOT.x, BOOT.y);
+        ctx.rotate(bootAngle(T));
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, BOOT.len);
+        ctx.stroke();
+        // The boot: shaft, then the foot with its toe pointing left.
+        ctx.translate(0, BOOT.len);
+        ctx.beginPath();
+        ctx.moveTo(-9, 0);
+        ctx.lineTo(10, 0);
+        ctx.lineTo(13, 26);
+        ctx.quadraticCurveTo(14, 34, 6, 34);
+        ctx.lineTo(-28, 34);
+        ctx.quadraticCurveTo(-34, 33, -32, 26);
+        ctx.quadraticCurveTo(-28, 18, -10, 17);
+        ctx.closePath();
+        const leather = ctx.createLinearGradient(-30, 0, 14, 34);
+        leather.addColorStop(0, '#a8662e');
+        leather.addColorStop(1, '#6a3a16');
+        outlined(leather, '#3a1d08');
+        ctx.fillStyle = '#2a1405';
+        ctx.fillRect(-32, 31, 46, 4);
+        ctx.strokeStyle = '#f6e7c8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (const ly of [6, 11, 16]) {
+            ctx.moveTo(-6, ly);
+            ctx.lineTo(4, ly + 3);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawSteelBall(b) {
+        if (b.sinking > 0.6) return; // gone down the funnel
+        const g = ctx.createRadialGradient(b.x - 2.5, b.y - 2.5, 1, b.x, b.y, BALL_R);
+        g.addColorStop(0, '#ffffff');
+        g.addColorStop(0.5, '#b8bfcc');
+        g.addColorStop(1, '#5d6472');
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, BALL_R, 0, TAU);
+        outlined(g, '#3d434f', 1);
+    }
+
+    function drawBucket(T, ball) {
+        groundShadow(BUCKET.x + 20, BUCKET.floor, 16);
+        ctx.beginPath();
+        ctx.roundRect(BUCKET.x + 16, BUCKET.y, 8, BUCKET.floor - BUCKET.y, 2);
+        outlined('#43b047', '#2a7a2d');
+        ctx.beginPath();
+        ctx.roundRect(BUCKET.x - 6, BUCKET.y, 52, 6, 2);
+        outlined('#43b047', '#2a7a2d');
+
+        ctx.save();
+        ctx.translate(BUCKET.x, BUCKET.y);
+        ctx.rotate(bucketAngle(T));
+        // Inside, then the ball sitting in it, then the front.
+        ctx.beginPath();
+        ctx.ellipse(15, -26, 17, 5, 0, 0, TAU);
+        outlined('#123a73', '#0c2a55', 1);
+        ctx.restore();
+        if (ball.inBucket) drawSteelBall(ball);
+        ctx.save();
+        ctx.translate(BUCKET.x, BUCKET.y);
+        ctx.rotate(bucketAngle(T));
+        ctx.beginPath();
+        ctx.moveTo(-2, -26);
+        ctx.lineTo(2, 0);
+        ctx.quadraticCurveTo(15, 4, 28, 0);
+        ctx.lineTo(32, -26);
+        ctx.quadraticCurveTo(15, -21, -2, -26);
+        const pail = ctx.createLinearGradient(-2, 0, 32, 0);
+        pail.addColorStop(0, '#1b4f99');
+        pail.addColorStop(0.4, '#5aa0ff');
+        pail.addColorStop(1, '#1b4f99');
+        outlined(pail, '#0c2a55');
+        ctx.strokeStyle = '#c9ccd6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(15, -26, 15, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    const STEP_COLORS = ['#ffc93c', '#ff8a1f', '#e63b2e', '#2f7de1', '#43b047', '#ffc93c'];
+    function drawStairs() {
+        const { x, y, w, h, n, floor } = STAIRS;
+        groundShadow(x - (n * w) / 2, floor, (n * w) / 2 + 10, 7);
+        for (const k of [0, 3, 5]) {
+            const sx = x - w * (k + 0.5);
+            ctx.beginPath();
+            ctx.roundRect(sx - 3, y + h * k + 10, 6, floor - (y + h * k + 10), 2);
+            outlined('#c9ccd6', '#666', 1);
+        }
+        for (let k = 0; k < n; k++) {
+            const sx = x - w * (k + 1), sy = y + h * k;
+            ctx.save();
+            ctx.translate(sx + w / 2, sy + h / 2);
+            ctx.rotate(k % 2 ? 0.07 : -0.05); // a crooked staircase
+            ctx.beginPath();
+            ctx.roundRect(-w / 2, -h / 2, w, h + 4, 3);
+            outlined(STEP_COLORS[k], 'rgba(0, 0, 0, 0.5)');
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            ctx.fillRect(-w / 2 + 2, -h / 2 + 2, w - 4, 3);
+            ctx.restore();
+        }
+    }
+
+    function drawPipe(T) {
+        groundShadow(PIPE.x + 20, PIPE.floor, 30, 6);
+        ctx.lineCap = 'butt';
+        ctx.lineJoin = 'round';
+        const path = () => {
+            ctx.beginPath();
+            ctx.moveTo(PIPE.x, PIPE.top + 8);
+            ctx.lineTo(PIPE.x, PIPE.bottom);
+            ctx.quadraticCurveTo(PIPE.x, PIPE.exitY, PIPE.x + 20, PIPE.exitY);
+            ctx.lineTo(PIPE.exitX - 2, PIPE.exitY);
+        };
+        path();
+        ctx.strokeStyle = '#0c2a55';
+        ctx.lineWidth = 22;
+        ctx.stroke();
+        path();
+        ctx.strokeStyle = '#2f7de1';
+        ctx.lineWidth = 18;
+        ctx.stroke();
+        path();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        // While the ball is inside, a bulge travels down the pipe.
+        const f = phase(T, ...STAGE.pipe);
+        if (f > 0 && f < 1) {
+            const p = f < 0.7
+                ? { x: PIPE.x, y: lerp(PIPE.top + 10, PIPE.bottom, f / 0.7) }
+                : { x: lerp(PIPE.x + 6, PIPE.exitX - 4, (f - 0.7) / 0.3), y: PIPE.exitY - 2 };
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 12, 12, 0, 0, TAU);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.ellipse(PIPE.exitX, PIPE.exitY, 4, 10, 0, 0, TAU);
+        outlined('#0b1a33', '#0c2a55');
+        // Funnel on top
+        ctx.beginPath();
+        ctx.moveTo(PIPE.x - 18, PIPE.top - 8);
+        ctx.lineTo(PIPE.x + 18, PIPE.top - 8);
+        ctx.lineTo(PIPE.x + 10, PIPE.top + 10);
+        ctx.lineTo(PIPE.x - 10, PIPE.top + 10);
+        ctx.closePath();
+        outlined('#ffc93c', '#a8770f');
+        ctx.beginPath();
+        ctx.ellipse(PIPE.x, PIPE.top - 8, 18, 5, 0, 0, TAU);
+        outlined('#5a3d06', '#a8770f');
+    }
+
+    function drawPost(T) {
+        groundShadow(POST.x, POST.y, 16);
+        ctx.beginPath();
+        ctx.roundRect(POST.x - 10, POST.y - 8, 20, 10, 3);
+        outlined('#ffc93c', '#a8770f');
+        ctx.save();
+        ctx.translate(POST.x, POST.y - 4);
+        ctx.rotate(postAngle(T));
+        ctx.beginPath();
+        ctx.roundRect(-4, -POST.len, 8, POST.len, 3);
+        outlined('#e63b2e', '#7a1910');
+        // The helping hand: a cartoon glove at the top, pointing right.
+        ctx.translate(0, -POST.len + 6);
+        ctx.beginPath();
+        ctx.roundRect(-7, -6, 10, 14, 3);
+        outlined('#e63b2e', '#7a1910');
+        ctx.beginPath();
+        ctx.ellipse(10, 0, 10, 9, 0, 0, TAU);
+        outlined('#ffffff', '#555');
+        for (const [fy, len] of [[-6, 10], [-2, 12], [2, 11], [6, 8]]) {
+            ctx.beginPath();
+            ctx.roundRect(14, fy - 2, len, 4.5, 2.2);
+            outlined('#ffffff', '#555', 1.2);
+        }
+        ctx.beginPath();
+        ctx.ellipse(8, -9, 4, 6, -0.6, 0, TAU);
+        outlined('#ffffff', '#555', 1.2);
+        ctx.restore();
+    }
+
+    function drawRamp() {
+        // Perch the bowling ball waits on
+        ctx.beginPath();
+        ctx.roundRect(PERCH.x - 3, PERCH.y + BOWL_R, 6, RAMP_FLOOR - PERCH.y - BOWL_R, 2);
+        outlined('#c9ccd6', '#666', 1);
+        groundShadow(480, RAMP_FLOOR, 90, 8);
+        for (let k = 0; k + 1 < RAMP_POINTS.length; k += 2) {
+            const a = RAMP_POINTS[k], b = RAMP_POINTS[k + 1];
+            const low = a.y > b.y ? a : b;
+            ctx.beginPath();
+            ctx.roundRect(low.x - 3, low.y + BOWL_R, 6, RAMP_FLOOR - low.y - BOWL_R, 2);
+            outlined('#c9ccd6', '#666', 1);
+            const off = BOWL_R + 3;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y + off);
+            ctx.lineTo(b.x, b.y + off);
+            ctx.strokeStyle = '#7a1910';
+            ctx.lineWidth = 11;
+            ctx.stroke();
+            ctx.strokeStyle = k === 2 ? '#2f7de1' : '#e63b2e';
+            ctx.lineWidth = 7;
+            ctx.stroke();
+            ctx.strokeStyle = '#ffc93c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y + off - 4);
+            ctx.lineTo(b.x, b.y + off - 4);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+        }
+        ctx.beginPath();
+        ctx.ellipse(PERCH.x, PERCH.y + BOWL_R, 9, 4, 0, 0, TAU);
+        outlined('#ffc93c', '#a8770f');
+    }
+
+    function drawBowlingBall(b) {
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        const g = ctx.createRadialGradient(-4, -5, 1, 0, 0, BOWL_R);
+        g.addColorStop(0, '#6b6f80');
+        g.addColorStop(1, '#14151c');
+        ctx.beginPath();
+        ctx.arc(0, 0, BOWL_R, 0, TAU);
+        outlined(g, '#000', 1);
+        ctx.rotate(b.spin);
+        ctx.fillStyle = '#000';
+        for (const [hx, hy] of [[3, -5], [-2, -6], [0, 2]]) {
+            ctx.beginPath();
+            ctx.arc(hx, hy, 1.8, 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function drawTub(T, ball) {
+        const { x, y, rx } = TUB;
+        groundShadow(x, TUB.floor, rx + 6, 7);
+        for (const px of [x - 26, x + 26]) {
+            ctx.beginPath();
+            ctx.roundRect(px - 3, y + 16, 6, TUB.floor - y - 16, 2);
+            outlined('#c9ccd6', '#666', 1);
+        }
+        ctx.beginPath();
+        ctx.roundRect(x - rx + 6, y + 14, rx * 2 - 12, 6, 2);
+        outlined('#ff8a1f', '#a8520a');
+        // Inside of the tub, then the ball sinking into it, then the outside.
+        ctx.beginPath();
+        ctx.ellipse(x, y - 12, rx, 8, 0, 0, TAU);
+        outlined('#cfe9ff', '#7a8a9a', 1.5);
+        if (ball.inTub) drawBowlingBall(ball);
+        ctx.beginPath();
+        ctx.moveTo(x - rx, y - 12);
+        ctx.ellipse(x, y - 12, rx, 8, 0, Math.PI, 0, true);
+        ctx.lineTo(x + rx - 2, y + 2);
+        ctx.quadraticCurveTo(x + rx - 6, y + 14, x + rx - 18, y + 14);
+        ctx.lineTo(x - rx + 18, y + 14);
+        ctx.quadraticCurveTo(x - rx + 6, y + 14, x - rx + 2, y + 2);
+        ctx.closePath();
+        const enamel = ctx.createLinearGradient(0, y - 12, 0, y + 14);
+        enamel.addColorStop(0, '#ffffff');
+        enamel.addColorStop(1, '#c9d2dd');
+        outlined(enamel, '#5d6b7a');
+        ctx.fillStyle = '#ffc93c';
+        for (const fx of [x - rx + 10, x + rx - 10]) {
+            ctx.beginPath();
+            ctx.ellipse(fx, y + 15, 4, 3, 0, 0, TAU);
+            ctx.fill();
+        }
+    }
+
+    function drawDiver(d) {
+        ctx.save();
+        ctx.translate(d.x, d.y);
+        if (d.state === 'fly') {
+            ctx.translate(0, -16);
+            ctx.rotate(d.rot);
+            ctx.translate(0, 16);
+        } else {
+            ctx.rotate(d.rot);
+        }
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#e8b48a';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(-2.5, -12);
+        ctx.lineTo(-3, 0);
+        ctx.moveTo(2.5, -12);
+        ctx.lineTo(3, 0);
+        // Arms up, ready to dive
+        ctx.moveTo(-4, -24);
+        ctx.lineTo(-6, -36);
+        ctx.moveTo(4, -24);
+        ctx.lineTo(6, -36);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.roundRect(-5.5, -26, 11, 15, 4);
+        outlined('#ffffff', '#7a1910', 1.2);
+        ctx.fillStyle = '#e63b2e';
+        for (const sy of [-23, -18, -13.5]) ctx.fillRect(-5, sy, 10, 2.2);
+        ctx.beginPath();
+        ctx.arc(0, -31, 5.5, 0, TAU);
+        outlined('#f2c9a0', '#8a5a3a', 1.2);
+        ctx.beginPath();
+        ctx.arc(0, -32, 5.8, Math.PI * 1.05, Math.PI * 1.95);
+        ctx.fillStyle = '#e63b2e';
+        ctx.fill();
+        ctx.restore();
+        ctx.lineCap = 'butt';
+    }
+
+    // Head first in the water: just the legs kick above the surface.
+    function drawDiverLegs(x, waterY, time) {
+        const kick = Math.sin(time * 12) * 4;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#e8b48a';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(x - 3, waterY + 2);
+        ctx.lineTo(x - 5 - kick, waterY - 17);
+        ctx.moveTo(x + 3, waterY + 2);
+        ctx.lineTo(x + 5 + kick, waterY - 17);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(x, waterY + 2, 11, 3, 0, 0, TAU);
+        ctx.stroke();
+    }
+
+    function drawSeesaw(T, dv) {
+        groundShadow(SEESAW.x, SEESAW.floor, SEESAW.half, 6);
+        ctx.beginPath();
+        ctx.moveTo(SEESAW.x, SEESAW.y);
+        ctx.lineTo(SEESAW.x - 13, SEESAW.floor);
+        ctx.lineTo(SEESAW.x + 13, SEESAW.floor);
+        ctx.closePath();
+        outlined('#ffc93c', '#a8770f');
+        ctx.save();
+        ctx.translate(SEESAW.x, SEESAW.y);
+        ctx.rotate(seesawAngle(T));
+        ctx.beginPath();
+        ctx.roundRect(-SEESAW.half, -7, SEESAW.half * 2, 7, 3);
+        outlined('#2f7de1', '#0c2a55');
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillRect(-SEESAW.half + 3, -6, SEESAW.half * 2 - 6, 2);
+        ctx.restore();
+        if (dv.state === 'stand') drawDiver(dv);
+    }
+
+    function drawWashtub(T, dv, time) {
+        const shake = T > STAGE.dive[1] && T < STAGE.dive[1] + 0.35 ? Math.sin(T * 90) * 2 : 0;
+        const x = WASHTUB.x + shake, y = WASHTUB.y, rx = WASHTUB.rx;
+        groundShadow(WASHTUB.x, WASHTUB.floor, rx + 6, 7);
+        ctx.beginPath();
+        ctx.ellipse(x, y - 14, rx, 9, 0, 0, TAU);
+        outlined('#7ec8ff', '#a8520a', 1.5);
+        if (dv.state === 'tub') drawDiverLegs(x, y - 14, time);
+        ctx.beginPath();
+        ctx.moveTo(x - rx, y - 14);
+        ctx.ellipse(x, y - 14, rx, 9, 0, Math.PI, 0, true);
+        ctx.lineTo(x + rx - 6, y + 10);
+        ctx.ellipse(x, y + 10, rx - 6, 6, 0, 0, Math.PI);
+        ctx.closePath();
+        const metal = ctx.createLinearGradient(x - rx, 0, x + rx, 0);
+        metal.addColorStop(0, '#c95f0a');
+        metal.addColorStop(0.35, '#ffa64d');
+        metal.addColorStop(1, '#b8520a');
+        outlined(metal, '#6a2f05');
+        ctx.strokeStyle = 'rgba(80, 30, 0, 0.45)';
+        ctx.lineWidth = 2;
+        for (const ry of [-4, 4]) {
+            ctx.beginPath();
+            ctx.ellipse(x, y + ry, rx - 3, 7, 0, 0.15, Math.PI - 0.15);
+            ctx.stroke();
+        }
+    }
+
+    // Water thrown up when the diver lands.
+    function drawSplash(T) {
+        const s = T - STAGE.dive[1];
+        if (s <= 0 || s >= STAGE.splash[1] - STAGE.splash[0]) return;
+        const fade = 1 - s / (STAGE.splash[1] - STAGE.splash[0]);
+        ctx.save();
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = '#7ec8ff';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        for (let k = 0; k < 16; k++) {
+            const a = -Math.PI / 2 + (k / 15 - 0.5) * 2.4;
+            const v = 110 + ((k * 37) % 60);
+            const px = WASHTUB.x + Math.cos(a) * v * s;
+            const py = WASHTUB.y - 16 + Math.sin(a) * v * s + 0.5 * 700 * s * s;
+            ctx.beginPath();
+            ctx.ellipse(px, py, 3.2, 4.5, a + Math.PI / 2, 0, TAU);
+            ctx.fill();
+            ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.ellipse(WASHTUB.x, WASHTUB.y - 14, WASHTUB.rx * (0.6 + s), 9 * (0.6 + s), 0, 0, TAU);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // The washtub sits on a lever that jolts the pole when the diver lands.
+    function drawTrigger(T) {
+        const jolt = Math.sin(phase(T, STAGE.dive[1], STAGE.dive[1] + 0.3) * Math.PI) * 6;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = '#a8770f';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(WASHTUB.x - WASHTUB.rx + 6, WASHTUB.y + 4);
+        ctx.lineTo(POLE.x + 8 + poleShake(T), POLE.base - 40 - jolt);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffc93c';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.lineCap = 'butt';
+    }
+
+    function drawPole(T) {
+        const x = POLE.x + poleShake(T);
+        // A notched post: the notches make the cage shimmy on the way down.
+        ctx.beginPath();
+        ctx.moveTo(x - 5, POLE.base);
+        for (let y = POLE.base; y > POLE.top; y -= 10) {
+            ctx.lineTo(x - 5, y - 5);
+            ctx.lineTo(x - 7.5, y - 8);
+            ctx.lineTo(x - 5, y - 10);
+        }
+        ctx.lineTo(x + 5, POLE.top);
+        for (let y = POLE.top; y < POLE.base; y += 10) {
+            ctx.lineTo(x + 5, y + 5);
+            ctx.lineTo(x + 7.5, y + 8);
+            ctx.lineTo(x + 5, y + 10);
+        }
+        ctx.closePath();
+        const red = ctx.createLinearGradient(x - 6, 0, x + 6, 0);
+        red.addColorStop(0, '#9e2116');
+        red.addColorStop(0.4, '#ff6a5e');
+        red.addColorStop(1, '#9e2116');
+        outlined(red, '#5a120b', 1.2);
+        ctx.beginPath();
+        ctx.arc(x, POLE.top - 4, 8, 0, TAU);
+        outlined('#ffc93c', '#a8770f');
+        // Latch that holds the cage up
+        const open = easeOut(phase(T, ...STAGE.latch));
+        ctx.save();
+        ctx.translate(x + 5, CAGE.upTop + 2);
+        ctx.rotate(-0.25 - 1.2 * open);
+        ctx.beginPath();
+        ctx.roundRect(0, -3, 20, 6, 3);
+        outlined('#ffc93c', '#a8770f');
+        ctx.restore();
+    }
+
+    // The cage is drawn in two halves so a caught mouse sits inside it.
+    function drawCageHalf(T, front) {
+        const top = cageTop(T);
+        const drop = phase(T, CAGE_DROP, CAGE_LAND);
+        const x = POLE.x + poleShake(T) + (drop > 0 && drop < 1 ? Math.sin(T * 55) * 2.5 : 0);
+        const bottom = top + CAGE.h;
+        const rt = CAGE.rx * 0.82, rb = CAGE.rx;
+        ctx.save();
+        ctx.lineCap = 'round';
+        const bars = 14;
+        for (let k = 0; k < bars; k++) {
+            const a = (k / bars) * TAU;
+            if ((Math.sin(a) >= 0) !== front) continue;
+            ctx.beginPath();
+            ctx.moveTo(x + Math.cos(a) * rt, top + Math.sin(a) * CAGE.ry * 0.8);
+            ctx.lineTo(x + Math.cos(a) * rb, bottom + Math.sin(a) * CAGE.ry);
+            ctx.strokeStyle = front ? '#2f7de1' : '#1b4f99';
+            ctx.lineWidth = front ? 3.2 : 2.4;
+            ctx.stroke();
+        }
+        const ring = (cy, rx, ry, w) => {
+            ctx.beginPath();
+            if (front) ctx.ellipse(x, cy, rx, ry, 0, 0, Math.PI);
+            else ctx.ellipse(x, cy, rx, ry, 0, Math.PI, TAU);
+            ctx.strokeStyle = front ? '#2f7de1' : '#1b4f99';
+            ctx.lineWidth = w;
+            ctx.stroke();
+        };
+        ring(top, rt, CAGE.ry * 0.8, 4);
+        ring((top + bottom) / 2, (rt + rb) / 2, CAGE.ry * 0.9, 2.5);
+        ring(bottom, rb, CAGE.ry, 5);
+        if (front) {
+            // Lid and the collar that slides on the pole
+            ctx.beginPath();
+            ctx.ellipse(x, top, rt * 0.55, CAGE.ry * 0.45, 0, 0, TAU);
+            outlined('rgba(47, 125, 225, 0.85)', '#0c2a55', 1.5);
+            ctx.beginPath();
+            ctx.roundRect(x - 9, top - 9, 18, 12, 4);
+            outlined('#ffc93c', '#a8770f');
+        }
+        ctx.restore();
+    }
+
+    // Puffs of dust when the cage slams down.
+    function drawDust(T) {
+        const f = phase(T, CAGE_LAND, CAGE_LAND + 0.7);
+        if (f <= 0 || f >= 1) return;
+        ctx.save();
+        ctx.globalAlpha = (1 - f) * 0.8;
+        ctx.fillStyle = '#f6ecd2';
+        for (let k = 0; k < 10; k++) {
+            const a = (k / 10) * TAU;
+            const d = CAGE.rx + 6 + f * 34;
+            ctx.beginPath();
+            ctx.arc(POLE.x + Math.cos(a) * d, CHEESE_SQ.y + 4 + Math.sin(a) * d * 0.35, 6 + f * 8, 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function contraptionItems(T, time) {
+        const sb = steelBall(T), bb = bowlingBall(T), dv = diver(T);
+        const cageDown = T >= CAGE_DROP;
+        const items = [
+            { y: BOOT.floor, draw: () => drawBoot(T) },
+            { y: BUCKET.floor, draw: () => drawBucket(T, sb) },
+            { y: SIGN.y, draw: () => drawStopSign(T) },
+            { y: GEAR_FLOOR, draw: () => drawGears(T) },
+            { y: STAIRS.floor, draw: () => drawStairs() },
+            { y: PIPE.floor, draw: () => drawPipe(T) },
+            { y: POST.y, draw: () => drawPost(T) },
+            { y: RAMP_FLOOR, draw: () => drawRamp() },
+            { y: TUB.floor, draw: () => drawTub(T, bb) },
+            { y: SEESAW.floor, draw: () => drawSeesaw(T, dv) },
+            { y: WASHTUB.floor, draw: () => drawWashtub(T, dv, time) },
+            { y: WASHTUB.floor + 1, draw: () => drawSplash(T) },
+            { y: WASHTUB.floor + 2, draw: () => drawTrigger(T) },
+            { y: POLE.base, draw: () => drawPole(T) },
+            // Up on the pole the cage is drawn round the pole; once it falls, round the cheese.
+            { y: cageDown ? CHEESE_SQ.y - 30 : POLE.base - 0.1, draw: () => drawCageHalf(T, false) },
+            { y: cageDown ? CHEESE_SQ.y + 40 : POLE.base + 0.1, draw: () => drawCageHalf(T, true) },
+            { y: CHEESE_SQ.y + 41, draw: () => drawDust(T) },
+        ];
+        if (sb.layer !== null) items.push({ y: sb.layer, draw: () => drawSteelBall(sb) });
+        if (bb.layer !== null) items.push({ y: bb.layer, draw: () => drawBowlingBall(bb) });
+        if (dv.state === 'fly') items.push({ y: WASHTUB.floor - 1, draw: () => drawDiver(dv) });
+        return items;
+    }
+
+    // --- Self-test view (?selftest) ---
+    function showSelfTest() {
+        document.getElementById('gameView').hidden = true;
+        document.getElementById('selftestPanel').hidden = false;
+        document.getElementById('backLink').href = location.pathname;
+        const out = document.getElementById('selftestResults');
+        const test = MouseCore.startSelfTest();
+        const tick = () => {
+            if (!test.step(400)) {
+                const { done, total } = test.progress();
+                out.textContent = `Planning games… ${done.toLocaleString()} of ${total.toLocaleString()}`;
+                setTimeout(tick, 0);
+                return;
+            }
+            const result = test.result();
+            out.innerHTML = '';
+            const summary = document.createElement('div');
+            summary.className = `summary ${result.passed ? 'pass' : 'fail'}`;
+            summary.textContent = result.passed ? 'ALL CHECKS PASSED' : 'CHECK FAILED';
+            out.appendChild(summary);
+            const intro = document.createElement('p');
+            intro.textContent = `Planned ${result.plans.toLocaleString()} games without playing them, using the same code as the real game. ` +
+                'Each check compares the results with what perfect fairness would give.';
+            out.appendChild(intro);
+            for (const c of result.checks) {
+                const row = document.createElement('div');
+                row.className = `check ${c.passed ? 'pass' : 'fail'}`;
+                const title = document.createElement('div');
+                title.className = 'title';
+                title.textContent = c.name;
+                const detail = document.createElement('div');
+                detail.className = 'detail';
+                detail.textContent = c.detail;
+                row.append(title, detail);
+                out.appendChild(row);
+            }
+        };
+        out.textContent = 'Planning games…';
+        setTimeout(tick, 50);
+    }
+
+    // --- Start up ---
+    if (new URLSearchParams(location.search).has('selftest')) {
+        showSelfTest();
+    } else {
+        participants = loadNames();
+        resetBoard();
+        updateList();
+        requestAnimationFrame(frame);
+    }
+</script>
+</body>
+</html>

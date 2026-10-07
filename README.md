@@ -41,6 +41,7 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `crossy-picker-3d.html` | [Try it](https://ahmedh00.github.io/name-pickers/crossy-picker-3d.html) | Inspired by Crossy Road - last survivor wins |
 | `mosquito.html` | [Try it](https://ahmedh00.github.io/name-pickers/mosquito.html) | Avoid getting swatted to win |
 | `breakout.html` | [Try it](https://ahmedh00.github.io/name-pickers/breakout.html) | Inspired by Breakout - last remaining name wins |
+| `mousetrap.html` | [Try it](https://ahmedh00.github.io/name-pickers/mousetrap.html) | Inspired by the Mouse Trap board game - mice race round the board, then the contraption drops the cage on whoever is on the cheese |
 
 
 ## Contributing
