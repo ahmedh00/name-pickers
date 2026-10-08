@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claw Machine Name Picker</title>
+    <style>
+        :root {
+            --bg-color: #0b0618;
+            --panel-color: #160d2e;
+            --primary-color: #f3e9ff;
+            --neon-pink: #ff3df2;
+            --neon-cyan: #2de2e6;
+            --error-color: #ff6b8a;
+        }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background: radial-gradient(circle at 50% 0%, #241046 0%, var(--bg-color) 60%);
+            background-color: var(--bg-color);
+            color: var(--primary-color);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin: 0 0 16px;
+            color: #fff;
+            text-shadow: 0 0 8px var(--neon-pink), 0 0 18px var(--neon-pink), 3px 3px 0 var(--neon-cyan);
+        }
+        .container {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            max-width: 1100px;
+            width: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            min-width: 230px;
+            background: var(--panel-color);
+            padding: 20px;
+            border: 2px solid var(--neon-cyan);
+            border-radius: 8px;
+            box-shadow: 0 0 14px rgba(45, 226, 230, 0.25);
+        }
+        .game-area {
+            flex: 3;
+            position: relative;
+        }
+        canvas {
+            background: #000;
+            border: 4px solid var(--neon-pink);
+            border-radius: 8px;
+            box-shadow: 0 0 18px rgba(255, 61, 242, 0.35);
+            display: block;
+            width: 100%;
+            height: auto;
+            box-sizing: border-box;
+        }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #000;
+            color: var(--neon-cyan);
+            border: 1px solid var(--primary-color);
+            font-family: inherit;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background: var(--primary-color);
+            color: var(--bg-color);
+            border: none;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+        button:hover:not(:disabled) { background: var(--neon-cyan); }
+        button:disabled, input:disabled { opacity: 0.4; cursor: not-allowed; }
+        #startBtn { background: var(--neon-pink); color: #fff; }
+        #startBtn:hover:not(:disabled) { background: #ff7af6; }
+        #muteBtn { background: transparent; color: var(--primary-color); border: 1px solid #555; font-size: 13px; }
+        #muteBtn:hover { background: #222; }
+        #nameError {
+            min-height: 1.2em;
+            margin: -4px 0 8px;
+            color: var(--error-color);
+            font-size: 13px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 4px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background: #221640;
+            margin-bottom: 5px;
+            border: 1px solid #3b2a66;
+            border-left: 6px solid var(--swatch, #888);
+        }
+        li .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .count { font-size: 12px; color: #a99bc9; margin-bottom: 4px; }
+        .remove-btn {
+            width: auto;
+            margin: 0;
+            padding: 4px 8px;
+            background: #c0154a;
+            color: #fff;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        .remove-btn:hover:not(:disabled) { background: #ff2d6f; }
+        hr { border: none; border-top: 1px solid #3b2a66; margin: 16px 0; }
+        .fair-note { font-size: 12px; line-height: 1.5; color: #a99bc9; margin: 6px 0 0; }
+        .fair-note a { color: var(--neon-cyan); }
+        #winnerOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 2, 15, 0.55);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            text-align: center;
+        }
+        #winnerOverlay .label { font-size: 24px; letter-spacing: 6px; }
+        #winnerName {
+            font-size: 52px;
+            font-weight: bold;
+            color: #fff;
+            margin: 10px 20px 24px;
+            word-break: break-word;
+            text-shadow: 0 0 10px var(--neon-pink), 0 0 24px var(--neon-pink);
+        }
+        #playAgainBtn { width: 220px; }
+        #selftestPanel {
+            max-width: 820px;
+            width: 100%;
+            background: var(--panel-color);
+            border: 2px solid var(--neon-cyan);
+            border-radius: 8px;
+            padding: 20px 24px;
+            box-sizing: border-box;
+        }
+        #selftestPanel a { color: var(--neon-cyan); }
+        .check { padding: 10px 0; border-bottom: 1px solid #3b2a66; }
+        .check .title { font-weight: bold; }
+        .check .detail { font-size: 13px; color: #a99bc9; margin-top: 4px; }
+        .check.pass .title::before { content: '✔ '; color: #4dff88; }
+        .check.fail .title::before { content: '✖ '; color: var(--error-color); }
+        .summary { font-size: 22px; font-weight: bold; margin: 16px 0 8px; }
+        .summary.pass { color: #4dff88; }
+        .summary.fail { color: var(--error-color); }
+        @media (max-width: 820px) {
+            body { padding: 12px; }
+            .container { flex-direction: column-reverse; align-items: stretch; }
+            #winnerName { font-size: 34px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Claw Picker</h1>
+
+    <div class="container" id="gameView">
+        <div class="sidebar">
+            <input type="text" id="nameInput" placeholder="Enter participant name..." autocomplete="off" maxlength="18">
+            <div id="nameError" role="alert" aria-live="polite"></div>
+            <button id="addBtn">Add Name</button>
+            <div class="count" id="nameCount"></div>
+            <ul id="nameList"></ul>
+            <hr>
+            <button id="startBtn" disabled>Start Game</button>
+            <button id="skipBtn" hidden>Skip to winner</button>
+            <button id="muteBtn" aria-pressed="false">Sound: on</button>
+            <p class="fair-note">
+                The winner is drawn with your browser's secure random generator before the claw moves,
+                so every name has exactly the same chance. <a href="?selftest">Run the fairness self-test</a>
+            </p>
+        </div>
+
+        <div class="game-area">
+            <canvas id="gameCanvas" width="800" height="600" aria-label="Claw machine"></canvas>
+            <div id="winnerOverlay" hidden aria-live="polite">
+                <div class="label">WINNER</div>
+                <div id="winnerName"></div>
+                <button id="playAgainBtn">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="selftestPanel" hidden>
+        <h2>Fairness self-test</h2>
+        <div id="selftestResults">Running…</div>
+        <p><a id="backLink" href="?">Back to the game</a></p>
+    </div>
+
+<script id="claw-core">
+    // --- Fairness core: decides every game before the claw moves. No DOM access. ---
+    const ClawCore = (() => {
+        const MAX_NAMES = 15;
+        const MAX_NAME_LENGTH = 18;
+        const MAX_FAILS = 12;
+        const FAIL_OUTCOMES = ['miss', 'slip', 'drop'];
+        // Chi-square critical values at p = 0.001, indexed by degrees of freedom.
+        const CHI_CRITICAL = [NaN, 10.828, 13.816, 16.266, 18.467, 20.515, 22.458, 24.322,
+            26.124, 27.877, 29.588, 31.264, 32.909, 34.528, 36.123];
+
+        const pool = new Uint32Array(256);
+        let poolPos = pool.length;
+        function cryptoU32() {
+            if (poolPos === pool.length) {
+                crypto.getRandomValues(pool);
+                poolPos = 0;
+            }
+            return pool[poolPos++];
+        }
+
+        // Uniform integer in [0, n). Draws from the top of the 2^32 range that would
+        // make some results more likely (modulo bias) are thrown away and redrawn.
+        function secureInt(n, nextU32 = cryptoU32) {
+            if (!Number.isInteger(n) || n < 1) throw new RangeError(`secureInt needs a positive integer, got ${n}`);
+            const limit = 2 ** 32 - (2 ** 32 % n);
+            let x;
+            do { x = nextU32(); } while (x >= limit);
+            return x % n;
+        }
+
+        // Fisher-Yates on a copy.
+        function shuffle(items, rng = secureInt) {
+            const out = [...items];
+            for (let i = out.length - 1; i > 0; i--) {
+                const j = rng(i + 1);
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+
+        function chiSquare(observed, expected) {
+            return observed.reduce((sum, o, i) => sum + (o - expected[i]) ** 2 / expected[i], 0);
+        }
+
+        function criticalValue(df) {
+            if (!(df in CHI_CRITICAL) || df < 1) throw new RangeError(`No critical value for df=${df}`);
+            return CHI_CRITICAL[df];
+        }
+
+        // Names that look the same on screen must count as the same person, or one
+        // person could hold two prizes: unify accents, drop zero-width characters, collapse spaces.
+        function normalizeName(raw) {
+            return String(raw).normalize('NFC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function validateName(raw, existing) {
+            const name = normalizeName(raw);
+            if (!name) return { error: 'Type a name first.' };
+            if (name.length > MAX_NAME_LENGTH) return { error: `Names can be up to ${MAX_NAME_LENGTH} characters.` };
+            const lower = name.toLowerCase();
+            if (existing.some(e => normalizeName(e).toLowerCase() === lower)) return { error: `${name} is already in the case.` };
+            if (existing.length >= MAX_NAMES) return { error: `The case holds ${MAX_NAMES} prizes at most.` };
+            return { name };
+        }
+
+        function parseSavedNames(json) {
+            let data;
+            try { data = JSON.parse(json); } catch { return []; }
+            if (!Array.isArray(data)) return [];
+            const names = [];
+            for (const item of data) {
+                if (typeof item !== 'string') continue;
+                const result = validateName(item, names);
+                if (result.name) names.push(result.name);
+            }
+            return names;
+        }
+
+        // Aim, pace and failure point are rolled the same way for every grab, so the
+        // winning grab moves exactly like a failed one until its prize reaches the chute.
+        function grab(target, outcome, rng) {
+            return {
+                target,
+                outcome,
+                offset: (rng(21) - 10) / 10, // -1..1, scaled to prize size when drawn
+                pace: 0.9 + rng(26) / 100,   // 0.90..1.15
+                at: rng(101) / 100,          // where along the lift/carry a slip or drop happens
+            };
+        }
+
+        // The winner is one uniform draw. Everything after it is theatre: shuffled
+        // prize positions, then failed grabs on any prize (the winner included) with a
+        // flat 40% chance to stop after each, so no grab is more likely to be the last.
+        // The cap of 12 only exists to bound game length; under 0.4% of games reach it.
+        function planGame(names, rng = secureInt) {
+            const n = names.length;
+            if (n < 2) throw new RangeError('planGame needs at least 2 names');
+            const winnerIndex = rng(n);
+            const slots = shuffle([...Array(n).keys()], rng);
+            const attempts = [grab(rng(n), FAIL_OUTCOMES[rng(3)], rng)];
+            while (attempts.length < MAX_FAILS && rng(5) < 3) {
+                attempts.push(grab(rng(n), FAIL_OUTCOMES[rng(3)], rng));
+            }
+            attempts.push(grab(winnerIndex, 'win', rng));
+            return { winnerIndex, slots, attempts };
+        }
+
+        const pct = x => (x * 100).toFixed(1) + '%';
+
+        function runSelfTest({ trials = 100000, plan = planGame, sizes = [5, 10, 15] } = {}) {
+            const checks = [];
+            const failCounts = new Array(MAX_FAILS).fill(0);
+            const outcomeCounts = { miss: 0, slip: 0, drop: 0 };
+            let failTotal = 0, failOnWinner = 0, failOnWinnerExpected = 0, broken = 0, plans = 0;
+
+            for (const n of sizes) {
+                const names = Array.from({ length: n }, (_, i) => `P${i}`);
+                const wins = new Array(n).fill(0);
+                for (let t = 0; t < trials; t++) {
+                    const p = plan(names);
+                    plans++;
+                    wins[p.winnerIndex]++;
+                    const fails = p.attempts.slice(0, -1);
+                    const last = p.attempts[p.attempts.length - 1];
+                    if (last.outcome !== 'win' || last.target !== p.winnerIndex || fails.some(a => a.outcome === 'win')) broken++;
+                    failCounts[Math.min(fails.length, MAX_FAILS) - 1]++;
+                    for (const a of fails) {
+                        if (a.outcome in outcomeCounts) outcomeCounts[a.outcome]++;
+                        failTotal++;
+                        if (a.target === p.winnerIndex) failOnWinner++;
+                        failOnWinnerExpected += 1 / n;
+                    }
+                }
+                const chi = chiSquare(wins, new Array(n).fill(trials / n));
+                const limit = criticalValue(n - 1);
+                checks.push({
+                    name: `Every name equally likely to win (${n} names)`,
+                    passed: chi < limit,
+                    detail: `lowest ${pct(Math.min(...wins) / trials)} · highest ${pct(Math.max(...wins) / trials)} · ` +
+                        `target ${pct(1 / n)} · χ² ${chi.toFixed(1)} (limit ${limit})`,
+                });
+            }
+
+            const stop = 0.4;
+            const expectedFails = failCounts.map((_, i) => plans * (i < MAX_FAILS - 1 ? stop * (1 - stop) ** i : (1 - stop) ** i));
+            const failChi = chiSquare(failCounts, expectedFails);
+            const failLimit = criticalValue(MAX_FAILS - 1);
+            checks.push({
+                name: 'Number of failed grabs follows the 40% stop chance',
+                passed: failChi < failLimit,
+                detail: failCounts.slice(0, 5).map((c, i) => `${i + 1}: ${pct(c / plans)}`).join(' · ') +
+                    ` · 6+: ${pct(failCounts.slice(5).reduce((a, b) => a + b, 0) / plans)} · χ² ${failChi.toFixed(1)} (limit ${failLimit})`,
+            });
+
+            const outcomeChi = chiSquare(Object.values(outcomeCounts), new Array(3).fill(failTotal / 3));
+            checks.push({
+                name: 'Miss, slip and drop equally likely',
+                passed: outcomeChi < criticalValue(2),
+                detail: Object.entries(outcomeCounts).map(([k, c]) => `${k} ${pct(c / failTotal)}`).join(' · ') + ` · χ² ${outcomeChi.toFixed(1)} (limit ${criticalValue(2)})`,
+            });
+
+            const targetChi = chiSquare([failOnWinner, failTotal - failOnWinner], [failOnWinnerExpected, failTotal - failOnWinnerExpected]);
+            checks.push({
+                name: 'Failed grabs land on the winner no more or less than anyone else',
+                passed: targetChi < criticalValue(1),
+                detail: `${pct(failOnWinner / failTotal)} on the winner (target ${pct(failOnWinnerExpected / failTotal)}) · χ² ${targetChi.toFixed(1)} (limit ${criticalValue(1)})`,
+            });
+
+            checks.push({
+                name: 'The last grab always wins, and only the last',
+                passed: broken === 0,
+                detail: `${broken} broken out of ${plans.toLocaleString()} games`,
+            });
+
+            return { passed: checks.every(c => c.passed), checks, plans };
+        }
+
+        return {
+            MAX_NAMES, MAX_NAME_LENGTH,
+            secureInt, shuffle, chiSquare, criticalValue,
+            validateName, parseSavedNames, planGame, runSelfTest,
+        };
+    })();
+</script>
+
+<script>
+    // --- UI Elements ---
+    const nameInput = document.getElementById('nameInput');
+    const nameError = document.getElementById('nameError');
+    const addBtn = document.getElementById('addBtn');
+    const nameCount = document.getElementById('nameCount');
+    const nameList = document.getElementById('nameList');
+    const startBtn = document.getElementById('startBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const winnerOverlay = document.getElementById('winnerOverlay');
+    const winnerNameEl = document.getElementById('winnerName');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+
+    // --- Canvas & Context ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // --- Cabinet geometry ---
+    const CASE = { x: 30, y: 86, w: 740, h: 470 };
+    const CASE_BOTTOM = CASE.y + CASE.h;
+    const RAIL_Y = CASE.y + 22;
+    const HOME_Y = RAIL_Y + 34;
+    const FLOOR_Y = CASE_BOTTOM - 22;
+    const CHUTE = { x: CASE.x + 16, w: 132, top: 392 };
+    const CHUTE_X = CHUTE.x + CHUTE.w / 2;
+    const CHUTE_RIGHT = CHUTE.x + CHUTE.w;
+    const PILE_LEFT = CHUTE_RIGHT + 24;
+    const PILE_RIGHT = CASE.x + CASE.w - 22;
+    const LABEL_FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    const STORAGE_KEY = 'clawMachineNames';
+
+    // --- State ---
+    let participants = [];
+    let prizes = [];
+    let clawSize = 40;
+    const claw = { x: CHUTE_X, y: HOME_Y, open: 1, carrying: null, layer: null, button: false, lastX: CHUTE_X, tilt: 0 };
+    let run = null;              // the game in progress: { plan, skipped }
+    let chuteFlash = 0;
+    let confetti = [];
+    const SKIPPED = Symbol('skipped');
+
+    // --- Audio Context (created on user interaction) ---
+    let audioCtx;
+    let muted = false;
+    function audio() {
+        if (muted) return null;
+        if (!audioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return null;
+            audioCtx = new AC();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+    }
+
+    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0 }) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime + delay;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(from, t0);
+        osc.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur);
+    }
+
+    function playSound(kind, ms = 0) {
+        switch (kind) {
+            case 'coin':
+                tone({ from: 988, dur: 0.08 });
+                tone({ from: 1319, dur: 0.25, delay: 0.08 });
+                break;
+            case 'motor':
+                tone({ type: 'sawtooth', from: 70, to: 85, dur: ms / 1000, vol: 0.025 });
+                break;
+            case 'clunk':
+                tone({ from: 180, to: 60, dur: 0.12, vol: 0.12 });
+                break;
+            case 'whiff':
+                tone({ type: 'triangle', from: 700, to: 180, dur: 0.3, vol: 0.1 });
+                break;
+            case 'boing':
+                tone({ type: 'sine', from: 220, to: 660, dur: 0.12, vol: 0.15 });
+                tone({ type: 'sine', from: 660, to: 300, dur: 0.25, vol: 0.12, delay: 0.12 });
+                break;
+            case 'thud':
+                tone({ type: 'sine', from: 140, to: 50, dur: 0.15, vol: 0.2 });
+                break;
+            case 'rattle':
+                // Pitch is cosmetic, so Math.random is fine here.
+                for (let i = 0; i < 8; i++) tone({ from: 300 + Math.random() * 500, dur: 0.04, vol: 0.05, delay: i * 0.09 });
+                break;
+            case 'win':
+                [523, 659, 784, 1047].forEach((f, i) => tone({ from: f, dur: 0.18, vol: 0.1, delay: i * 0.12 }));
+                tone({ from: 1047, dur: 0.6, vol: 0.1, delay: 0.48 });
+                break;
+        }
+    }
+
+    // --- Logic: Name Management ---
+    function saveNames() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(participants)); } catch { /* storage unavailable */ }
+    }
+
+    function loadNames() {
+        try { return ClawCore.parseSavedNames(localStorage.getItem(STORAGE_KEY)); } catch { return []; }
+    }
+
+    function hueFor(index) {
+        return Math.round((index * 137.508) % 360);
+    }
+
+    function updateList() {
+        const playing = run !== null;
+        nameList.innerHTML = '';
+        participants.forEach((name, index) => {
+            const li = document.createElement('li');
+            li.style.setProperty('--swatch', `hsl(${hueFor(index)}, 85%, 60%)`);
+            const span = document.createElement('span');
+            span.className = 'name';
+            span.textContent = name;
+            const rmBtn = document.createElement('button');
+            rmBtn.textContent = 'X';
+            rmBtn.className = 'remove-btn';
+            rmBtn.setAttribute('aria-label', `Remove ${name}`);
+            rmBtn.disabled = playing;
+            rmBtn.onclick = () => {
+                participants.splice(index, 1);
+                namesChanged();
+            };
+            li.append(span, rmBtn);
+            nameList.appendChild(li);
+        });
+        nameCount.textContent = participants.length ? `${participants.length} / ${ClawCore.MAX_NAMES} prizes` : '';
+        nameInput.disabled = playing;
+        addBtn.disabled = playing;
+        startBtn.disabled = playing || participants.length < 2;
+        skipBtn.hidden = !playing;
+    }
+
+    function namesChanged() {
+        saveNames();
+        winnerOverlay.hidden = true;
+        buildPrizes();
+        updateList();
+    }
+
+    function addName() {
+        const result = ClawCore.validateName(nameInput.value, participants);
+        if (result.error) {
+            nameError.textContent = result.error;
+            return;
+        }
+        nameError.textContent = '';
+        participants.push(result.name);
+        nameInput.value = '';
+        namesChanged();
+    }
+
+    addBtn.addEventListener('click', addName);
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addName(); });
+
+    muteBtn.addEventListener('click', () => {
+        muted = !muted;
+        muteBtn.setAttribute('aria-pressed', String(muted));
+        muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
+    });
+
+    // --- Prize layout ---
+    // Front row sits on the floor; each row behind sits higher, slightly smaller,
+    // and between the two prizes in front of it so every name band stays visible.
+    function layoutSlots(n) {
+        const r = n <= 6 ? 46 : n <= 10 ? 40 : 36;
+        const step = 2 * r + 8;
+        const perRow = Math.floor((PILE_RIGHT - PILE_LEFT - 2 * r) / step) + 1;
+        const cx = (PILE_LEFT + PILE_RIGHT) / 2;
+        let candidates = Array.from({ length: perRow }, (_, k) => cx + (k - (perRow - 1) / 2) * step);
+        const slots = [];
+        for (let row = 0, left = n; left > 0 && candidates.length; row++) {
+            const count = Math.min(left, candidates.length);
+            const start = Math.floor((candidates.length - count) / 2);
+            const xs = candidates.slice(start, start + count);
+            for (const x of xs) slots.push({ x, y: FLOOR_Y - r - row * 1.3 * r, row, r: r * (1 - 0.06 * row) });
+            candidates = xs.slice(1).map((x, i) => (x + xs[i]) / 2);
+            left -= count;
+        }
+        return { r, slots };
+    }
+
+    function fitLabel(name, r) {
+        const maxW = r * 2 + 10;
+        for (let size = 15; size >= 10; size--) {
+            ctx.font = `bold ${size}px ${LABEL_FONT}`;
+            const w = ctx.measureText(name).width + 12;
+            if (w <= maxW) return { font: ctx.font, text: name, w };
+        }
+        let text = name;
+        while (text.length > 1 && ctx.measureText(text + '…').width + 12 > maxW) text = text.slice(0, -1);
+        text += '…';
+        return { font: ctx.font, text, w: ctx.measureText(text).width + 12 };
+    }
+
+    // Prize i starts in slot i; a game moves it to slot plan.slots[i].
+    let slotList = [];
+    function buildPrizes() {
+        const layout = layoutSlots(participants.length);
+        clawSize = layout.r;
+        slotList = layout.slots;
+        prizes = participants.map((name, i) => {
+            const slot = slotList[i];
+            return { name, hue: hueFor(i), slot, x: slot.x, y: slot.y, r: slot.r, row: slot.row,
+                     wobble: 0, inChute: false, label: fitLabel(name, slot.r) };
+        });
+        claw.carrying = null;
+        claw.layer = null;
+    }
+
+    function setSlot(p, slot) {
+        p.slot = slot;
+        p.row = slot.row;
+        if (p.r !== slot.r) {
+            p.r = slot.r;
+            p.label = fitLabel(p.name, slot.r);
+        }
+    }
+
+    // --- Animation helpers ---
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const easeInOut = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    const easeIn = t => t * t;
+
+    // Runs step(t) for t in 0..1 over ms. Rejects with SKIPPED as soon as Skip is pressed.
+    function tween(ms, step, game) {
+        return new Promise((resolve, reject) => {
+            const start = performance.now();
+            function frame(now) {
+                if (game.skipped) return reject(SKIPPED);
+                const t = Math.min(1, (now - start) / ms);
+                step(t);
+                if (t < 1) requestAnimationFrame(frame);
+                else resolve();
+            }
+            requestAnimationFrame(frame);
+        });
+    }
+    const wait = (ms, game) => tween(ms, () => {}, game);
+
+    function moveMs(fromX, toX, pace) {
+        return (300 + Math.abs(toX - fromX) * 1.0) * pace;
+    }
+
+    // --- Claw geometry ---
+    // Right-hand arm relative to the hub; the left arm mirrors it.
+    function armPoints(open, s) {
+        const a = -0.12 + 0.87 * open;
+        const ex = 12 + s * 0.9 * Math.sin(a);
+        const ey = 8 + s * 0.9 * Math.cos(a);
+        const b = a - 0.6;
+        return { ex, ey, tx: ex + s * 0.95 * Math.sin(b), ty: ey + s * 0.95 * Math.cos(b) };
+    }
+
+    // How far to close so the tips rest on a prize of radius r (0 = tips touching), and where it hangs.
+    function gripFor(r) {
+        let lo = 0, hi = 1;
+        for (let i = 0; i < 20; i++) {
+            const mid = (lo + hi) / 2;
+            if (armPoints(mid, clawSize).tx < r * 0.82) lo = mid; else hi = mid;
+        }
+        const tips = armPoints(lo, clawSize);
+        return { open: lo, hang: tips.ty - r * 0.45 };
+    }
+
+    // A prize falls back into its own slot with a bounce.
+    async function fallBack(p, game) {
+        const sx = p.x, sy = p.y;
+        const landX = Math.max(sx, CHUTE_RIGHT + p.r * 0.6);
+        const landY = p.slot.y - p.r * 0.6;
+        await tween(Math.max(250, (landY - sy) * 1.6), t => {
+            p.x = lerp(sx, landX, t);
+            p.y = lerp(sy, landY, easeIn(t));
+        }, game);
+        playSound('thud');
+        const hopX = p.x, hopY = p.y;
+        await tween(350 + Math.abs(p.slot.x - hopX) * 0.6, t => {
+            p.x = lerp(hopX, p.slot.x, easeInOut(t));
+            p.y = lerp(hopY, p.slot.y, t) - Math.sin(t * Math.PI) * 40;
+        }, game);
+        await tween(220, t => { p.y = p.slot.y - Math.sin(t * Math.PI) * 8; }, game);
+        p.y = p.slot.y;
+    }
+
+    // --- One grab ---
+    // Every grab runs the same motions at the same speeds (scaled by the plan's pace).
+    // The only differences are where the claw lets go: closing on air (miss),
+    // during the lift (slip), on the way back (drop), or over the chute (win).
+    async function playGrab(attempt, game) {
+        const p = prizes[attempt.target];
+        const pace = attempt.pace;
+        const grip = gripFor(p.r);
+        const aimX = p.x + attempt.offset * p.r * 0.35;
+        const lowY = p.y - grip.hang;
+        const falls = [];
+        claw.layer = p.row;
+
+        const outMs = moveMs(claw.x, aimX, pace);
+        playSound('motor', outMs);
+        const fromX = claw.x;
+        await tween(outMs, t => { claw.x = lerp(fromX, aimX, easeInOut(t)); }, game);
+        await wait(200 * pace, game);
+
+        claw.button = true;
+        await tween(700 * pace, t => { claw.y = lerp(HOME_Y, lowY, easeInOut(t)); }, game);
+
+        const closeTo = attempt.outcome === 'miss' ? gripFor(0).open : grip.open;
+        playSound('clunk');
+        await tween(350 * pace, t => {
+            claw.open = lerp(1, closeTo, t);
+            if (attempt.outcome === 'miss') p.wobble = Math.sin(t * Math.PI * 5) * 5 * (1 - t);
+        }, game);
+        p.wobble = 0;
+        claw.button = false;
+        if (attempt.outcome === 'miss') playSound('whiff');
+        else claw.carrying = p;
+
+        const holdDx = p.x - claw.x;
+        const release = () => {
+            claw.carrying = null;
+            claw.open = Math.min(1, claw.open + 0.25);
+            playSound('boing');
+            const fall = fallBack(p, game);
+            fall.catch(() => {}); // a Skip mid-fall is handled by the awaiting game loop
+            falls.push(fall);
+        };
+
+        const slipAt = 0.2 + 0.7 * attempt.at;
+        await tween(700 * pace, t => {
+            claw.y = lerp(lowY, HOME_Y, easeInOut(t));
+            if (attempt.outcome === 'slip' && claw.carrying && t >= slipAt) release();
+            if (claw.carrying) { p.x = claw.x + holdDx; p.y = claw.y + grip.hang; }
+        }, game);
+
+        // Drops happen between the pile and the lip of the chute, never over it.
+        const lipX = CHUTE_RIGHT + p.r * 0.3;
+        const dropX = lerp(claw.x, lipX, 0.15 + 0.85 * attempt.at);
+        const backMs = moveMs(claw.x, CHUTE_X, pace);
+        playSound('motor', backMs);
+        const liftX = claw.x;
+        await tween(backMs, t => {
+            claw.x = lerp(liftX, CHUTE_X, easeInOut(t));
+            if (attempt.outcome === 'drop' && claw.carrying && claw.x <= dropX) release();
+            if (claw.carrying) { p.x = claw.x + holdDx; p.y = claw.y + grip.hang; }
+        }, game);
+        claw.layer = null;
+
+        const openFrom = claw.open;
+        await tween(300 * pace, t => { claw.open = lerp(openFrom, 1, t); }, game);
+        if (claw.carrying) {
+            claw.carrying = null;
+            const sx = p.x, sy = p.y;
+            await tween(500, t => {
+                p.x = lerp(sx, CHUTE_X, t);
+                p.y = lerp(sy, CASE_BOTTOM - p.r, easeIn(t));
+            }, game);
+            p.inChute = true;
+        }
+        await Promise.all(falls);
+    }
+
+    // --- Main Game ---
+    async function startGame() {
+        if (run || participants.length < 2) return;
+        audio(); // unlock audio on this click
+        const plan = ClawCore.planGame(participants);
+        const game = { plan, skipped: false };
+        run = game;
+        winnerOverlay.hidden = true;
+        updateList();
+        playSound('coin');
+        // Last game's winner pops back out of the chute to join the mix.
+        for (const p of prizes) {
+            if (p.inChute) Object.assign(p, { inChute: false, x: CHUTE_X, y: CHUTE.top });
+        }
+
+        try {
+            // Mix the prizes into their new places for this game.
+            const starts = prizes.map(p => ({ x: p.x, y: p.y }));
+            prizes.forEach((p, i) => setSlot(p, slotList[plan.slots[i]]));
+            playSound('rattle');
+            await tween(900, t => {
+                prizes.forEach((p, i) => {
+                    p.x = lerp(starts[i].x, p.slot.x, easeInOut(t));
+                    p.y = lerp(starts[i].y, p.slot.y, easeInOut(t)) - Math.sin(t * Math.PI) * 60;
+                });
+            }, game);
+            await wait(400, game);
+
+            for (const attempt of plan.attempts) {
+                await playGrab(attempt, game);
+                await wait(250, game);
+            }
+            celebrate(game);
+            await wait(900, game);
+        } catch (err) {
+            if (err !== SKIPPED) throw err;
+        }
+        finishGame(game);
+    }
+
+    // Puts everything where the plan ends: winner in the chute, the rest in their slots.
+    function finishGame(game) {
+        if (run !== game) return;
+        const winner = prizes[game.plan.winnerIndex];
+        prizes.forEach(p => {
+            p.x = p.slot.x;
+            p.y = p.slot.y;
+            p.wobble = 0;
+            p.inChute = p === winner;
+        });
+        Object.assign(claw, { x: CHUTE_X, y: HOME_Y, open: 1, carrying: null, layer: null, button: false });
+        if (!game.celebrated) celebrate(game);
+        run = null;
+        winnerNameEl.textContent = winner.name;
+        winnerOverlay.hidden = false;
+        updateList();
+    }
+
+    function celebrate(game) {
+        game.celebrated = true;
+        playSound('win');
+        chuteFlash = 1;
+        // Confetti motion is cosmetic, so Math.random is fine here.
+        for (let i = 0; i < 140; i++) {
+            confetti.push({
+                x: CHUTE_X + (Math.random() - 0.5) * 60, y: CHUTE.top,
+                vx: (Math.random() - 0.3) * 9, vy: -6 - Math.random() * 9,
+                rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+                color: `hsl(${Math.random() * 360}, 90%, 60%)`, life: 1,
+            });
+        }
+    }
+
+    startBtn.addEventListener('click', startGame);
+    playAgainBtn.addEventListener('click', startGame);
+    skipBtn.addEventListener('click', () => {
+        if (!run) return;
+        run.skipped = true;
+        finishGame(run);
+    });
+
+    // --- Drawing ---
+    function drawCabinet(time) {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, '#1a0b33');
+        bg.addColorStop(1, '#0a0516');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // Marquee with chasing bulbs
+        ctx.fillStyle = '#2a0f4f';
+        ctx.beginPath();
+        ctx.roundRect(20, 8, W - 40, 68, 12);
+        ctx.fill();
+        const bulbs = 30;
+        for (let i = 0; i < bulbs; i++) {
+            const on = (i + Math.floor(time / 180)) % 3 === 0;
+            ctx.fillStyle = on ? '#fff59e' : '#6b4a1f';
+            ctx.beginPath();
+            ctx.arc(34 + i * ((W - 68) / (bulbs - 1)), 14, 3, 0, Math.PI * 2);
+            ctx.arc(34 + i * ((W - 68) / (bulbs - 1)), 70, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.save();
+        ctx.font = "bold 40px 'Courier New', Courier, monospace";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = '#ff3df2';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = '#ffe9ff';
+        ctx.fillText('CLAW PICKER', W / 2, 43);
+        ctx.restore();
+
+        // Case interior
+        const glass = ctx.createLinearGradient(0, CASE.y, 0, CASE_BOTTOM);
+        glass.addColorStop(0, '#120a2a');
+        glass.addColorStop(1, '#22164a');
+        ctx.fillStyle = glass;
+        ctx.fillRect(CASE.x, CASE.y, CASE.w, CASE.h);
+        ctx.fillStyle = '#2d1d5c';
+        ctx.fillRect(CASE.x, FLOOR_Y, CASE.w, CASE_BOTTOM - FLOOR_Y);
+
+        // Rail and carriage
+        ctx.strokeStyle = '#8890a8';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(CASE.x + 12, RAIL_Y);
+        ctx.lineTo(CASE.x + CASE.w - 12, RAIL_Y);
+        ctx.stroke();
+        ctx.fillStyle = '#c9cfdf';
+        ctx.fillRect(claw.x - 20, RAIL_Y - 8, 40, 16);
+
+        // Chute interior
+        ctx.fillStyle = '#05020c';
+        ctx.fillRect(CHUTE.x, CHUTE.top, CHUTE.w, CASE_BOTTOM - CHUTE.top);
+    }
+
+    function drawChuteFront() {
+        const top = CHUTE.top + 18;
+        const front = ctx.createLinearGradient(CHUTE.x, 0, CHUTE_RIGHT, 0);
+        front.addColorStop(0, '#b0127a');
+        front.addColorStop(1, '#ff3d9e');
+        ctx.fillStyle = front;
+        ctx.fillRect(CHUTE.x, top, CHUTE.w, CASE_BOTTOM - top);
+        if (chuteFlash > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${chuteFlash * 0.6})`;
+            ctx.fillRect(CHUTE.x, top, CHUTE.w, CASE_BOTTOM - top);
+        }
+        ctx.fillStyle = '#ffd6f0';
+        ctx.fillRect(CHUTE.x - 4, top - 6, CHUTE.w + 8, 8);
+        ctx.font = "bold 20px 'Courier New', Courier, monospace";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('PRIZE', CHUTE_X, top + 50);
+        ctx.fillText('▼', CHUTE_X, top + 80);
+    }
+
+    function drawPrize(p) {
+        if (p.inChute) return;
+        const r = p.r;
+        ctx.save();
+        ctx.translate(p.x + p.wobble, p.y);
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI);
+        ctx.fillStyle = `hsl(${p.hue}, 70%, 88%)`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, r, Math.PI, 0);
+        ctx.fillStyle = `hsl(${p.hue}, 85%, 58%)`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(-r * 0.38, -r * 0.5, r * 0.28, r * 0.15, -0.6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(10, 6, 30, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(-p.label.w / 2, -10, p.label.w, 22, 6);
+        ctx.fill();
+        ctx.font = p.label.font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(p.label.text, 0, 1.5);
+        ctx.restore();
+    }
+
+    function drawClaw() {
+        const { x, y } = claw;
+        ctx.strokeStyle = '#b8bfd2';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x, RAIL_Y);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        const arm = armPoints(claw.open, clawSize);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const dir of [-1, 1]) {
+            ctx.strokeStyle = '#6d7590';
+            ctx.lineWidth = 9;
+            ctx.beginPath();
+            ctx.moveTo(x + dir * 12, y + 8);
+            ctx.lineTo(x + dir * arm.ex, y + arm.ey);
+            ctx.lineTo(x + dir * arm.tx, y + arm.ty);
+            ctx.stroke();
+            ctx.strokeStyle = '#dfe4f2';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
+
+        ctx.fillStyle = '#c9cfdf';
+        ctx.beginPath();
+        ctx.roundRect(x - 18, y - 8, 36, 20, 5);
+        ctx.fill();
+        ctx.fillStyle = claw.button ? '#ff3d3d' : '#3dff7a';
+        ctx.beginPath();
+        ctx.arc(x, y + 2, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawGlassAndFrame() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(CASE.x, CASE.y, CASE.w, CASE.h);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        for (const sx of [180, 260, 560]) {
+            ctx.beginPath();
+            ctx.moveTo(sx, CASE.y);
+            ctx.lineTo(sx + 60, CASE.y);
+            ctx.lineTo(sx - 140, CASE_BOTTOM);
+            ctx.lineTo(sx - 200, CASE_BOTTOM);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.save();
+        ctx.strokeStyle = '#2de2e6';
+        ctx.lineWidth = 6;
+        ctx.shadowColor = '#2de2e6';
+        ctx.shadowBlur = 14;
+        ctx.strokeRect(CASE.x, CASE.y, CASE.w, CASE.h);
+        ctx.restore();
+    }
+
+    function drawControls() {
+        const top = CASE_BOTTOM + 3;
+        ctx.fillStyle = '#2a0f4f';
+        ctx.fillRect(20, top, W - 40, H - top - 4);
+        ctx.font = "bold 14px 'Courier New', Courier, monospace";
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#a99bc9';
+        ctx.fillText('1 PLAY = 1 FAIR PICK', 40, top + 20);
+
+        // Joystick leans the way the claw is moving.
+        const jx = W - 200, jy = top + 26;
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.ellipse(jx, jy, 22, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(jx, jy);
+        ctx.lineTo(jx + claw.tilt * 14, jy - 16);
+        ctx.stroke();
+        ctx.fillStyle = '#ff3d3d';
+        ctx.beginPath();
+        ctx.arc(jx + claw.tilt * 14, jy - 18, 7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = claw.button ? '#ff6b6b' : '#8a1c1c';
+        ctx.beginPath();
+        ctx.arc(W - 120, jy - 4, 13, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawConfetti() {
+        confetti = confetti.filter(c => c.life > 0 && c.y < H + 20);
+        for (const c of confetti) {
+            c.vy += 0.3;
+            c.x += c.vx;
+            c.y += c.vy;
+            c.rot += c.vr;
+            c.life -= 0.006;
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(c.rot);
+            ctx.globalAlpha = Math.max(0, c.life);
+            ctx.fillStyle = c.color;
+            ctx.fillRect(-4, -2, 8, 4);
+            ctx.restore();
+        }
+    }
+
+    function draw(time) {
+        claw.tilt = lerp(claw.tilt, Math.max(-1, Math.min(1, (claw.x - claw.lastX) / 4)), 0.2);
+        claw.lastX = claw.x;
+        chuteFlash = Math.max(0, chuteFlash - 0.02);
+
+        drawCabinet(time);
+
+        if (!prizes.length) {
+            ctx.font = "20px 'Courier New', Courier, monospace";
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#7d6ca8';
+            ctx.fillText('Add names, then press Start', (PILE_LEFT + PILE_RIGHT) / 2, CASE.y + CASE.h / 2);
+        }
+
+        // Back rows first, so nearer prizes overlap the ones behind them.
+        // The claw is drawn in the row it is reaching into; the carried prize hangs from it.
+        const maxRow = prizes.reduce((m, p) => Math.max(m, p.row), 0);
+        for (let row = maxRow; row >= 0; row--) {
+            for (const p of prizes) if (p.row === row && p !== claw.carrying) drawPrize(p);
+            if (claw.layer === row) drawClawWithPrize();
+        }
+        if (claw.layer === null) drawClawWithPrize();
+
+        drawChuteFront();
+        drawGlassAndFrame();
+        drawControls();
+        drawConfetti();
+        requestAnimationFrame(draw);
+    }
+
+    function drawClawWithPrize() {
+        if (claw.carrying) drawPrize(claw.carrying);
+        drawClaw();
+    }
+
+    // --- Self-test view (?selftest) ---
+    function showSelfTest() {
+        document.getElementById('gameView').hidden = true;
+        document.getElementById('selftestPanel').hidden = false;
+        document.getElementById('backLink').href = location.pathname;
+        const out = document.getElementById('selftestResults');
+        out.textContent = 'Running 300,000 games…';
+        setTimeout(() => {
+            const result = ClawCore.runSelfTest();
+            out.innerHTML = '';
+            const summary = document.createElement('div');
+            summary.className = `summary ${result.passed ? 'pass' : 'fail'}`;
+            summary.textContent = result.passed ? 'ALL CHECKS PASSED' : 'CHECK FAILED';
+            out.appendChild(summary);
+            const intro = document.createElement('p');
+            intro.textContent = `Planned ${result.plans.toLocaleString()} games without playing them, using the same code as the real game. ` +
+                'Each check compares the results with what perfect fairness would give.';
+            out.appendChild(intro);
+            for (const c of result.checks) {
+                const row = document.createElement('div');
+                row.className = `check ${c.passed ? 'pass' : 'fail'}`;
+                const title = document.createElement('div');
+                title.className = 'title';
+                title.textContent = c.name;
+                const detail = document.createElement('div');
+                detail.className = 'detail';
+                detail.textContent = c.detail;
+                row.append(title, detail);
+                out.appendChild(row);
+            }
+        }, 50);
+    }
+
+    // --- Start up ---
+    if (new URLSearchParams(location.search).has('selftest')) {
+        showSelfTest();
+    } else {
+        participants = loadNames();
+        buildPrizes();
+        updateList();
+        requestAnimationFrame(draw);
+    }
+</script>
+</body>
+</html>

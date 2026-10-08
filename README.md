@@ -42,6 +42,8 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `mosquito.html` | [Try it](https://ahmedh00.github.io/name-pickers/mosquito.html) | Avoid getting swatted to win |
 | `breakout.html` | [Try it](https://ahmedh00.github.io/name-pickers/breakout.html) | Inspired by Breakout - last remaining name wins |
 | `mousetrap.html` | [Try it](https://ahmedh00.github.io/name-pickers/mousetrap.html) | Inspired by the Mouse Trap board game - mice race round the board, then the contraption drops the cage on whoever is on the cheese |
+| `claw-machine.html` | [Try it](https://ahmedh00.github.io/name-pickers/claw-machine.html) | Inspired by arcade claw machines - the prize that makes it down the chute wins |
+| `bail-out.html` | [Try it](https://ahmedh00.github.io/name-pickers/bail-out.html) | Inspired by 80s skate contests - downhill heats then a vert final, highest judges' score wins |
 
 
 ## Contributing
