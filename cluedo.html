@@ -1017,6 +1017,7 @@
     let participants = [];
     let suspects = [];  // drawing info per participant: { name, hue, tag }
     let run = null;     // the case on screen (it stays after the verdict until the next one)
+    let story = null;   // the intro cutscene, while it plays
     let confetti = [];
     let flashes = [];
     let speed = 1;
@@ -1236,6 +1237,32 @@
                 tone({ type: 'sawtooth', from: 130, dur: 0.6, vol: 0.07 });
                 tone({ type: 'square', from: 98, dur: 0.6, vol: 0.04 });
                 break;
+            case 'thunder':
+                noise({ dur: 2.2, vol: 0.4, from: 400, to: 60 });
+                tone({ type: 'sine', from: 60, to: 30, dur: 1.8, vol: 0.2, delay: 0.05 });
+                break;
+            case 'zap':
+                noise({ dur: 0.25, vol: 0.3, filter: 'bandpass', from: 4000, to: 800, q: 2 });
+                tone({ type: 'sawtooth', from: 900, to: 60, dur: 0.3, vol: 0.06 });
+                break;
+            case 'buzz':
+                for (let i = 0; i < 3; i++) tone({ type: 'sawtooth', from: 110, dur: 0.12, vol: 0.06, delay: i * 0.16 });
+                break;
+            case 'ring':
+                for (let i = 0; i < 6; i++) tone({ type: 'sine', from: i % 2 ? 1320 : 1660, dur: 0.05, vol: 0.05, delay: i * 0.05 });
+                break;
+            case 'news':
+                [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone({ type: 'square', from: f, dur: 0.14, vol: 0.05, delay: i * 0.12 }));
+                tone({ type: 'sawtooth', from: 130, dur: 0.9, vol: 0.05 });
+                break;
+            case 'flash':
+                noise({ dur: 0.05, vol: 0.2, filter: 'highpass', from: 3000 });
+                tone({ type: 'sine', from: 3000, to: 5000, dur: 0.25, vol: 0.02, delay: 0.03 });
+                break;
+            case 'slam':
+                noise({ dur: 0.5, vol: 0.45, from: 900, to: 70 });
+                tone({ type: 'sine', from: 90, to: 35, dur: 0.6, vol: 0.4 });
+                break;
             case 'headline':
                 for (let i = 0; i < 10; i++) noise({ dur: 0.03, vol: 0.16, delay: 0.15 + i * 0.075, filter: 'highpass', from: 2500 });
                 tone({ type: 'triangle', from: 2093, dur: 0.8, vol: 0.09, delay: 0.95 });
@@ -1248,7 +1275,10 @@
         muted = on;
         muteBtn.setAttribute('aria-pressed', String(muted));
         muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
-        if (muted) stopHum();
+        if (muted) {
+            stopHum();
+            stopRain();
+        }
         else if (playing()) startHum();
     }
     muteBtn.addEventListener('click', () => setMuted(!muted));
@@ -1379,6 +1409,7 @@
         addBtn.disabled = busy;
         startBtn.disabled = busy || participants.length < 2;
         skipBtn.hidden = !busy;
+        skipBtn.textContent = story ? 'Skip intro' : 'Skip to verdict';
     }
 
     // Everyone back on their starting square, the Incident Report empty again.
@@ -1883,9 +1914,20 @@
     function startGame() {
         if (playing() || participants.length < 2) return;
         audio(); // unlock audio on this click
+        // The story plays in browser fullscreen; this has to be asked for during the click itself.
+        let fullscreen = false;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            const request = gameArea.requestFullscreen || gameArea.webkitRequestFullscreen;
+            try {
+                const p = request && request.call(gameArea);
+                fullscreen = Boolean(request);
+                if (p && p.catch) p.catch(() => { if (story) story.fullscreen = false; });
+            } catch { fullscreen = false; }
+        }
         resetBoard();
         const plan = ClueCore.planGame(participants);
         run = buildRun(plan);
+        story = buildStory(fullscreen);
         verdictOverlay.hidden = true;
         copyMsg.textContent = '';
         startHum();
@@ -2012,6 +2054,10 @@
     }
 
     function skipToVerdict() {
+        if (story) {
+            endStory();
+            return;
+        }
         if (!playing()) return;
         run.paused = false;
         resumeBtn.hidden = true;
@@ -2985,6 +3031,680 @@
     function stopMusic() {
         clearInterval(musicTimer);
         musicTimer = null;
+    }
+
+    // --- The curtain: hides the board until a case starts ---
+    function drawCurtain(open, time) {
+        const half = W / 2;
+        for (const side of [-1, 1]) {
+            const shift = open * half * 1.05;
+            const squeeze = 1 - 0.45 * open;
+            ctx.save();
+            ctx.translate(side < 0 ? -shift : W + shift, 0);
+            ctx.scale(squeeze * (side < 0 ? 1 : -1), 1);
+            // Velvet folds: bands of light and dark red with a gentle sway.
+            const folds = 9;
+            for (let k = 0; k < folds; k++) {
+                const x = (k * half) / folds, w = half / folds + 1;
+                const g = ctx.createLinearGradient(x, 0, x + w, 0);
+                g.addColorStop(0, '#4a0b10');
+                g.addColorStop(0.45, '#a3192a');
+                g.addColorStop(0.6, '#c0262d');
+                g.addColorStop(1, '#3a070b');
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x + w, 0);
+                ctx.lineTo(x + w + Math.sin(time * 0.8 + k) * 3, H);
+                ctx.lineTo(x + Math.sin(time * 0.8 + k + 0.5) * 3, H);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+        if (open > 0.6) return;
+        ctx.save();
+        ctx.globalAlpha = 1 - phase(open, 0, 0.6);
+        // The valance across the top, with gold trim and tassels.
+        const val = ctx.createLinearGradient(0, 0, 0, 90);
+        val.addColorStop(0, '#5c0d14');
+        val.addColorStop(1, '#8e1522');
+        ctx.fillStyle = val;
+        ctx.fillRect(0, 0, W, 86);
+        ctx.fillStyle = '#d9a520';
+        ctx.fillRect(0, 84, W, 6);
+        for (let x = 20; x < W; x += 40) {
+            ctx.beginPath();
+            ctx.moveTo(x - 6, 90);
+            ctx.lineTo(x + 6, 90);
+            ctx.lineTo(x, 104);
+            ctx.fill();
+        }
+        textLine('🔍 CLUEDO PICKER', W / 2, 44, { font: `900 40px ${SERIF_FONT}`, color: '#f6efe0', align: 'center' });
+        textLine('Who took down prod?', W / 2, 330, { font: `italic bold 44px ${SERIF_FONT}`, color: '#f6efe0', align: 'center' });
+        const n = participants.length;
+        textLine(n ? `${n} suspect${n > 1 ? 's' : ''} on file` : 'No suspects on file yet', W / 2, 390,
+            { font: `bold 20px ${UI_FONT}`, color: '#f4d8a0', align: 'center' });
+        const prompt = n >= 2 ? '▶  Press Start Investigation' : 'Add at least two suspects to begin';
+        ctx.globalAlpha *= n >= 2 ? 0.6 + 0.4 * Math.sin(time * 4) : 0.8;
+        textLine(prompt, W / 2, 450, { font: `bold 22px ${UI_FONT}`, color: '#ffffff', align: 'center' });
+        ctx.restore();
+    }
+
+    // --- The story so far: a cutscene before every case ---
+    // Pure set dressing. It names suspects only in list order (the wake-up calls),
+    // and the figure in the data hall is a faceless silhouette, so it gives nothing away.
+    const STORY_SCENES = [
+        { end: 4.6, draw: sceneRain, line: 'It was 3:06 am. The kind of hour when servers die and alibis are born.' },
+        { end: 9.8, draw: sceneAisle, line: 'Somewhere in the data hall, someone was where they shouldn\'t be…' },
+        { end: 13.4, draw: sceneMonitor, line: 'At 3:07, PROD-01 stopped answering. The status page wasn\'t far behind.' },
+        { end: 18.2, draw: sceneBedroom, line: 'Across town, the CEO\'s phone lit up like a Christmas tree.' },
+        { end: 23.6, draw: sceneChain, line: 'By 3:15, the CEO had called everyone. And I mean everyone.' },
+        { end: 29.2, draw: sceneNews, line: 'By sunrise, it was on the news.' },
+        { end: 34.0, draw: sceneOffice, line: 'Which is when they called me.' },
+        { end: 37.5, draw: sceneTitle, line: '' },
+    ];
+    const STORY_END = STORY_SCENES.at(-1).end;
+    const STORY_TYPE_RATE = 42;
+
+    function buildStory(fullscreen) {
+        const events = [];
+        const ev = (t, sound) => events.push({ t, sound });
+        ev(0.1, 'rain');
+        ev(2.9, 'thunder');
+        [5.6, 6.0, 6.4, 6.8, 7.2].forEach(t => ev(t, 'step'));
+        ev(8.2, 'zap');
+        ev(8.3, 'blackout');
+        ev(8.9, 'klaxon');
+        ev(10.4, 'flatline');
+        ev(12.0, 'nope');
+        [14.1, 14.7].forEach(t => ev(t, 'buzz'));
+        ev(15.6, 'lie');
+        const n = Math.max(1, participants.length);
+        for (let i = 0; i < n; i++) ev(18.6 + (i * 3.6) / n, 'ring');
+        ev(23.8, 'news');
+        [26.0, 26.4, 26.7, 27.3].forEach(t => ev(t, 'flash'));
+        ev(29.5, 'thunder');
+        [30.0, 30.6].forEach(t => ev(t, 'ring'));
+        ev(32.4, 'start');
+        ev(34.3, 'slam');
+        ev(34.4, 'sting');
+        events.sort((a, b) => a.t - b.t);
+        return { t: 0, end: STORY_END, events, next: 0, fullscreen, names: [...participants] };
+    }
+
+    function advanceStory(dt) {
+        story.t = Math.min(story.end, story.t + dt);
+        while (story.next < story.events.length && story.events[story.next].t <= story.t) {
+            const { sound } = story.events[story.next++];
+            if (sound === 'rain') startRain(); else playSound(sound);
+        }
+        if (story.t >= story.end) endStory();
+    }
+
+    // The case proper starts here, back in the normal layout.
+    function endStory() {
+        if (!story) return;
+        const wasFull = story.fullscreen;
+        story = null;
+        stopRain();
+        if (wasFull && (document.fullscreenElement || document.webkitFullscreenElement)) {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            try {
+                const p = exit.call(document);
+                if (p && p.catch) p.catch(() => {});
+            } catch { /* already out of fullscreen */ }
+        }
+        updateList();
+    }
+
+    function sceneAt(t) {
+        let start = 0;
+        for (const s of STORY_SCENES) {
+            if (t < s.end) return { scene: s, f: t - start, dur: s.end - start };
+            start = s.end;
+        }
+        const last = STORY_SCENES.at(-1);
+        return { scene: last, f: last.end - start, dur: last.end - start };
+    }
+
+    function drawStory(time) {
+        const { scene, f, dur } = sceneAt(story.t);
+        ctx.save();
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, H);
+        scene.draw(f, dur, time);
+        ctx.restore();
+        // Fade through black between scenes.
+        const fade = Math.max(1 - phase(f, 0, 0.35), phase(f, dur - 0.25, dur));
+        if (fade > 0) {
+            ctx.fillStyle = `rgba(0, 0, 0, ${fade})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        // Letterbox bars and the narrator's typed voice-over.
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, W, 44);
+        ctx.fillRect(0, H - 76, W, 76);
+        if (scene.line) {
+            const text = scene.line.slice(0, Math.floor(Math.max(0, f - 0.3) * STORY_TYPE_RATE));
+            textLine(text, W / 2, H - 38, { font: `italic 21px ${SERIF_FONT}`, color: '#f4e8c8', align: 'center', max: W - 60 });
+        }
+        textLine('INC-0307 · THE STORY SO FAR', 20, 22, { font: `bold 12px ${UI_FONT}`, color: '#7a6343' });
+        textLine('Press S to skip', W - 20, 22, { font: `bold 12px ${UI_FONT}`, color: '#7a6343', align: 'right' });
+        // The curtain opens on the first scene.
+        if (story.t < 1.6) drawCurtain(easeInOut(phase(story.t, 0.2, 1.5)), time);
+        if (scene.line !== lastStatus) {
+            lastStatus = scene.line;
+            statusEl.textContent = scene.line || 'Who took down prod?';
+        }
+    }
+
+    function rainStreaks(x0, y0, w, h, time, alpha = 0.35) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, y0, w, h);
+        ctx.clip();
+        ctx.strokeStyle = `rgba(180, 200, 230, ${alpha})`;
+        ctx.lineWidth = 1;
+        const rand = decorRandom(5);
+        for (let k = 0; k < 90; k++) {
+            const sx = rand() * w, speed = 400 + rand() * 300, len = 10 + rand() * 14;
+            const y = ((rand() * h + time * speed) % (h + 40)) - 20;
+            ctx.beginPath();
+            ctx.moveTo(x0 + sx, y0 + y);
+            ctx.lineTo(x0 + sx - 3, y0 + y + len);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    function skyline(y, color, seed) {
+        const rand = decorRandom(seed);
+        ctx.fillStyle = color;
+        for (let x = 0; x < W;) {
+            const w = 40 + rand() * 70, h = 60 + rand() * 180;
+            ctx.fillRect(x, y - h, w, h);
+            x += w + 4;
+        }
+    }
+
+    function litWindows(y, seed, time) {
+        const rand = decorRandom(seed);
+        for (let k = 0; k < 70; k++) {
+            const x = rand() * W, yy = y - 20 - rand() * 160;
+            if (Math.sin(time * 0.3 + k) > -0.3) {
+                ctx.fillStyle = rand() < 0.2 ? 'rgba(54, 214, 198, 0.7)' : 'rgba(255, 210, 120, 0.7)';
+                ctx.fillRect(x, yy, 5, 7);
+            }
+        }
+    }
+
+    // 1. Rain on the Inspector's window, the city asleep.
+    function sceneRain(f, dur, time) {
+        const sky = ctx.createLinearGradient(0, 0, 0, H);
+        sky.addColorStop(0, '#05070f');
+        sky.addColorStop(1, '#1a2238');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, H);
+        skyline(560, '#0a0e18', 3);
+        litWindows(560, 3, time);
+        skyline(640, '#05070b', 8);
+        if (f > 2.8 && f < 3.1) {
+            ctx.fillStyle = `rgba(220, 230, 255, ${0.6 * (1 - phase(f, 2.8, 3.1))})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+        rainStreaks(0, 0, W, H, time, 0.4);
+        // Window frame.
+        ctx.strokeStyle = '#1b130c';
+        ctx.lineWidth = 26;
+        ctx.strokeRect(60, 50, W - 120, H - 150);
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(W / 2, 50);
+        ctx.lineTo(W / 2, H - 100);
+        ctx.moveTo(60, 300);
+        ctx.lineTo(W - 60, 300);
+        ctx.stroke();
+    }
+
+    // 2. A 3D dolly down the server aisle; a faceless figure reaches PROD-01; the lights die.
+    function sceneAisle(f, dur, time) {
+        const F = 420, cx = W / 2, cy = 300;
+        const dolly = f * 110;
+        const P = (x, y, z) => {
+            const d = Math.max(30, z - dolly);
+            return [cx + (x * F) / (F + d), cy + (y * F) / (F + d), F / (F + d)];
+        };
+        const dark = f > 3.4;
+        ctx.fillStyle = dark ? '#05060a' : '#0d1220';
+        ctx.fillRect(0, 0, W, H);
+        // Floor and ceiling as perspective grids.
+        ctx.strokeStyle = dark ? 'rgba(255, 40, 40, 0.15)' : 'rgba(80, 110, 160, 0.35)';
+        ctx.lineWidth = 1;
+        for (let z = 0; z < 2400; z += 150) {
+            for (const y of [270, -270]) {
+                const a = P(-380, y, z), b = P(380, y, z);
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.stroke();
+            }
+        }
+        for (const x of [-380, -190, 0, 190, 380]) {
+            for (const y of [270, -270]) {
+                const a = P(x, y, dolly + 30), b = P(x, y, 2400);
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.stroke();
+            }
+        }
+        // Racks down both sides, nearest last so they overlap the far ones.
+        for (let z = 2100; z >= 0; z -= 300) {
+            for (const side of [-1, 1]) {
+                const x = side * 380;
+                const a = P(x, -260, z), b = P(x, 260, z), c = P(x, 260, z + 260), d = P(x, -260, z + 260);
+                if (a[2] <= 0) continue;
+                ctx.fillStyle = dark ? '#0a0a0e' : '#151b28';
+                ctx.strokeStyle = dark ? '#2a0a0a' : '#3a4658';
+                ctx.beginPath();
+                ctx.moveTo(a[0], a[1]);
+                ctx.lineTo(b[0], b[1]);
+                ctx.lineTo(c[0], c[1]);
+                ctx.lineTo(d[0], d[1]);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                for (let j = 0; j < 8; j++) {
+                    for (let k = 0; k < 3; k++) {
+                        const p = P(x, -220 + j * 58, z + 40 + k * 70);
+                        const on = Math.sin(time * (3 + j) + z + k * 2) > (dark ? 0.85 : -0.2);
+                        ctx.fillStyle = on ? (dark ? '#ff3b3b' : (j + k) % 3 ? '#36d6c6' : '#ffb43b') : 'rgba(255, 255, 255, 0.05)';
+                        ctx.fillRect(p[0], p[1], 3 * p[2] * 3, 2 * p[2] * 3);
+                    }
+                }
+            }
+        }
+        // PROD-01 at the end of the aisle.
+        const e1 = P(-150, -250, 2300), e2 = P(150, 260, 2300);
+        ctx.fillStyle = '#10141c';
+        ctx.fillRect(e1[0], e1[1], e2[0] - e1[0], e2[1] - e1[1]);
+        ctx.strokeStyle = '#e0353c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(e1[0], e1[1], e2[0] - e1[0], e2[1] - e1[1]);
+        textLine('PROD-01', (e1[0] + e2[0]) / 2, e1[1] - 10, { font: `bold 13px ${MONO}`, color: '#ff5a5a', align: 'center' });
+        for (let j = 0; j < 10; j++) {
+            ctx.fillStyle = dark ? (Math.sin(time * 9 + j) > 0.6 ? '#ff3b3b' : '#300') : Math.sin(time * 6 + j) > 0 ? '#2fbf5a' : '#0f3';
+            ctx.fillRect(e1[0] + 6, e1[1] + 8 + j * ((e2[1] - e1[1] - 16) / 10), e2[0] - e1[0] - 12, 2);
+        }
+        // The figure: a black silhouette, creeping up the aisle, then reaching out.
+        const fz = lerp(900, 2150, easeInOut(phase(f, 0.6, 3.0)));
+        const fp = P(lerp(-110, -40, phase(f, 0.6, 3.0)), 260, fz);
+        if (!dark || Math.sin(time * 14) > 0) {
+            ctx.save();
+            ctx.translate(fp[0], fp[1]);
+            ctx.scale(fp[2] * 5.2, fp[2] * 5.2);
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.moveTo(-10, 0);
+            ctx.lineTo(-4, -24);
+            ctx.lineTo(4, -24);
+            ctx.lineTo(10, 0);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(0, -30, 7, 0, TAU);
+            ctx.fill();
+            const reach = phase(f, 2.8, 3.3);
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#000';
+            ctx.beginPath();
+            ctx.moveTo(4, -18);
+            ctx.lineTo(4 + 12 * reach, -18 - 6 * reach);
+            ctx.stroke();
+            ctx.restore();
+        }
+        if (f > 3.3 && f < 3.5) {
+            ctx.fillStyle = 'rgba(200, 230, 255, 0.7)';
+            ctx.fillRect(0, 0, W, H);
+        }
+        if (dark) {
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.1 + 0.1 * Math.max(0, Math.sin(time * 10))})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    }
+
+    // 3. The heartbeat flatlines; the status page goes red.
+    function sceneMonitor(f, dur, time) {
+        ctx.fillStyle = '#05070b';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = `rgba(255, 30, 30, ${0.08 + 0.08 * Math.sin(time * 10)})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.save();
+        ctx.translate(290, 320);
+        drawBox(ctx, -230, -150, 460, 300, '#05080c', '#36d6c6', 12);
+        const flat = f > 1.4;
+        textLine('PROD-01 · HEALTH', -210, -120, { font: `bold 18px ${UI_FONT}`, color: '#36d6c6' });
+        textLine(flat ? '0 req/s' : '1,204 req/s', 210, -120, { font: `bold 18px ${UI_FONT}`, color: flat ? '#ff3b3b' : '#7dffa8', align: 'right' });
+        const cursor = phase(f, 0.2, 2.6);
+        ctx.strokeStyle = flat ? '#ff3b3b' : '#7dffa8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let k = 0; k <= 100 * cursor; k++) {
+            const x = -210 + k * 4.2, beat = k % 25;
+            const y = k < 45 && beat >= 8 && beat < 14 ? [0, -70, 55, -22, 10, 0][beat - 8] : 0;
+            if (k) ctx.lineTo(x, 30 + y); else ctx.moveTo(x, 30 + y);
+        }
+        ctx.stroke();
+        ctx.restore();
+        // The status page, flipping over in 3D from green to red.
+        const flip = phase(f, 1.4, 1.9);
+        const page = paint('status', 360, 300, () => {
+            const down = flip >= 0.5;
+            drawBox(ctx, -180, -150, 360, 300, '#ffffff', '#c8d0da', 10);
+            textLine('status.ourcompany.com', -160, -120, { font: `bold 14px ${UI_FONT}`, color: '#2b2f36' });
+            drawBox(ctx, -160, -95, 320, 70, down ? '#c0262d' : '#2f8f46', '#0000', 8);
+            textLine(down ? '⚠ MAJOR OUTAGE' : '✓ All systems operational', 0, -60, { font: `bold 20px ${UI_FONT}`, color: '#fff', align: 'center' });
+            ['Website', 'API', 'Checkout', 'Coffee machine'].forEach((s, k) => {
+                textLine(s, -150, -5 + k * 34, { font: `15px ${UI_FONT}`, color: '#2b2f36' });
+                textLine(down ? (k === 3 ? 'Also down' : 'Down') : 'Operational', 150, -5 + k * 34,
+                    { font: `bold 15px ${UI_FONT}`, color: down ? '#c0262d' : '#2f8f46', align: 'right' });
+            });
+        });
+        const a = flip * Math.PI;
+        drawTurned(page, 740, 320, flip < 0.5 ? a : a - Math.PI, 1);
+    }
+
+    // 4. The CEO's bedroom: the phone buzzes, the CEO bolts upright.
+    function sceneBedroom(f, dur, time) {
+        const glow = f > 0.6 ? 0.5 + 0.5 * Math.sin(time * 18) : 0;
+        ctx.fillStyle = '#0b1022';
+        ctx.fillRect(0, 0, W, H);
+        // Moonlit window.
+        drawBox(ctx, 620, 90, 220, 180, '#16234a', '#2a2a3a', 4);
+        ctx.fillStyle = '#e8eef6';
+        ctx.beginPath();
+        ctx.arc(760, 140, 26, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#16234a';
+        ctx.beginPath();
+        ctx.arc(772, 132, 22, 0, TAU);
+        ctx.fill();
+        // The bed.
+        drawBox(ctx, 160, 420, 440, 120, '#3d2a4a', '#1a1022', 14);
+        drawBox(ctx, 150, 360, 40, 190, '#4a3020', '#24160c', 6);
+        drawBox(ctx, 196, 400, 110, 46, '#e9edf1', '#a0a8b4', 18);
+        // The CEO: lying down, then bolt upright with a nightcap.
+        const up = easeOut(phase(f, 1.9, 2.2));
+        ctx.save();
+        ctx.translate(260, 440);
+        ctx.rotate(lerp(-Math.PI / 2, 0, up));
+        drawPawn(ctx, 0, 0, 210, { scale: 3.2, sat: 40 });
+        ctx.fillStyle = '#c0262d';
+        ctx.beginPath();
+        ctx.moveTo(-16, -98);
+        ctx.lineTo(16, -98);
+        ctx.lineTo(30, -140);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(30, -140, 6, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+        drawBox(ctx, 160, 450, 440, 90, '#5a3d6e', '#1a1022', 14); // the duvet
+        // Nightstand and buzzing phone.
+        drawBox(ctx, 620, 450, 120, 110, '#4a3020', '#24160c', 6);
+        const buzz = f > 0.6 && f < 2.0 ? Math.sin(time * 70) * 2 : 0;
+        drawBox(ctx, 660 + buzz, 418, 44, 30, '#111', '#333', 5);
+        if (glow) {
+            const g = ctx.createRadialGradient(682, 430, 5, 682, 430, 160);
+            g.addColorStop(0, `rgba(120, 180, 255, ${0.35 * glow})`);
+            g.addColorStop(1, 'rgba(120, 180, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(500, 270, 360, 320);
+        }
+        if (f > 0.7) {
+            ctx.save();
+            ctx.globalAlpha = phase(f, 0.7, 0.9);
+            drawBox(ctx, 560, 300, 260, 70, 'rgba(240, 244, 250, 0.96)', '#9aa3ad', 12);
+            textLine('🔔 PagerDuty · now', 576, 322, { font: `bold 13px ${UI_FONT}`, color: '#2b2f36' });
+            textLine('PROD-01 is DOWN. SEV-1.', 576, 348, { font: `15px ${UI_FONT}`, color: '#c0262d' });
+            ctx.restore();
+        }
+        if (f > 2.3) drawBubbleBig(330, 200, 'IS THE WEBSITE DOWN??', phase(f, 2.3, 2.5), '#c0262d');
+        if (f > 2.0 && f < 2.6) textLine('?!', 320, 250, { font: `900 46px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+    }
+
+    function drawBubbleBig(x, y, text, pop, accent) {
+        if (pop <= 0) return;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(pop, pop);
+        ctx.font = `900 24px ${UI_FONT}`;
+        const w = ctx.measureText(text).width + 40;
+        ctx.fillStyle = '#fffaf0';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 4;
+        roundRect(ctx, -w / 2, -60, w, 50, 25);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-14, -12);
+        ctx.lineTo(-30, 18);
+        ctx.lineTo(6, -12);
+        ctx.fill();
+        textLine(text, 0, -35, { font: `900 24px ${UI_FONT}`, color: '#2b1e12', align: 'center' });
+        ctx.restore();
+    }
+
+    // 5. An apartment block at night; every suspect's window lights up as their phone rings.
+    function sceneChain(f, dur, time) {
+        ctx.fillStyle = '#0a0e1c';
+        ctx.fillRect(0, 0, W, H);
+        skyline(640, '#070a14', 11);
+        const names = story.names;
+        const n = names.length, cols = Math.min(5, n), rows = Math.ceil(n / cols);
+        const ww = 150, wh = 96, gx = 20, gy = 34;
+        const bw = cols * (ww + gx) + 40, bh = rows * (wh + gy) + 50;
+        const bx = W / 2 - bw / 2, by = Math.max(60, 330 - bh / 2);
+        drawBox(ctx, bx, by, bw, bh, '#3a2a22', '#1a120c', 4);
+        names.forEach((name, i) => {
+            const col = i % cols, row = Math.floor(i / cols);
+            const x = bx + 30 + col * (ww + gx), y = by + 26 + row * (wh + gy);
+            const ringAt = 0.4 + (i * 3.6) / n;
+            const lit = f >= ringAt;
+            drawBox(ctx, x, y, ww, wh, lit ? '#f4c66a' : '#121826', '#0a0705', 3);
+            if (lit) {
+                drawPawn(ctx, x + ww / 2, y + wh - 6, hueFor(i), { scale: 2 });
+                const shake = f < ringAt + 0.6 ? Math.sin(time * 60) * 2 : 0;
+                textLine('📞', x + ww - 22 + shake, y + 18, { font: `18px ${UI_FONT}`, color: '#fff', align: 'center' });
+                if (f < ringAt + 0.9) textLine('RING!', x + 34, y + 18, { font: `900 13px ${UI_FONT}`, color: '#c0262d', align: 'center' });
+            }
+            ctx.fillStyle = '#0a0705';
+            ctx.fillRect(x + ww / 2 - 1, y, 2, wh);
+            textLine(name, x + ww / 2, y + wh + 13, { font: `bold 12px ${UI_FONT}`, color: '#f4e8c8', align: 'center', max: ww });
+        });
+    }
+
+    // 6. Breaking news: ticker, nosediving chart, a reporter, the CEO dodging cameras.
+    function sceneNews(f, dur, time) {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, W, H);
+        drawBox(ctx, 40, 60, W - 80, 540, '#1a1a1a', '#333', 20);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(60, 80, W - 120, 500);
+        ctx.clip();
+        const g = ctx.createLinearGradient(0, 80, 0, 580);
+        g.addColorStop(0, '#1d3557');
+        g.addColorStop(1, '#0d1b2a');
+        ctx.fillStyle = g;
+        ctx.fillRect(60, 80, W - 120, 500);
+        // The data centre behind the reporter.
+        drawBox(ctx, 90, 210, 330, 260, '#2b3342', '#11161f', 4);
+        for (let k = 0; k < 6; k++) for (let j = 0; j < 3; j++) drawBox(ctx, 110 + k * 50, 230 + j * 60, 34, 38, '#11161f', '#000', 2);
+        textLine('DATA CENTRE', 255, 450, { font: `bold 14px ${UI_FONT}`, color: '#8a97a6', align: 'center' });
+        drawPawn(ctx, 200, 462, 30, { scale: 3, sat: 50 });
+        drawBox(ctx, 238, 362, 8, 40, '#222', '#000', 2);
+        ctx.fillStyle = '#333';
+        ctx.beginPath();
+        ctx.arc(242, 358, 8, 0, TAU);
+        ctx.fill();
+        // The CEO legging it across the shot under a coat, flashbulbs going off.
+        const dash = phase(f, 1.8, 4.2);
+        if (dash > 0 && dash < 1) {
+            const x = lerp(30, 470, dash);
+            drawPawn(ctx, x, 462, 210, { scale: 2.6, sat: 40 });
+            ctx.fillStyle = '#2b2f36';
+            ctx.beginPath();
+            ctx.ellipse(x, 384, 40, 22, -0.2, Math.PI, TAU);
+            ctx.fill();
+            if (Math.sin(time * 9) > 0.7) {
+                const fg = ctx.createRadialGradient(x + 60, 370, 0, x + 60, 370, 90);
+                fg.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+                fg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = fg;
+                ctx.fillRect(x - 40, 270, 200, 200);
+            }
+        }
+        // The stock chart.
+        drawBox(ctx, 520, 170, 380, 230, '#0b1220', '#2f7de1', 8);
+        textLine('OURCO (NASDAQ)', 540, 192, { font: `bold 14px ${MONO}`, color: '#8fb8ff' });
+        const drop = phase(f, 0.6, 3.0);
+        textLine(`▼ ${(drop * 23.7).toFixed(1)}%`, 880, 192, { font: `bold 16px ${MONO}`, color: '#ff3b3b', align: 'right' });
+        ctx.strokeStyle = '#ff3b3b';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const rand = decorRandom(42);
+        for (let k = 0; k <= 40 * drop; k++) {
+            const x = 540 + k * 8.5, y = 230 + (k / 40) ** 2 * 140 + rand() * 12;
+            if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+        // Banner and ticker.
+        const slide = easeOut(phase(f, 0.2, 0.6));
+        ctx.fillStyle = '#c0262d';
+        ctx.fillRect(60, 470 + (1 - slide) * 120, 300, 40);
+        textLine('BREAKING NEWS', 76, 490 + (1 - slide) * 120, { font: `900 22px ${UI_FONT}`, color: '#fff' });
+        ctx.fillStyle = '#f4f4f4';
+        ctx.fillRect(60, 510, W - 120, 40);
+        textLine('WEBSITE DOWN SINCE 3:07 AM · "WE ARE INVESTIGATING"', 76, 530, { font: `900 19px ${UI_FONT}`, color: '#111', max: W - 150 });
+        ctx.fillStyle = '#111';
+        ctx.fillRect(60, 550, W - 120, 30);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(60, 550, W - 120, 30);
+        ctx.clip();
+        const ticker = 'CUSTOMERS FORCED TO GO OUTSIDE · "IT\'S ALWAYS DNS," SAYS EXPERT · INTERN DENIES EVERYTHING · COFFEE MACHINE ALSO DOWN · CEO "VERY CALM", SAYS CEO · ';
+        ctx.font = `bold 15px ${UI_FONT}`;
+        const tw = ctx.measureText(ticker).width;
+        const off = (f * 140) % tw;
+        textLine(ticker + ticker, W - 60 - off - tw * 0.4, 565, { font: `bold 15px ${UI_FONT}`, color: '#ffd23f' });
+        ctx.restore();
+        textLine('● LIVE', W - 80, 100, { font: `bold 14px ${UI_FONT}`, color: Math.floor(time * 2) % 2 ? '#ff3b3b' : '#fff', align: 'right' });
+    }
+
+    // 7. The Inspector's office: rain, a ringing phone, and the hat goes on.
+    function sceneOffice(f, dur, time) {
+        ctx.fillStyle = '#0e0b08';
+        ctx.fillRect(0, 0, W, H);
+        // Window with rain and a neon sign glow.
+        drawBox(ctx, 560, 70, 340, 300, '#0b1020', '#1b130c', 4);
+        skyline(370, '#05070b', 21);
+        rainStreaks(560, 70, 340, 300, time, 0.5);
+        const neon = 0.5 + 0.5 * Math.sin(time * 3);
+        textLine('24H DATA CENTRE', 730, 120, { font: `bold 22px ${UI_FONT}`, color: `rgba(54, 214, 198, ${0.5 + 0.5 * neon})`, align: 'center' });
+        ctx.strokeStyle = '#1b130c';
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(730, 70);
+        ctx.lineTo(730, 370);
+        ctx.stroke();
+        // Desk lamp pool of light.
+        const lg = ctx.createRadialGradient(300, 470, 10, 300, 470, 320);
+        lg.addColorStop(0, 'rgba(255, 210, 120, 0.4)');
+        lg.addColorStop(1, 'rgba(255, 210, 120, 0)');
+        ctx.fillStyle = lg;
+        ctx.fillRect(0, 150, 700, 500);
+        // The Inspector, standing behind the desk; the hat goes on at the end.
+        ctx.save();
+        ctx.translate(330, 470);
+        ctx.scale(4, 4);
+        drawInspector({ x: 0, y: 0, lift: 0, scale: 1, dir: 1 });
+        ctx.restore();
+        drawBox(ctx, 120, 460, 460, 110, '#4a3020', '#24160c', 6);
+        // The phone, ringing then answered.
+        const answered = f > 1.4;
+        const shake = !answered && f > 0.4 ? Math.sin(time * 60) * 3 : 0;
+        drawBox(ctx, 440 + shake, 430, 70, 34, '#1b1b1b', '#000', 8);
+        if (!answered) drawBox(ctx, 436 + shake, 418, 78, 16, '#1b1b1b', '#000', 8);
+        if (!answered && f > 0.4) textLine('RING! RING!', 475, 395, { font: `900 18px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+        if (answered) {
+            drawBubbleBig(330, 250, f < 2.8 ? 'Inspector speaking.' : "PROD-01? …I'll take the case.", phase(f, f < 2.8 ? 1.5 : 2.8, f < 2.8 ? 1.7 : 3.0), '#c0262d');
+        }
+        // Coffee steam.
+        drawBox(ctx, 180, 430, 30, 34, '#f5f1e8', '#3a2a1a', 4);
+        ctx.strokeStyle = 'rgba(220, 230, 240, 0.5)';
+        ctx.lineWidth = 2;
+        for (const dx of [188, 200]) {
+            ctx.beginPath();
+            ctx.moveTo(dx, 425);
+            ctx.quadraticCurveTo(dx + 6 * Math.sin(time * 3), 410, dx, 395);
+            ctx.stroke();
+        }
+    }
+
+    // 8. The title slams in.
+    function sceneTitle(f, dur, time) {
+        ctx.fillStyle = '#05070b';
+        ctx.fillRect(0, 0, W, H);
+        const slam = easeOut(phase(f, 0.25, 0.5));
+        const shake = f > 0.5 && f < 0.9 ? Math.sin(time * 80) * 6 * (1 - phase(f, 0.5, 0.9)) : 0;
+        ctx.save();
+        ctx.translate(W / 2 + shake, 300);
+        ctx.scale(lerp(3, 1, slam), lerp(3, 1, slam));
+        ctx.globalAlpha = slam;
+        textLine('WHO TOOK', 0, -50, { font: `900 72px ${SERIF_FONT}`, color: '#f6efe0', align: 'center' });
+        textLine('DOWN PROD?', 0, 30, { font: `900 72px ${SERIF_FONT}`, color: '#e0353c', align: 'center' });
+        ctx.restore();
+        if (f > 1.0) {
+            ctx.save();
+            ctx.globalAlpha = phase(f, 1.0, 1.4);
+            textLine(`INC-0307 · ${story.names.length} suspects · 1 Inspector`, W / 2, 420, { font: `bold 20px ${UI_FONT}`, color: '#f4d8a0', align: 'center' });
+            ctx.restore();
+        }
+        drawStamp(W / 2 + 300, 150, 'CASE OPEN', '#c0262d', phase(f, 1.4, 1.6));
+    }
+
+    // Rain on the window, looped while the story plays.
+    let rain = null;
+    function startRain() {
+        const ac = audio();
+        if (!ac || rain) return;
+        const src = ac.createBufferSource();
+        src.buffer = getNoise(ac);
+        src.loop = true;
+        const f = ac.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.value = 2500;
+        f.Q.value = 0.4;
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(0.0001, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.05, ac.currentTime + 1);
+        src.connect(f);
+        f.connect(gain);
+        gain.connect(ac.destination);
+        src.start();
+        rain = { src, gain };
+    }
+
+    function stopRain() {
+        if (!rain) return;
+        const now = audioCtx.currentTime;
+        rain.gain.gain.cancelScheduledValues(now);
+        rain.gain.gain.setValueAtTime(Math.max(0.0001, rain.gain.gain.value), now);
+        rain.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        rain.src.stop(now + 0.6);
+        rain = null;
     }
 
     // --- Drawing: helpers ---
@@ -4378,6 +5098,23 @@
     function draw(time) {
         sizeCanvas();
         if (!boardLayer) boardLayer = buildBoard();
+        // Before a case the board is hidden behind the curtain; then the story plays.
+        if (story || !run) {
+            ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, W, H);
+            if (story) {
+                drawStory(time);
+            } else {
+                drawCurtain(0, time);
+                const status = idleStatus();
+                if (status !== lastStatus) {
+                    lastStatus = status;
+                    statusEl.textContent = status;
+                }
+            }
+            return;
+        }
         const game = run;
         const t = game ? game.t : 0;
 
@@ -4464,7 +5201,8 @@
     function frame(now) {
         const dt = lastNow === null ? 0 : Math.min(0.05, (now - lastNow) / 1000);
         lastNow = now;
-        if (playing()) advanceRun(dt * speed);
+        if (story) advanceStory(dt * speed);
+        else if (playing()) advanceRun(dt * speed);
         draw(now / 1000);
         requestAnimationFrame(frame);
     }
