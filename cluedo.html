@@ -316,6 +316,20 @@
         .paper-actions { display: flex; gap: 8px; margin-top: 12px; }
         .paper-actions button { margin: 0; font-size: 13px; padding: 8px; }
         #playAgainBtn { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); }
+        #resumeBtn {
+            position: absolute;
+            left: 50%;
+            bottom: 9%;
+            transform: translateX(-50%);
+            width: auto;
+            padding: 12px 34px;
+            font-size: 18px;
+            background: var(--clue-red);
+            box-shadow: 0 5px 0 var(--clue-red-dark), 0 10px 30px rgba(0, 0, 0, 0.5);
+            animation: resumePulse 1.2s ease-in-out infinite;
+        }
+        #resumeBtn:hover { background: #d8393f; }
+        @keyframes resumePulse { 50% { transform: translateX(-50%) scale(1.06); } }
         #copyMsg { min-height: 1.1em; font-size: 12px; text-align: center; margin-top: 4px; font-family: 'Trebuchet MS', sans-serif; }
 
         /* Read out by screen readers; shown as text under the board on small screens. */
@@ -342,7 +356,7 @@
         .summary.fail { color: var(--error-color); }
 
         @media (prefers-reduced-motion: reduce) {
-            .paper { animation: none; }
+            .paper, #resumeBtn { animation: none; }
         }
         @media (max-width: 820px) {
             body { padding: 12px; }
@@ -360,6 +374,8 @@
             .subhead { font-size: 12px; margin: 0; }
             .story { display: none; }
             .paper-actions { margin-top: 5px; gap: 4px; }
+            /* The status text sits under the board here, so anchor to the board's own height. */
+            #resumeBtn { padding: 6px 18px; font-size: 13px; bottom: auto; top: calc((100vw - 24px) * 0.56); }
             .paper-actions button { font-size: 10px; padding: 4px; box-shadow: none; }
             #copyMsg { font-size: 10px; min-height: 0; }
             #status {
@@ -392,6 +408,9 @@
             <button id="startBtn" disabled>Start Investigation</button>
             <button id="skipBtn" hidden>Skip to verdict</button>
             <div class="tool-row">
+                <button id="pauseBtn" aria-pressed="true">Pause on clues: on</button>
+            </div>
+            <div class="tool-row">
                 <button id="speedBtn" aria-label="Playback speed">Speed 1×</button>
                 <button id="muteBtn" aria-pressed="false">Sound: on</button>
                 <button id="fullBtn">Fullscreen</button>
@@ -401,12 +420,13 @@
                 so every name has exactly the same chance. Fake-outs and witnesses are drawn just as evenly, so nothing
                 on screen gives the culprit away. <a href="?selftest">Run the fairness self-test</a>
             </p>
-            <p class="keys"><kbd>Space</kbd> start · <kbd>S</kbd> skip · <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd> speed · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen</p>
+            <p class="keys"><kbd>Space</kbd> start / resume · <kbd>S</kbd> skip · <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd> speed · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen</p>
         </div>
 
         <div class="game-area" id="gameArea">
             <canvas id="gameCanvas" width="1000" height="700" aria-label="Data centre floor plan"></canvas>
             <div id="status" aria-live="polite"></div>
+            <button id="resumeBtn" hidden>▶ Resume</button>
             <div id="verdictOverlay" hidden aria-live="polite">
                 <article class="paper">
                     <div class="masthead">The Daily Standup</div>
@@ -447,8 +467,9 @@
         const START_ROOM = -1;      // the Inspector starts in the War Room, which is not a suspect room
         const MIN_TURNS = 3;        // even two names get a proper investigation
         const FINAL_SINGLES = 3;    // the last three suspects are always cleared one at a time
-        // Seconds each part of a case takes at 1x. buildRun lays the timeline out with the same numbers.
-        const TIMING = { intro: 5.5, turn: 4.8, deduction: 3, accusation: 5.2 };
+        // Seconds each part of a case takes at 1x. buildRun lays the timeline out from schedule(), so the
+        // game and the self-test always agree on how long a case runs.
+        const TIMING = { intro: 5.5, single: 5.8, fake: 5.8, batch: 5.0, recap: 2.6, showdown: 6.5, accusation: 4.8 };
         // Chi-square critical values at p = 0.001, indexed by degrees of freedom.
         const CHI_CRITICAL = [NaN, 10.828, 13.816, 16.266, 18.467, 20.515, 22.458, 24.322,
             26.124, 27.877, 29.588, 31.264, 32.909, 34.528, 36.123];
@@ -602,7 +623,9 @@
                     at = turnRoom;
                 }
             }
-            return { culprit, room, weapon, turns };
+            // In the final showdown the last two suspects sit side by side; which side the culprit
+            // gets is its own fair coin, so where they sit says nothing.
+            return { culprit, room, weapon, turns, culpritSide: rng(2) };
         }
 
         // Re-checks a plan turn by turn against the rules above.
@@ -610,7 +633,8 @@
             const { culprit, room, weapon, turns } = plan;
             const inRange = (x, max) => Number.isInteger(x) && x >= 0 && x < max;
             if (!inRange(culprit, n) || !inRange(room, ROOMS.length) || !inRange(weapon, WEAPONS.length)) return false;
-            if (turns.length < MIN_TURNS || turns.at(-1).kind !== 'clear') return false;
+            if (turns.length < MIN_TURNS || turns.at(-1).kind !== 'clear' || turns.at(-1).suspects.length !== 1) return false;
+            if (plan.culpritSide !== 0 && plan.culpritSide !== 1) return false;
             const uncleared = new Set([...Array(n).keys()]);
             const clearSizes = [];
             let at = START_ROOM;
@@ -639,8 +663,28 @@
             return clearSizes.slice(-FINAL_SINGLES).every(size => size === 1);
         }
 
+        // When everything happens: each turn in order, then the recap, then the last clearing is
+        // played as the two-suspect showdown, then the accusation.
+        function schedule(plan) {
+            const last = plan.turns.length - 1;
+            const starts = [];
+            let t = TIMING.intro;
+            plan.turns.forEach((turn, k) => {
+                if (k === last) return;
+                starts.push(t);
+                t += turn.kind === 'fake' ? TIMING.fake : turn.suspects.length > 1 ? TIMING.batch : TIMING.single;
+            });
+            const recap = t;
+            t += TIMING.recap;
+            const showdown = t;
+            starts.push(t);
+            t += TIMING.showdown;
+            const accusation = t;
+            return { starts, recap, showdown, accusation, end: t + TIMING.accusation };
+        }
+
         function estimateDuration(plan) {
-            return TIMING.intro + plan.turns.length * TIMING.turn + TIMING.deduction + TIMING.accusation;
+            return schedule(plan).end;
         }
 
         const pct = x => (x * 100).toFixed(1) + '%';
@@ -663,7 +707,7 @@
         function startSelfTest({ trials = 5000, plan = planGame, sizes = [2, 5, 10, 15] } = {}) {
             const checks = [];
             const total = trials * sizes.length;
-            const fakeTell = tellCounter(), witnessTell = tellCounter();
+            const fakeTell = tellCounter(), witnessTell = tellCounter(), sideTell = tellCounter();
             let sizeIdx = 0, t = 0, wins = null, positions = null;
             let broken = 0, plans = 0, minTime = Infinity, maxTime = 0;
 
@@ -714,6 +758,7 @@
                             }
                             if (turn.kind === 'clear') turn.suspects.forEach(i => uncleared.delete(i));
                         }
+                        sideTell.add(0.5, p.culpritSide === 0);
                         const time = estimateDuration(p);
                         minTime = Math.min(minTime, time);
                         maxTime = Math.max(maxTime, time);
@@ -747,8 +792,14 @@
                         `${witnessTell.expected.toFixed(1)} · z ${witnessTell.z().toFixed(2)} (limit ±${Z_CRITICAL})`,
                 });
                 all.push({
-                    name: 'Every case takes between 20 and 70 seconds at normal speed',
-                    passed: minTime >= 20 && maxTime <= 70,
+                    name: 'The showdown gives nothing away: the culprit sits on the left half the time',
+                    passed: Math.abs(sideTell.z()) < Z_CRITICAL,
+                    detail: `culprit on the left ${sideTell.observed.toLocaleString()} times · fair coin expects ` +
+                        `${sideTell.expected.toFixed(1)} · z ${sideTell.z().toFixed(2)} (limit ±${Z_CRITICAL})`,
+                });
+                all.push({
+                    name: 'Every case takes between 20 and 80 seconds at normal speed',
+                    passed: minTime >= 20 && maxTime <= 80,
                     detail: `shortest ${minTime.toFixed(1)} s · longest ${maxTime.toFixed(1)} s`,
                 });
                 return { passed: all.every(c => c.passed), checks: all, plans };
@@ -766,7 +817,7 @@
         return {
             MAX_NAMES, MAX_NAME_LENGTH, ROOMS, WEAPONS, START_ROOM, TIMING,
             secureInt, shuffle, chiSquare, criticalValue,
-            validateName, parseSavedNames, planGame, planIsValid, estimateDuration, startSelfTest, runSelfTest,
+            validateName, parseSavedNames, planGame, planIsValid, schedule, estimateDuration, startSelfTest, runSelfTest,
         };
     })();
 </script>
@@ -785,6 +836,8 @@
     const speedBtn = document.getElementById('speedBtn');
     const muteBtn = document.getElementById('muteBtn');
     const fullBtn = document.getElementById('fullBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
     const gameArea = document.getElementById('gameArea');
     const statusEl = document.getElementById('status');
     const verdictOverlay = document.getElementById('verdictOverlay');
@@ -802,7 +855,8 @@
     // Everything is drawn in a 1000 x 700 world; the backing store is scaled up on
     // high-DPI screens so the artwork stays crisp.
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    const mainCtx = canvas.getContext('2d');
+    let ctx = mainCtx; // the shared drawing helpers draw into whichever context this points at
     const W = 1000, H = 700;
     const TAU = Math.PI * 2;
     let pixelRatio = 0;
@@ -815,6 +869,7 @@
         canvas.width = W * ratio;
         canvas.height = H * ratio;
         boardLayer = null;
+        cardCache.clear();
     }
     window.addEventListener('resize', sizeCanvas);
 
@@ -965,6 +1020,7 @@
     let confetti = [];
     let flashes = [];
     let speed = 1;
+    let pauseOnClues = true; // stop after each reveal until someone presses Resume
     let lastStatus = '';
     let notebook = null;
     const playing = () => run !== null && !run.done;
@@ -985,10 +1041,11 @@
         return audioCtx;
     }
 
-    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0 }) {
+    // `at` schedules on the audio clock (the soundtrack); `delay` is relative to now.
+    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0, at = null }) {
         const ac = audio();
         if (!ac) return;
-        const t0 = ac.currentTime + delay;
+        const t0 = at ?? ac.currentTime + delay;
         const osc = ac.createOscillator();
         const gain = ac.createGain();
         osc.type = type;
@@ -1013,10 +1070,10 @@
     }
 
     // Filtered white noise for footsteps, card flicks, static and thuds.
-    function noise({ dur, vol = 0.1, delay = 0, filter = 'lowpass', from = 1200, to = from, q = 1 }) {
+    function noise({ dur, vol = 0.1, delay = 0, filter = 'lowpass', from = 1200, to = from, q = 1, at = null }) {
         const ac = audio();
         if (!ac) return;
-        const t0 = ac.currentTime + delay;
+        const t0 = at ?? ac.currentTime + delay;
         const src = ac.createBufferSource();
         src.buffer = getNoise(ac);
         const f = ac.createBiquadFilter();
@@ -1148,6 +1205,36 @@
                 noise({ dur: 0.18, vol: 0.25, from: 400, to: 80 });
                 tone({ type: 'sine', from: 95, to: 50, dur: 0.2, vol: 0.25 });
                 noise({ dur: 0.12, vol: 0.12, filter: 'highpass', from: 4000, to: 1500, delay: 0.05 });
+                break;
+            case 'drumroll':
+                for (let i = 0; i < 13; i++) noise({ dur: 0.04, vol: 0.02 + i * 0.008, delay: i * 0.032, filter: 'bandpass', from: 1700, q: 1.5 });
+                break;
+            case 'type':
+                noise({ dur: 0.02, vol: 0.035, filter: 'highpass', from: 3200 });
+                break;
+            case 'chat':
+                tone({ type: 'sine', from: 880, to: 1320, dur: 0.07, vol: 0.05 });
+                break;
+            case 'pager':
+                [0, 0.12].forEach(d => tone({ type: 'square', from: 2600, dur: 0.06, vol: 0.025, delay: d }));
+                break;
+            case 'firebell':
+                for (let i = 0; i < 14; i++) tone({ type: 'square', from: i % 2 ? 950 : 1250, dur: 0.06, vol: 0.03, delay: i * 0.07 });
+                break;
+            case 'roomba':
+                tone({ type: 'sine', from: 260, to: 340, dur: 0.9, vol: 0.04 });
+                [0.2, 0.55].forEach(d => tone({ type: 'sine', from: 1500, dur: 0.05, vol: 0.03, delay: d }));
+                break;
+            case 'squeak':
+                tone({ type: 'sine', from: 1500, to: 2300, dur: 0.12, vol: 0.06 });
+                tone({ type: 'sine', from: 2300, to: 1400, dur: 0.12, vol: 0.06, delay: 0.12 });
+                break;
+            case 'heartbeat':
+                [0, 0.22].forEach(d => tone({ type: 'sine', from: 70, to: 40, dur: 0.16, vol: 0.32, delay: d }));
+                break;
+            case 'lie':
+                tone({ type: 'sawtooth', from: 130, dur: 0.6, vol: 0.07 });
+                tone({ type: 'square', from: 98, dur: 0.6, vol: 0.04 });
                 break;
             case 'headline':
                 for (let i = 0; i < 10; i++) noise({ dur: 0.03, vol: 0.16, delay: 0.15 + i * 0.075, filter: 'highpass', from: 2500 });
@@ -1298,6 +1385,7 @@
     function resetBoard() {
         suspects = participants.map((name, i) => ({ name, hue: hueFor(i), tag: fitTag(name) }));
         run = null;
+        cardCache.clear();
         notebook = freshNotebook();
         confetti = [];
         flashes = [];
@@ -1328,11 +1416,106 @@
     // --- Building a case's timeline ---
     // A case is a fixed timeline worked out from the plan before anything moves. Every
     // frame just asks "where is everything at time t?", so Skip only has to jump to the end.
-    const T_ROLL = 0.8, T_WALK = 1.4, T_ASK = 1.2, T_REVEAL = 1.4; // one turn: adds up to ClueCore.TIMING.turn
+    // How each kind of turn is split up; each adds up to its ClueCore.TIMING entry.
+    const PHASES = {
+        single: { roll: 0.5, walk: 1.0, ask: 1.5, reveal: 2.8 },
+        group: { roll: 0.5, walk: 0.9, ask: 0.8, reveal: 2.8 },
+    };
+    // Reveals play slowly enough to follow: the caption says what's being checked first,
+    // the animation runs at 1/REVEAL_SLOW speed, then the result holds on screen.
+    const REVEAL_LEAD = 0.3, REVEAL_SLOW = 1.5;
+    const TYPE_RATE = 75; // narration types itself out at this many characters a second
+
+    // Cosmetic choices (excuses, which reveal, which exit…) can never change who did it,
+    // so they use Math.random.
+    const randInt = n => Math.floor(Math.random() * n);
+    const pickOne = list => list[randInt(list.length)];
+    function shuffled(list) {
+        const out = [...list];
+        for (let i = out.length - 1; i > 0; i--) {
+            const j = randInt(i + 1);
+            [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+    }
+    // Deals from a shuffled deck, so nothing repeats until everything has had a turn.
+    function deck(list) {
+        let pile = [];
+        return () => {
+            if (!pile.length) pile = shuffled(list);
+            return pile.pop();
+        };
+    }
+    function randomAxis() {
+        const v = [Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5];
+        const m = Math.hypot(...v) || 1;
+        return v.map(x => x / m);
+    }
+
+    // Every suspect gets a random job each case, and excuses to match.
+    const ROLES = {
+        'SRE': ['I was paged for something else!', 'I was writing the runbook!'],
+        'Intern': ['I only have read access!', "It's my first week!"],
+        'DBA': ['The database was fine. FINE.', 'I was vacuuming tables!'],
+        'Product Manager': ['I was writing a roadmap!', "I don't even know where prod is!"],
+        'Architect': ['I was drawing boxes and arrows!', "I designed it. I don't touch it."],
+        'Frontend Dev': ['I was centring a div!', 'It works in Chrome!'],
+        'Backend Dev': ['My code has tests! Somewhere.', 'It passed on my machine!'],
+        'QA Engineer': ["I found the bug. I didn't make it!", 'I was writing a test plan!'],
+        'Scrum Master': ['I was moving tickets!', 'I was timeboxing!'],
+        'CTO': ['I was in the board meeting!', "I approved it. I didn't do it."],
+        'Data Scientist': ['I was training a model!', "The model says it wasn't me."],
+        'Security Engineer': ['I was rotating keys!', 'I locked it down. Then it went down.'],
+        'Designer': ['I was choosing a font!', 'I was in Figma!'],
+        'DevOps Engineer': ['The pipeline was green!', 'I was writing YAML!'],
+        'Support Engineer': ['I was on the phone with a customer!', 'I was closing tickets!'],
+        'Tech Lead': ['I was reviewing a PR!', 'I was in back-to-back meetings!'],
+    };
+    const ROLE_NAMES = Object.keys(ROLES);
+    const EXCUSES = ['I was in standup!', 'I was on PTO!', "I don't have prod access!", 'It\'s always DNS. Not me.',
+        'I was getting coffee!', 'I only touched staging!', 'My laptop was updating!', 'I was in a meeting about meetings!',
+        'I was asleep. Honest.', 'Have you tried blaming the intern?', 'I was refactoring… nothing!', 'Check the logs! Actually, don\'t.'];
+    const WITNESS_LINES = ['I can vouch!', 'They were with me!', 'I have receipts!', 'Check this out!', 'Not them!', 'Alibi, right here!'];
+    const NOIR = [
+        'The racks blinked at me like they knew something.',
+        'The NOC hummed like a guilty conscience.',
+        'The UPS whined like a witness with a secret.',
+        'It smelled of burnt coffee and bad decisions.',
+        'Cold in here. Colder than a rejected pull request.',
+        'Where good ideas go to get scheduled.',
+        'Nothing gets loaded at 3 am. Except trouble.',
+        'Empty desks. Abandoned hoodies. Half a sandwich.',
+        "The guard was asleep. The cameras weren't.",
+    ];
+    const CHATTER = [
+        ['CEO', 'Joining from the airport. Status?'], ['Support', "Customers are asking if it's just them"],
+        ['Status page', 'Updated: "Investigating"'], ['Marketing', "Can we call it 'planned maintenance'?"],
+        ['Legal', 'Nobody write "data loss" anywhere'], ['Finance', 'How much is this costing per minute?'],
+        ['On-call bot', 'Have you tried turning it off and on again?'], ['Facilities', 'The coffee machine is also down'],
+        ['DNS', "It wasn't me this time"], ['Security', 'Someone left a USB stick in the car park'],
+        ['Sales', 'I have a demo in 4 hours. No pressure.'], ['HR', 'Reminder: be kind in the post-mortem'],
+    ];
+    const CLEARED_CHATTER = ["Told you it wasn't me ☕", 'Back to the Break Room then', 'Can I go home now?',
+        'Called it. Not guilty.', 'Somebody owes me an apology', 'Biscuits are in the Break Room 🍪'];
+    const ACT_HUES = { 'CEO': 210, 'PagerDuty': 140, 'Support': 30, 'Status page': 190, 'Marketing': 320, 'Legal': 260,
+        'Finance': 90, 'On-call bot': 170, 'Facilities': 45, 'DNS': 0, 'Security': 230, 'Sales': 15, 'HR': 300 };
+    const EXITS = ['hop', 'moonwalk', 'roomba', 'escort', 'zip'];
+    const GROUP_ASKS = { cctv: 'Roll the tape!', badge: 'Pull the door logs!', zoom: 'Check the recording!', rota: 'Who was on call?', thermal: 'Thermal cam!' };
+
+    // The War Room furniture for the final showdown.
+    const SEATS = [
+        { x: ROOM_RECTS[WAR].x + 46, y: ROOM_RECTS[WAR].y + 150 },
+        { x: ROOM_RECTS[WAR].x + ROOM_RECTS[WAR].w - 46, y: ROOM_RECTS[WAR].y + 150 },
+    ];
+    const POLYGRAPHS = [
+        { x: ROOM_RECTS[WAR].x + 92, y: ROOM_RECTS[WAR].y + 132 },
+        { x: ROOM_RECTS[WAR].x + ROOM_RECTS[WAR].w - 92, y: ROOM_RECTS[WAR].y + 132 },
+    ];
+    const SHOW_INSP = { x: ROOM_RECTS[WAR].x + ROOM_RECTS[WAR].w / 2, y: ROOM_RECTS[WAR].y + ROOM_RECTS[WAR].h - 16 };
 
     // An actor's position at time t: the latest move that has started decides it.
     function trackAt(track, t) {
-        let s = { x: track.start.x, y: track.start.y, lift: 0, scale: 1, moving: false, dir: 1 };
+        let s = { x: track.start.x, y: track.start.y, lift: 0, scale: 1, moving: false, dir: 1, style: null };
         for (const m of track.moves) {
             if (t < m.t0) break;
             s = moveAt(m, phase(t, m.t0, m.t1), s);
@@ -1343,60 +1526,89 @@
     function moveAt(m, f, prev) {
         const moving = f > 0 && f < 1;
         if (m.type === 'glide') {
-            const e = easeInOut(f);
-            return { x: lerp(m.from.x, m.to.x, e), y: lerp(m.from.y, m.to.y, e), lift: Math.sin(Math.PI * f) * 22,
-                scale: 1, moving, dir: Math.sign(m.to.x - m.from.x) || prev.dir };
+            const style = m.style || 'hop';
+            const e = style === 'zip' ? easeIn(f) : easeInOut(f);
+            const lift = style === 'hop' ? Math.sin(Math.PI * f) * 22 : style === 'roomba' ? 4
+                : style === 'escort' ? Math.abs(Math.sin(f * 26)) * 2.5 : 0;
+            const sway = style === 'moonwalk' && moving ? Math.sin(f * 30) * 3 : 0;
+            return { x: lerp(m.from.x, m.to.x, e) + sway, y: lerp(m.from.y, m.to.y, e), lift: moving ? lift : 0,
+                scale: 1, moving, dir: Math.sign(m.to.x - m.from.x) || prev.dir, style: moving ? style : null };
         }
         if (m.type === 'path') {
             const p = along(m.path, easeInOut(f));
-            return { x: p.x, y: p.y, lift: moving ? Math.abs(Math.sin(f * 40)) * 3 : 0, scale: 1, moving, dir: Math.sign(p.dx) || prev.dir };
+            return { x: p.x, y: p.y, lift: moving ? Math.abs(Math.sin(f * 40)) * 3 : 0, scale: 1, moving, dir: Math.sign(p.dx) || prev.dir, style: null };
         }
         // Tunnel: walk to the hatch and drop out of sight, then climb out of the far hatch.
         if (f < 0.5) {
             const p = along(m.a, easeInOut(phase(f, 0, 0.3)));
-            return { x: p.x, y: p.y, lift: 0, scale: 1 - phase(f, 0.3, 0.48), moving, dir: Math.sign(p.dx) || prev.dir };
+            return { x: p.x, y: p.y, lift: 0, scale: 1 - phase(f, 0.3, 0.48), moving, dir: Math.sign(p.dx) || prev.dir, style: null };
         }
         const p = along(m.b, easeInOut(phase(f, 0.7, 1)));
-        return { x: p.x, y: p.y, lift: 0, scale: phase(f, 0.52, 0.7), moving, dir: Math.sign(p.dx) || prev.dir };
+        return { x: p.x, y: p.y, lift: 0, scale: phase(f, 0.52, 0.7), moving, dir: Math.sign(p.dx) || prev.dir, style: null };
     }
 
     const lastPos = track => (track.moves.length ? track.moves.at(-1).to : track.start);
 
     function buildRun(plan) {
         const { TIMING } = ClueCore;
+        const sched = ClueCore.schedule(plan);
         const n = suspects.length;
+        const last = plan.turns.length - 1;
         const game = {
-            plan, t: 0, nextEvent: 0, skipped: false, done: false, celebrated: false,
-            events: [], statuses: [], dice: [], bubbles: [], cards: [], cctv: [], rings: [], twists: [],
-            clearedAt: new Array(n).fill(Infinity),
+            plan, sched, t: 0, nextEvent: 0, skipped: false, done: false, celebrated: false,
+            end: sched.end, accuseAt: sched.accusation, namedAt: sched.accusation + 0.3,
+            musicFrom: TIMING.intro - 0.5, musicTo: sched.showdown,
+            events: [], statuses: [], camKeys: [], dice: [], bubbles: [], reveals: [], rings: [], twists: [],
+            lamps: [], acts: [], chat: [], pagers: [],
+            clearedAt: new Array(n).fill(Infinity), clearOrder: [],
+            roles: shuffled(ROLE_NAMES).slice(0, n),
+            recap: { t0: sched.recap, t1: sched.showdown },
             pawnTracks: START_SPOTS.slice(0, n).map(p => ({ start: p, moves: [] })),
             weaponTracks: WEAPON_HOME.map((room, w) => ({ start: weaponSpot(room, WEAPON_HOME.slice(0, w).filter(r => r === room).length), moves: [] })),
             inspTrack: { start: INSP_SPOTS[WAR], moves: [] },
         };
         const ev = (t, props) => game.events.push({ t, ...props });
-        const say = (t, text) => game.statuses.push({ t, text });
+        // Narration types itself out, with a soft clack every few letters.
+        const say = (t, text) => {
+            game.statuses.push({ t, text });
+            for (let k = 0; k < Math.min(text.length, 70); k += 6) ev(t + k / TYPE_RATE, { sound: 'type' });
+        };
+        const cam = (t, mode, extra = {}) => game.camKeys.push({ t, mode, ...extra });
+        const chat = (t, from, text, hue) => {
+            game.chat.push({ t, from, text, hue });
+            ev(t, { sound: 'chat' });
+        };
         const nameOf = i => suspects[i].name;
+        const singleDeck = deck(SINGLE_REVEALS), groupDeck = deck(GROUP_REVEALS), fakeDeck = deck(FAKE_REVEALS);
+        const exitDeck = deck(EXITS), chatterDeck = deck(CHATTER), excuseDeck = deck(EXCUSES), witnessDeck = deck(WITNESS_LINES);
+        const activityDeck = deck(ACTIVITIES), meetingDeck = deck(MEETINGS);
+        const excuseFor = i => (Math.random() < 0.6 ? pickOne(ROLES[game.roles[i]]) : excuseDeck());
 
         // Who is standing in which room, so everyone gets a spot of their own.
         const pawnRoom = new Array(n).fill(-1);
         const pawnOcc = ROOM_DEFS.map(() => []);
         const weaponRoom = [...WEAPON_HOME];
         const weaponOcc = ROOM_DEFS.map((_, r) => WEAPON_HOME.flatMap((home, w) => (home === r ? [w] : [])));
-        function place(occ, rooms, tracks, i, room, t0, t1, spotFor) {
+        function place(occ, rooms, tracks, i, room, t0, t1, spotFor, style) {
             if (rooms[i] === room) return;
-            if (rooms[i] >= 0) occ[rooms[i]][occ[rooms[i]].indexOf(i)] = undefined;
+            if (rooms[i] >= 0 && occ[rooms[i]].includes(i)) occ[rooms[i]][occ[rooms[i]].indexOf(i)] = undefined;
             let k = 0;
             while (occ[room][k] !== undefined) k++;
             occ[room][k] = i;
             rooms[i] = room;
-            tracks[i].moves.push({ type: 'glide', t0, t1, from: lastPos(tracks[i]), to: spotFor(room, k) });
+            tracks[i].moves.push({ type: 'glide', t0, t1, from: lastPos(tracks[i]), to: spotFor(room, k), style });
         }
-        const movePawn = (i, room, t0, t1) => place(pawnOcc, pawnRoom, game.pawnTracks, i, room, t0, t1, (r, k) => {
+        const movePawn = (i, room, t0, t1, style = 'hop') => place(pawnOcc, pawnRoom, game.pawnTracks, i, room, t0, t1, (r, k) => {
             const slots = SLOTS[r];
             const s = slots[k % slots.length];
             return k < slots.length ? s : { x: s.x + 7, y: s.y - 6 };
-        });
-        const moveWeapon = (w, room, t0, t1) => place(weaponOcc, weaponRoom, game.weaponTracks, w, room, t0, t1, weaponSpot);
+        }, style);
+        const moveWeapon = (w, room, t0, t1, style = 'hop') => place(weaponOcc, weaponRoom, game.weaponTracks, w, room, t0, t1, weaponSpot, style);
+        function seat(i, spot, t0, t1) {
+            if (pawnRoom[i] >= 0 && pawnOcc[pawnRoom[i]].includes(i)) pawnOcc[pawnRoom[i]][pawnOcc[pawnRoom[i]].indexOf(i)] = undefined;
+            pawnRoom[i] = WAR;
+            game.pawnTracks[i].moves.push({ type: 'glide', t0, t1, from: lastPos(game.pawnTracks[i]), to: spot, style: 'hop' });
+        }
         function walk(from, to, t0, t1) {
             if (TUNNELS[from] === to) {
                 game.inspTrack.moves.push({ type: 'tunnel', t0, t1, to: INSP_SPOTS[to],
@@ -1410,47 +1622,47 @@
             return false;
         }
 
-        // --- Intro: the alarm, the flatline, the Incident Report sealed ---
+        // --- Intro: the alarm, the fly-in, the flatline, the Incident Report sealed ---
+        cam(0, 'full');
         say(0, '3:07 am. PROD-01 has flatlined!');
         ev(0, { sound: 'klaxon' });
-        ev(0.6, { sound: 'flatline' });
-        say(2.4, 'The Incident Report is sealed: one suspect, one location, one piece of kit.');
-        ev(2.4, { sound: 'cards' });
-        say(4.3, 'The Inspector takes the case.');
-        ev(4.3, { sound: 'start' });
+        ev(1.5, { sound: 'flatline' });
+        chat(0.8, 'PagerDuty', 'PROD-01 is DOWN · SEV-3 opened', ACT_HUES.PagerDuty);
+        chat(2.3, 'CEO', 'Is the website supposed to say 503?', ACT_HUES.CEO);
+        say(3.3, 'The Incident Report is sealed: one suspect, one location, one piece of kit.');
+        ev(3.3, { sound: 'cards' });
+        say(4.9, 'The Inspector takes the case.');
+        ev(4.9, { sound: 'start' });
 
-        // Twists are cosmetic set dressing: which turns get one is Math.random, and none of
-        // them lands on a clearing or changes any timing.
-        const twistKinds = reduceMotion.matches ? ['heat'] : ['blackout', 'surge', 'heat'];
+        // Two or three plot twists, on different turns.
+        const twistKinds = shuffled(reduceMotion.matches ? ['heat', 'firedrill', 'roomba', 'duck'] : ['blackout', 'surge', 'heat', 'firedrill', 'roomba', 'duck']);
         const twistTurns = new Map();
-        const candidates = plan.turns.map((_, k) => k).filter(k => k > 0 || plan.turns.length === 1);
-        for (let k = plan.turns.length >= 5 ? 2 : 1; k > 0 && candidates.length; k--) {
-            const turn = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
-            const unused = twistKinds.filter(x => ![...twistTurns.values()].includes(x));
-            const pool = unused.length ? unused : twistKinds;
-            twistTurns.set(turn, pool[Math.floor(Math.random() * pool.length)]);
-        }
+        shuffled([...Array(last).keys()]).slice(0, last >= 5 ? 3 : last >= 3 ? 2 : last >= 1 ? 1 : 0)
+            .forEach((k, j) => twistTurns.set(k, twistKinds[j]));
 
         // --- The investigation ---
         let at = WAR;
-        plan.turns.forEach((turn, k) => {
-            const T = TIMING.intro + k * TIMING.turn;
-            const w0 = T + T_ROLL, a0 = w0 + T_WALK, r0 = a0 + T_ASK, end = r0 + T_REVEAL;
+        for (let k = 0; k < last; k++) {
+            const turn = plan.turns[k];
+            const T = sched.starts[k];
+            const group = turn.suspects.length > 1;
+            const ph = group ? PHASES.group : PHASES.single;
+            const w0 = T + ph.roll, a0 = w0 + ph.walk, r0 = a0 + ph.ask, end = r0 + ph.reveal;
             const roomName = ROOM_NAMES[turn.room], weaponName = WEAPON_NAMES[turn.weapon];
 
-            // Dice faces are cosmetic, so Math.random is fine here.
-            const faces = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
-            game.dice.push({ t0: T, roll: w0, t1: w0 + 0.7, faces });
+            const faces = [1 + randInt(6), 1 + randInt(6)];
+            game.dice.push({ t0: T, roll: w0, t1: w0 + 0.75, faces, axes: [randomAxis(), randomAxis()] });
             ev(T, { sound: 'dice' });
             say(T, `Lead ${k + 1} of ${plan.turns.length}: the Inspector rolls ${faces[0] + faces[1]}…`);
+            cam(T, 'follow');
 
             const tunnel = walk(at, turn.room, w0, a0);
             const twist = twistTurns.get(k);
             if (twist === 'blackout') {
-                game.twists.push({ kind: twist, t0: T + 0.5, t1: a0 + 0.1 });
-                ev(T + 0.5, { sound: 'blackout' });
+                game.twists.push({ kind: twist, t0: T + 0.4, t1: a0 + 0.1 });
+                ev(T + 0.4, { sound: 'blackout' });
                 ev(a0 - 0.4, { sound: 'generator' });
-                say(T + 0.5, `⚡ Power cut! The Inspector heads for the ${roomName} by torchlight…`);
+                say(T + 0.4, `⚡ Power cut! The Inspector heads for the ${roomName} by torchlight…`);
             } else if (twist === 'surge') {
                 game.twists.push({ kind: twist, t0: w0 + 0.2, t1: w0 + 0.75 });
                 ev(w0 + 0.2, { sound: 'surge' });
@@ -1459,94 +1671,214 @@
                 game.twists.push({ kind: twist, t0: T + 0.4, t1: r0 });
                 ev(T + 0.4, { sound: 'heat' });
                 say(T + 0.4, `🔥 Cooling failure! It's getting hot on the way to the ${roomName}…`);
+            } else if (twist === 'firedrill') {
+                // Everyone still without an alibi, culprit included, scatters to random rooms.
+                game.twists.push({ kind: twist, t0: T + 0.3, t1: T + 1.9 });
+                ev(T + 0.3, { sound: 'firebell' });
+                say(T + 0.3, '🚨 Fire drill! Everyone without an alibi scatters to a new room…');
+                suspects.forEach((_, i) => {
+                    if (game.clearedAt[i] !== Infinity) return;
+                    const rooms = ClueCore.ROOMS.map((_, r) => r).filter(r => r !== pawnRoom[i] && r !== BREAK);
+                    movePawn(i, pickOne(rooms), T + 0.45 + i * 0.03, T + 1.3 + i * 0.03, 'zip');
+                });
+            } else if (twist === 'roomba') {
+                const w = pickOne(WEAPON_NAMES.map((_, i) => i).filter(i => i !== turn.weapon));
+                const dest = pickOne(ClueCore.ROOMS.map((_, r) => r).filter(r => r !== weaponRoom[w]));
+                game.twists.push({ kind: twist, t0: w0, t1: a0 });
+                moveWeapon(w, dest, w0, a0 - 0.05, 'roomba');
+                ev(w0, { sound: 'roomba' });
+                say(w0, `🤖 The robot vacuum has made off with the ${WEAPON_NAMES[w]}!`);
+            } else if (twist === 'duck') {
+                game.twists.push({ kind: twist, t0: T + 0.5, t1: r0 });
+                game.bubbles.push({ t0: T + 0.7, t1: T + 1.6, who: 'duck', text: 'Quack.' });
+                ev(T + 0.7, { sound: 'squeak' });
+                ev(T + 1.3, { sound: 'squeak' });
+                say(T + 0.5, '🦆 A rubber duck witness comes forward. It says nothing useful.');
             } else {
-                say(w0 + 0.1, tunnel ? `…and slips into the cable tunnel to the ${roomName}!` : `Heading for the ${roomName}…`);
+                say(w0 + 0.1, `${tunnel ? 'Down the cable tunnel to' : 'To'} the ${roomName}. ${NOIR[turn.room]}`);
             }
             at = turn.room;
 
-            if (turn.suspects.length === 1) {
+            // The incident channel never names anyone still under suspicion.
+            const chatAt = T + 0.5 + Math.random() * 0.9;
+            if (game.clearOrder.length && Math.random() < 0.45) {
+                const i = pickOne(game.clearOrder);
+                chat(chatAt, nameOf(i), pickOne(CLEARED_CHATTER), suspects[i].hue);
+                const pagerAt = T + Math.random() * 3;
+                game.pagers.push({ t: pagerAt, who: pickOne(game.clearOrder) });
+                ev(pagerAt, { sound: 'pager' });
+            } else {
+                const [from, text] = chatterDeck();
+                chat(chatAt, from, text, ACT_HUES[from]);
+            }
+            if (k === Math.floor(last / 2)) chat(T + 2.2, 'PagerDuty', 'Still down · escalated to SEV-2', ACT_HUES.PagerDuty);
+
+            cam(a0, 'room', { room: turn.room });
+            if (!group) {
+                // Interrogation: identical for everyone, whatever happens next.
                 const s = turn.suspects[0], w = turn.witness;
-                game.bubbles.push({ t0: a0, t1: r0 + 0.1, who: 'insp', text: `Was it ${nameOf(s)}?` });
-                say(a0, `"Was it ${nameOf(s)}, in the ${roomName}, with the ${weaponName}?"`);
+                game.bubbles.push({ t0: a0, t1: a0 + 0.8, who: 'insp', text: `Was it ${nameOf(s)}?` });
+                say(a0, `"Was it ${nameOf(s)} the ${game.roles[s]}, in the ${roomName}, with the ${weaponName}?"`);
                 ev(a0, { sound: 'summon', mark: { type: 'question', who: [s] } });
-                movePawn(s, turn.room, a0 + 0.1, a0 + 0.75);
-                moveWeapon(turn.weapon, turn.room, a0 + 0.25, a0 + 0.9);
-                game.rings.push({ t0: r0 - 0.15, t1: end, who: w });
-                ev(r0, { sound: 'flip' });
+                movePawn(s, turn.room, a0 + 0.05, a0 + 0.6);
+                moveWeapon(turn.weapon, turn.room, a0 + 0.15, a0 + 0.7);
+                game.lamps.push({ t0: a0 + 0.45, t1: r0 + 0.1, who: s });
+                game.bubbles.push({ t0: a0 + 0.8, t1: r0 + 0.05, who: s, text: excuseFor(s) });
+                game.acts.push({ t0: a0 + 0.7, t1: r0 + 0.5, weapon: turn.weapon });
+                ev(r0 - 0.45, { sound: 'drumroll' });
+                cam(r0 - 0.05, 'full');
+                game.rings.push({ t0: r0 - 0.1, t1: end, who: w });
+                ev(r0 + REVEAL_LEAD, { sound: 'flip' });
+                const stampAt = r0 + REVEAL_LEAD + 0.85 * REVEAL_SLOW;
                 if (turn.kind === 'clear') {
-                    game.bubbles.push({ t0: r0 - 0.15, t1: end - 0.1, who: w, text: 'I can vouch!' });
-                    game.cards.push({ t0: r0, t1: end + 0.15, face: { type: 'suspect', index: s }, stampAt: r0 + 0.5, stamp: 'ALIBI', by: nameOf(w) });
-                    say(r0, `${nameOf(w)} vouches for ${nameOf(s)}. Alibi confirmed: ${nameOf(s)} is in the clear.`);
+                    const kind = singleDeck();
+                    const activity = activityDeck(), meeting = meetingDeck();
+                    const [pending, result] = singleText(kind, nameOf(s), nameOf(w), activity, meeting, weaponName);
+                    game.bubbles.push({ t0: r0 - 0.1, t1: r0 + 1.2, who: w, text: witnessDeck() });
+                    game.reveals.push({ kind, t0: r0, t1: end + 0.1, stampAt, stamp: 'ALIBI', good: true, pending, result, who: [s], witness: w,
+                        face: { type: 'suspect', index: s }, activity, meeting, commits: shuffled(COMMITS) });
+                    say(r0, pending);
+                    say(stampAt, result);
                 } else {
+                    const kind = fakeDeck();
                     const shown = turn.shown;
                     const cardName = shown.type === 'room' ? ROOM_NAMES[shown.index] : WEAPON_NAMES[shown.index];
-                    game.bubbles.push({ t0: r0 - 0.15, t1: end - 0.1, who: w, text: 'Not so fast!' });
-                    game.cards.push({ t0: r0, t1: end + 0.15, face: shown, stampAt: r0 + 0.5, stamp: 'NOT IT', by: nameOf(w) });
-                    say(r0, `${nameOf(w)} shows the ${cardName} card, so that's not it. ${nameOf(s)} isn't in the clear yet…`);
-                    ev(r0 + 0.5, { sound: 'nope', mark: { type: 'cross', kind: shown.type, index: shown.index } });
+                    const [pending, result] = fakeText(kind, nameOf(s), nameOf(w), cardName, shown.type);
+                    game.bubbles.push({ t0: r0 - 0.1, t1: r0 + 1.2, who: w, text: 'Not so fast!' });
+                    game.reveals.push({ kind, t0: r0, t1: end + 0.1, stampAt, stamp: 'NOT IT', good: false, pending, result, witness: w, face: shown });
+                    say(r0, pending);
+                    say(stampAt, result);
+                    ev(stampAt, { sound: 'nope', mark: { type: 'cross', kind: shown.type, index: shown.index } });
                 }
             } else {
-                // Several suspects at once: footage or door logs put them all somewhere else.
-                // Which flavour is cosmetic, so Math.random is fine here.
-                const flavour = Math.random() < 0.5 ? 'cctv' : 'badge';
-                game.bubbles.push({ t0: a0, t1: r0, who: 'insp', text: flavour === 'cctv' ? 'Roll the tape!' : 'Pull the door logs!' });
-                say(a0, flavour === 'cctv' ? `Pulling the CCTV from the ${roomName}…` : `Checking the badge-swipe logs at the ${roomName} door…`);
+                const kind = groupDeck();
+                const [pending, result] = groupText(kind, roomName, listNames(turn.suspects.map(nameOf)));
+                const t0 = r0 - 0.3, stampAt = t0 + REVEAL_LEAD + 1.0 * REVEAL_SLOW;
+                game.bubbles.push({ t0: a0, t1: r0, who: 'insp', text: GROUP_ASKS[kind] });
+                say(a0, `The Inspector checks the ${roomName}…`);
                 ev(a0, { sound: 'cctv' });
-                game.cctv.push({ t0: a0 + 0.15, t1: end + 0.15, room: turn.room, who: turn.suspects, flavour, stampAt: r0 + 0.5 });
-                say(r0 + 0.5, `${listNames(turn.suspects.map(nameOf))} were nowhere near PROD-01. All cleared!`);
+                cam(t0 - 0.05, 'full');
+                game.reveals.push({ kind, t0, t1: end + 0.1, stampAt, stamp: 'ALL CLEARED', good: true, pending, result, who: turn.suspects, room: turn.room });
+                say(t0, pending);
+                say(stampAt, result);
             }
             if (turn.kind === 'clear') {
-                ev(r0 + 0.5, { sound: 'alibi', mark: { type: 'clear', who: turn.suspects } });
+                const clearAt = game.reveals.at(-1).stampAt;
+                ev(clearAt, { sound: 'alibi', mark: { type: 'clear', who: turn.suspects } });
                 turn.suspects.forEach((s, j) => {
-                    game.clearedAt[s] = r0 + 0.5;
-                    movePawn(s, BREAK, end - 0.25 + j * 0.12, end + 0.75 + j * 0.12);
+                    game.clearedAt[s] = clearAt;
+                    game.clearOrder.push(s);
+                    const style = exitDeck();
+                    movePawn(s, BREAK, end - 0.15 + j * 0.15, end + (style === 'moonwalk' ? 1.3 : 0.9) + j * 0.15, style);
                 });
             }
-        });
+        }
 
-        // --- Deduction: every other lead closed off in the notebook ---
-        const D = TIMING.intro + plan.turns.length * TIMING.turn;
-        say(D, 'Every other lead is closed. The Inspector heads back to the War Room…');
-        if (at !== WAR) walk(at, WAR, D + 0.1, D + 1.7);
+        // --- Recap: the corkboard, and every other lead closed off ---
+        const R = sched.recap;
+        cam(R, 'full');
+        say(R, 'Every other lead is closed. Two suspects remain…');
+        if (at !== WAR) walk(at, WAR, R + 0.1, R + 1.6);
+        chat(R + 0.4, 'PagerDuty', 'SEV-1 declared. All hands.', ACT_HUES.PagerDuty);
         const shown = new Set(plan.turns.filter(t => t.kind === 'fake').map(t => `${t.shown.type}${t.shown.index}`));
         const leftovers = [
             ...ClueCore.ROOMS.map((_, i) => ({ kind: 'room', index: i })).filter(x => x.index !== plan.room),
             ...WEAPON_NAMES.map((_, i) => ({ kind: 'weapon', index: i })).filter(x => x.index !== plan.weapon),
         ].filter(x => !shown.has(`${x.kind}${x.index}`));
-        leftovers.forEach((x, j) => ev(D + 0.3 + (j * 2.4) / leftovers.length, { sound: 'tick', mark: { type: 'cross', ...x } }));
+        leftovers.forEach((x, j) => ev(R + 0.3 + (j * 2.0) / leftovers.length, { sound: 'tick', mark: { type: 'cross', ...x } }));
+
+        // --- Showdown: both last suspects on the polygraph; the spotlight decides ---
+        // Seats come from the plan's fair coin, and everything up to the landing is the same for both.
+        const S = sched.showdown;
+        const c = plan.culprit, loser = plan.turns[last].suspects[0];
+        const left = plan.culpritSide === 0 ? c : loser, right = left === c ? loser : c;
+        cam(S, 'room', { room: WAR, zoom: 1.7 });
+        say(S, 'Two suspects. One alibi. The polygraph never lies…');
+        ev(S, { sound: 'summon', mark: { type: 'question', who: [left, right] } });
+        seat(left, SEATS[0], S + 0.1, S + 0.8);
+        seat(right, SEATS[1], S + 0.1, S + 0.8);
+        game.inspTrack.moves.push({ type: 'path', t0: S, t1: S + 0.6, to: SHOW_INSP, path: polyline([INSP_SPOTS[WAR], SHOW_INSP]) });
+        game.bubbles.push({ t0: S + 0.8, t1: S + 1.8, who: 'insp', text: 'Where were you at 3:07?' });
+        game.bubbles.push({ t0: S + 1.8, t1: S + 2.7, who: left, text: excuseFor(left) });
+        game.bubbles.push({ t0: S + 2.7, t1: S + 3.6, who: right, text: excuseFor(right) });
+        game.showdown = { t0: S, sweep: S + 3.0, land: S + 5.2, left, right, culpritSide: plan.culpritSide, startSide: randInt(2) };
+        say(S + 3.0, 'The needles scratch. The spotlight swings…');
+        [3.1, 3.8, 4.5].forEach(d => ev(S + d, { sound: 'heartbeat' }));
+        ev(S + 5.2, { sound: 'lie' });
+        say(S + 5.2, `The needle jumps for ${nameOf(c)}. ${nameOf(loser)}'s story checks out.`);
+        ev(S + 5.5, { sound: 'alibi', mark: { type: 'clear', who: [loser] } });
+        game.clearedAt[loser] = S + 5.5;
+        game.clearOrder.push(loser);
+        movePawn(loser, BREAK, S + 5.6, S + 6.5, exitDeck());
 
         // --- Accusation ---
-        const A = D + TIMING.deduction;
-        const c = plan.culprit;
-        say(A, 'Only one suspect has no alibi…');
-        movePawn(c, WAR, A + 0.1, A + 0.9);
-        ev(A + 0.1, { sound: 'summon' });
-        game.spotlight = { t0: A + 0.5, t1: A + 1.7, who: c };
-        game.bubbles.push({ t0: A + 1.4, t1: A + 3.2, who: 'insp', text: `It was you, ${nameOf(c)}!` });
-        say(A + 1.4, `"It was you, ${nameOf(c)}!"`);
-        ev(A + 1.4, { sound: 'sting', mark: { type: 'culprit', who: c } });
-        game.report = { t0: A + 2.2, flips: [A + 2.6, A + 3.2, A + 3.8] };
-        ev(A + 2.6, { sound: 'reveal' });
-        ev(A + 3.2, { sound: 'reveal', mark: { type: 'room', index: plan.room } });
-        ev(A + 3.8, { sound: 'reveal', mark: { type: 'weapon', index: plan.weapon } });
-        say(A + 3.8, `It was ${nameOf(c)}, in the ${ROOM_NAMES[plan.room]}, with the ${WEAPON_NAMES[plan.weapon]}!`);
-        game.accuseAt = A;
-        game.end = ClueCore.estimateDuration(plan);
+        const A = sched.accusation;
+        game.spotlight = { t0: A, t1: A + 0.8, who: c };
+        cam(A + 1.1, 'full');
+        game.bubbles.push({ t0: A + 0.3, t1: A + 1.9, who: 'insp', text: `It was you, ${nameOf(c)}!` });
+        say(A + 0.3, `"It was you, ${nameOf(c)}!"`);
+        ev(A + 0.3, { sound: 'sting', mark: { type: 'culprit', who: c } });
+        game.report = { t0: A + 1.3, flips: [A + 1.7, A + 2.3, A + 2.9] };
+        ev(A + 1.7, { sound: 'reveal' });
+        ev(A + 2.3, { sound: 'reveal', mark: { type: 'room', index: plan.room } });
+        ev(A + 2.9, { sound: 'reveal', mark: { type: 'weapon', index: plan.weapon } });
+        say(A + 2.9, `It was ${nameOf(c)}, in the ${ROOM_NAMES[plan.room]}, with the ${WEAPON_NAMES[plan.weapon]}!`);
 
+        // Pause points: just after each reveal has shown its result.
+        game.pauses = game.reveals.map(r => r.stampAt + 0.8).sort((a, b) => a - b);
+        game.nextPause = 0;
+        game.paused = false;
         game.events.sort((a, b) => a.t - b.t);
         game.statuses.sort((a, b) => a.t - b.t);
+        game.camKeys.sort((a, b) => a.t - b.t);
         return game;
     }
 
-    function statusAt(game, t) {
-        let text = '';
-        for (const s of game.statuses) {
-            if (s.t > t) break;
-            text = s.text;
-        }
-        return text;
+    // What each reveal is checking while it plays, and what it found.
+    function singleText(kind, s, w, activity, meeting, weapon) {
+        const where = activity.replace(' with me', ` with ${w}`);
+        return {
+            card: [`${w} reaches for a card…`, `${w} shows ${s}'s alibi card. ${s} is in the clear!`],
+            slack: [`Checking ${s}'s message history…`, `Slack DM: ${s} was ${where} at 3:07. Cleared!`],
+            git: [`Checking ${s}'s git log…`, `${s} only ever pushed to a branch, never prod. Cleared!`],
+            calendar: [`Checking ${s}'s calendar…`, `${s} was stuck in "${meeting}". Cleared!`],
+            receipt: ['Checking the coffee machine records…', `${s} was buying a triple espresso at 3:07. Cleared!`],
+            vpn: [`Tracing ${s}'s VPN connection…`, `${s} was logged in from home at 3:07. Cleared!`],
+            polaroid: [`${w} has a photo from 3:07…`, `${s} was at the ping-pong table with ${w}. Cleared!`],
+            fingerprint: [`Dusting the ${weapon} for prints…`, `The prints don't match ${s}. Cleared!`],
+        }[kind];
     }
 
+    function groupText(kind, room, names) {
+        return {
+            cctv: [`Rewinding the ${room} CCTV…`, `${names} were on camera somewhere else. All cleared!`],
+            badge: [`Checking the ${room} door log…`, `${names} badged out before 3:07. All cleared!`],
+            zoom: ['Checking the 3 am Zoom recording…', `${names} were stuck in the 3 am sync. All cleared!`],
+            rota: ["Checking last night's on-call rota…", `${names} were off call and fast asleep. All cleared!`],
+            thermal: ['Thermal-scanning the Break Room…', `${names} were glowing away in the Break Room. All cleared!`],
+        }[kind];
+    }
+
+    function fakeText(kind, s, w, card, type) {
+        const notIt = `The ${card} isn't it, so ${s} isn't cleared yet.`;
+        return {
+            card: [`${w} reaches for a card…`, `${w} shows the ${card} card. ${notIt}`],
+            thrown: [`${w} slams down a card!`, `${w} holds the ${card} card. ${notIt}`],
+            bag: type === 'weapon' ? ['Bagging the evidence…', `${w} has the ${card} card. ${notIt}`]
+                : [`Unrolling the ${card} blueprints…`, `${w} has the ${card} card. ${notIt}`],
+            herring: ['Wait… something smells fishy…', `A red herring! ${notIt}`],
+            magnify: [`Examining ${w}'s card…`, `It's the ${card} card. ${notIt}`],
+        }[kind];
+    }
+
+    function statusAt(game, t) {
+        let s = null;
+        for (const x of game.statuses) {
+            if (x.t > t) break;
+            s = x;
+        }
+        return s;
+    }
     // --- Main Game ---
     function startGame() {
         if (playing() || participants.length < 2) return;
@@ -1557,24 +1889,47 @@
         verdictOverlay.hidden = true;
         copyMsg.textContent = '';
         startHum();
+        startMusic();
         updateList();
     }
 
     function advanceRun(dt) {
         const game = run;
-        game.t = Math.min(game.end, game.t + dt);
+        if (game.paused) return;
+        let target = Math.min(game.end, game.t + dt);
+        if (pauseOnClues && !game.skipped) {
+            while (game.nextPause < game.pauses.length && game.pauses[game.nextPause] < game.t) game.nextPause++;
+            const p = game.pauses[game.nextPause];
+            if (p !== undefined && target >= p) {
+                target = p;
+                game.paused = true;
+                game.nextPause++;
+            }
+        }
+        game.t = target;
         while (game.nextEvent < game.events.length && game.events[game.nextEvent].t <= game.t) {
             const e = game.events[game.nextEvent++];
             if (e.sound && !game.skipped) playSound(e.sound);
             if (e.mark) applyMark(e.mark);
         }
+        if (game.paused) {
+            resumeBtn.hidden = false;
+            resumeBtn.focus({ preventScroll: true });
+        }
         if (game.t >= game.end) finishGame(game);
+    }
+
+    function resumeRun() {
+        if (!run || !run.paused) return;
+        run.paused = false;
+        resumeBtn.hidden = true;
     }
 
     function finishGame(game) {
         if (run !== game || game.done) return;
         game.done = true;
         stopHum();
+        stopMusic();
         celebrate(game);
         showVerdict(game);
         updateList();
@@ -1616,11 +1971,11 @@
         const fakes = plan.turns.filter(t => t.kind === 'fake').length;
         headlineEl.textContent = `${name} took down prod`;
         headlineEl.style.setProperty('--hl', name.length <= 8 ? 1 : name.length <= 13 ? 0.8 : 0.64);
-        subheadEl.textContent = `…in the ${room}, with the ${weapon}.`;
+        subheadEl.textContent = `…the ${game.roles[plan.culprit]}, in the ${room}, with the ${weapon}.`;
         // The quip is cosmetic, so Math.random is fine here.
         storyEl.textContent = `At 3:07 am PROD-01 stopped answering. After ${plan.turns.length} leads, ` +
             `${suspects.length - 1} alibis${fakes ? ` and ${fakes} red herring${fakes > 1 ? 's' : ''}` : ''}, ` +
-            `the Inspector named ${name} as the culprit. The ${weapon} was recovered from the ${room}. ` +
+            `the polygraph needle jumped and the Inspector named ${name} as the culprit. The ${weapon} was recovered from the ${room}. ` +
             `${cleared > 1 ? 'Every other suspect was found with a coffee in the Break Room. ' : ''}` +
             QUIPS[Math.floor(Math.random() * QUIPS.length)];
         paperDateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -1632,7 +1987,7 @@
     function verdictText() {
         if (!run) return '';
         const { plan } = run;
-        return `🔍 Cluedo Picker verdict: It was ${suspects[plan.culprit].name}, in the ${ROOM_NAMES[plan.room]}, ` +
+        return `🔍 Cluedo Picker verdict: It was ${suspects[plan.culprit].name} the ${run.roles[plan.culprit]}, in the ${ROOM_NAMES[plan.room]}, ` +
             `with the ${WEAPON_NAMES[plan.weapon]}! PROD-01 can rest in peace.`;
     }
 
@@ -1658,12 +2013,22 @@
 
     function skipToVerdict() {
         if (!playing()) return;
+        run.paused = false;
+        resumeBtn.hidden = true;
         run.skipped = true;
         run.t = run.end;
         advanceRun(0);
     }
 
     startBtn.addEventListener('click', startGame);
+    resumeBtn.addEventListener('click', resumeRun);
+    canvas.addEventListener('click', resumeRun);
+    pauseBtn.addEventListener('click', () => {
+        pauseOnClues = !pauseOnClues;
+        pauseBtn.setAttribute('aria-pressed', String(pauseOnClues));
+        pauseBtn.textContent = `Pause on clues: ${pauseOnClues ? 'on' : 'off'}`;
+        if (!pauseOnClues) resumeRun();
+    });
     playAgainBtn.addEventListener('click', startGame);
     skipBtn.addEventListener('click', skipToVerdict);
     copyBtn.addEventListener('click', copyVerdict);
@@ -1681,7 +2046,8 @@
         const key = e.key.toLowerCase();
         if ((key === ' ' || key === 'enter') && tag !== 'BUTTON' && tag !== 'A') {
             e.preventDefault();
-            startGame();
+            if (run && run.paused) resumeRun();
+            else startGame();
         } else if (key === 's') {
             skipToVerdict();
         } else if (key === 'm') {
@@ -1692,6 +2058,934 @@
             setSpeed(Number(key));
         }
     });
+
+    // --- Offscreen canvases ---
+    // Anything drawn in 3D is painted flat into an offscreen canvas first, then projected.
+    function makeLayer(w, h) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(w * pixelRatio);
+        canvas.height = Math.ceil(h * pixelRatio);
+        const g = canvas.getContext('2d');
+        g.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        return { canvas, g, w, h, ratio: pixelRatio };
+    }
+
+    const scratchLayers = new Map();
+    function scratch(key, w, h) {
+        let o = scratchLayers.get(key);
+        if (!o || o.w !== w || o.h !== h || o.ratio !== pixelRatio) {
+            o = makeLayer(w, h);
+            scratchLayers.set(key, o);
+        }
+        o.g.setTransform(1, 0, 0, 1, 0, 0);
+        o.g.clearRect(0, 0, o.canvas.width, o.canvas.height);
+        o.g.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        return o;
+    }
+
+    // Runs fn with the shared drawing helpers pointed at another context.
+    function withContext(g, fn) {
+        const prev = ctx;
+        ctx = g;
+        try { fn(); } finally { ctx = prev; }
+    }
+
+    // Paints fn() (origin at the centre) into a reusable w x h layer.
+    function paint(key, w, h, fn) {
+        const o = scratch(key, w, h);
+        withContext(o.g, () => {
+            ctx.translate(w / 2, h / 2);
+            fn();
+        });
+        return o;
+    }
+
+    // --- 3D: projecting flat layers ---
+    const FOCAL = 800;
+
+    // Draws a layer turned `angle` radians about its vertical axis, in perspective,
+    // as thin vertical strips. Angles stay within ±90°; callers swap in a back face past that.
+    function drawTurned(o, x, y, angle, scale = 1, alpha = 1) {
+        const c = Math.cos(angle), s = Math.sin(angle);
+        if (alpha <= 0 || scale <= 0.01 || c < 0.02) return;
+        const { canvas, w, h } = o;
+        const cols = Math.max(8, Math.ceil(w / 4));
+        const sw = w / cols, k = canvas.width / w;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        ctx.translate(x, y);
+        ctx.scale(scale, scale);
+        for (let i = 0; i < cols; i++) {
+            const u0 = -w / 2 + i * sw, u1 = u0 + sw;
+            const p0 = FOCAL / (FOCAL + u0 * s), p1 = FOCAL / (FOCAL + u1 * s);
+            const x0 = u0 * c * p0, x1 = u1 * c * p1;
+            const hh = h * p0;
+            ctx.drawImage(canvas, i * sw * k, 0, Math.ceil(sw * k) + 1, canvas.height, x0, -hh / 2, x1 - x0 + 0.7, hh);
+        }
+        ctx.restore();
+    }
+
+    // Draws a full-board layer tilted back in perspective (a "Mode 7" floor), rolled and zoomed.
+    function drawTilted(o, tilt, roll, zoom) {
+        const s = Math.sin(tilt), c = Math.cos(tilt), F = 900, STEP = 3, k = o.canvas.width / W;
+        ctx.save();
+        ctx.translate(W / 2, H / 2 + 30 * s);
+        ctx.rotate(roll);
+        ctx.scale(zoom, zoom);
+        for (let y = 0; y < H; y += STEP) {
+            const v0 = y - H / 2, v1 = v0 + STEP;
+            const p0 = F / (F - v0 * s), p1 = F / (F - v1 * s);
+            const y0 = v0 * c * p0, y1 = v1 * c * p1;
+            ctx.drawImage(o.canvas, 0, y * k, o.canvas.width, STEP * k, (-W / 2) * p0, y0, W * p0, y1 - y0 + 0.7);
+        }
+        ctx.restore();
+    }
+
+    // --- 3D: dice ---
+    const M3 = {
+        mul: (a, b) => a.map(row => [0, 1, 2].map(j => row[0] * b[0][j] + row[1] * b[1][j] + row[2] * b[2][j])),
+        apply: (m, v) => m.map(row => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]),
+        rotX: t => [[1, 0, 0], [0, Math.cos(t), -Math.sin(t)], [0, Math.sin(t), Math.cos(t)]],
+        rotY: t => [[Math.cos(t), 0, Math.sin(t)], [0, 1, 0], [-Math.sin(t), 0, Math.cos(t)]],
+        // Rotation by t about a unit axis (Rodrigues).
+        axis([x, y, z], t) {
+            const c = Math.cos(t), s = Math.sin(t), C = 1 - c;
+            return [[c + x * x * C, x * y * C - z * s, x * z * C + y * s],
+                [y * x * C + z * s, c + y * y * C, y * z * C - x * s],
+                [z * x * C - y * s, z * y * C + x * s, c + z * z * C]];
+        },
+    };
+    // z points at the viewer; y points down the screen.
+    const DIE_FACES = [
+        { v: 1, n: [0, 0, 1], a: [1, 0, 0], b: [0, 1, 0] }, { v: 6, n: [0, 0, -1], a: [-1, 0, 0], b: [0, 1, 0] },
+        { v: 2, n: [1, 0, 0], a: [0, 0, -1], b: [0, 1, 0] }, { v: 5, n: [-1, 0, 0], a: [0, 0, 1], b: [0, 1, 0] },
+        { v: 3, n: [0, 1, 0], a: [1, 0, 0], b: [0, 0, -1] }, { v: 4, n: [0, -1, 0], a: [1, 0, 0], b: [0, 0, 1] },
+    ];
+    const FACE_TO_VIEWER = { 1: M3.rotY(0), 6: M3.rotY(Math.PI), 2: M3.rotY(-Math.PI / 2), 5: M3.rotY(Math.PI / 2), 3: M3.rotX(Math.PI / 2), 4: M3.rotX(-Math.PI / 2) };
+    const DIE_REST = M3.mul(M3.rotX(-0.55), M3.rotY(0.6)); // a resting die shows a little of two sides
+    const LIGHT = (() => { const l = [-0.4, -0.6, 0.7], m = Math.hypot(...l); return l.map(x => x / m); })();
+
+    // A die of half-size `size`, tumbling (spin 1 → 0) about `axis` until `face` points up.
+    function drawDie3D(x, y, size, face, spin, axis) {
+        const R = M3.mul(DIE_REST, M3.mul(M3.axis(axis, spin * 5 * Math.PI), FACE_TO_VIEWER[face]));
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(x + 3, y + size * 1.5, size * 1.3, size * 0.45, 0, 0, TAU);
+        ctx.fill();
+        for (const f of DIE_FACES) {
+            const n = M3.apply(R, f.n);
+            if (n[2] <= 0.02) continue;
+            const e1 = M3.apply(R, f.a), e2 = M3.apply(R, f.b);
+            const lum = 0.55 + 0.45 * Math.max(0, n[0] * LIGHT[0] + n[1] * LIGHT[1] + n[2] * LIGHT[2]);
+            ctx.save();
+            ctx.transform(e1[0] * size, e1[1] * size, e2[0] * size, e2[1] * size, x + n[0] * size, y + n[1] * size);
+            ctx.fillStyle = `rgb(${Math.round(244 * lum)}, ${Math.round(232 * lum)}, ${Math.round(200 * lum)})`;
+            ctx.fillRect(-1, -1, 2, 2);
+            ctx.strokeStyle = 'rgba(125, 20, 24, 0.7)';
+            ctx.lineWidth = 0.07;
+            ctx.strokeRect(-1, -1, 2, 2);
+            ctx.fillStyle = f.v === 1 ? '#c0262d' : '#2b1e12';
+            for (const [px, py] of PIPS[f.v]) {
+                ctx.beginPath();
+                ctx.arc(px * 0.52, py * 0.52, f.v === 1 ? 0.26 : 0.17, 0, TAU);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    // --- 3D: a wireframe globe for VPN traces ---
+    function globePoint(lat, lon, spin) {
+        const p = [Math.cos(lat) * Math.sin(lon), -Math.sin(lat), Math.cos(lat) * Math.cos(lon)];
+        return M3.apply(M3.mul(M3.rotX(0.35), M3.rotY(spin)), p);
+    }
+
+    function drawGlobe(r, spin, arcF) {
+        ctx.save();
+        const glow = ctx.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+        glow.addColorStop(0, '#16324a');
+        glow.addColorStop(1, '#07121d');
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, TAU);
+        ctx.fill();
+        ctx.lineWidth = 1;
+        const line = pts => {
+            for (let k = 1; k < pts.length; k++) {
+                const a = pts[k - 1], b = pts[k];
+                ctx.strokeStyle = a[2] > 0 && b[2] > 0 ? 'rgba(54, 214, 198, 0.75)' : 'rgba(54, 214, 198, 0.12)';
+                ctx.beginPath();
+                ctx.moveTo(a[0] * r, a[1] * r);
+                ctx.lineTo(b[0] * r, b[1] * r);
+                ctx.stroke();
+            }
+        };
+        for (let lat = -60; lat <= 60; lat += 30) line(Array.from({ length: 37 }, (_, k) => globePoint(lat * Math.PI / 180, k * TAU / 36, spin)));
+        for (let lon = 0; lon < 360; lon += 30) line(Array.from({ length: 19 }, (_, k) => globePoint(-Math.PI / 2 + k * Math.PI / 18, lon * Math.PI / 180, spin)));
+        // The ping: from the data centre to wherever the suspect really was, arcing above the surface.
+        const from = [0.9, -0.2], to = [0.55, 1.3];
+        const pts = [];
+        for (let k = 0; k <= 30 * arcF; k++) {
+            const u = k / 30;
+            const p = globePoint(lerp(from[0], to[0], u), lerp(from[1], to[1], u), spin);
+            const lift = 1 + 0.25 * Math.sin(Math.PI * u);
+            pts.push([p[0] * lift, p[1] * lift, p[2]]);
+        }
+        ctx.strokeStyle = '#ffb43b';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        pts.forEach((p, k) => (k ? ctx.lineTo(p[0] * r, p[1] * r) : ctx.moveTo(p[0] * r, p[1] * r)));
+        ctx.stroke();
+        for (const [ll, color] of [[from, '#ff3b3b'], [to, '#2fbf5a']]) {
+            const p = globePoint(ll[0], ll[1], spin);
+            if (p[2] < 0) continue;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(p[0] * r, p[1] * r, 4, 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    // --- Reveals: a different animation for every clearing and fake-out ---
+    // Each reveal draws round (0, 0) at the centre of the board, `f` seconds after it starts.
+    const MONO = 'ui-monospace, Menlo, Consolas, monospace';
+    const SINGLE_REVEALS = ['card', 'slack', 'git', 'calendar', 'receipt', 'vpn', 'polaroid', 'fingerprint'];
+    const GROUP_REVEALS = ['cctv', 'badge', 'zoom', 'rota', 'thermal'];
+    const FAKE_REVEALS = ['card', 'thrown', 'bag', 'herring', 'magnify'];
+    const ACTIVITIES = ['playing ping-pong with me', 'stuck in the lift with me', 'at the vending machine with me',
+        'on a call with me', 'fixing the printer with me', 'hunting for the Wi-Fi password with me', 'at karaoke with me'];
+    const MEETINGS = ['Sprint planning (overran)', 'Retro about the last retro', '1:1 that could have been an email',
+        'All-hands rehearsal', 'Architecture review: part 7', 'Lunch & learn: YAML'];
+    const COMMITS = ['fix typo in README', 'add more tests', 'rename variable (again)', 'update docs', 'bump version', 'tidy CSS'];
+
+    function textLine(text, x, y, { font = `13px ${MONO}`, color = '#e8eef6', align = 'left', max = 9999 } = {}) {
+        ctx.font = font;
+        ctx.fillStyle = color;
+        ctx.textAlign = align;
+        ctx.textBaseline = 'middle';
+        ctx.fillText(fitText(ctx, text, max), x, y);
+    }
+    const typed = (text, f, rate = 45) => text.slice(0, Math.max(0, Math.floor(f * rate)));
+    const nameUp = i => suspects[i].name.toUpperCase();
+
+    function drawAvatar(x, y, r, hue) {
+        ctx.fillStyle = `hsl(${hue}, 70%, 50%)`;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(x, y - r * 0.2, r * 0.38, 0, TAU);
+        ctx.fill();
+    }
+
+    // A chat message, wrapped onto a second line if it needs one. Returns its height.
+    function chatBubble(x, y, w, text, pop, mine) {
+        ctx.font = `13px ${UI_FONT}`;
+        const words = text.split(' ');
+        const lines = [''];
+        for (const word of words) {
+            const next = lines.at(-1) ? `${lines.at(-1)} ${word}` : word;
+            if (ctx.measureText(next).width > w - 18 && lines.at(-1) && lines.length < 2) lines.push(word);
+            else lines[lines.length - 1] = next;
+        }
+        const h = 12 + lines.length * 16;
+        if (pop <= 0) return h;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(pop, pop);
+        ctx.fillStyle = mine ? '#2f7de1' : '#e9edf1';
+        roundRect(ctx, mine ? -w : 0, -14, w, h, 12);
+        ctx.fill();
+        lines.forEach((line, k) => textLine(line, mine ? -w + 10 : 10, k * 16, { font: `13px ${UI_FONT}`, color: mine ? '#fff' : '#1b1a17', max: w - 18 }));
+        ctx.restore();
+        return h;
+    }
+
+    const REVEAL_DRAW = {
+        // The classic: a card turned over in 3D.
+        card(r, f) {
+            drawCard3D(0, -10, r.face, easeInOut(phase(f, 0.05, 0.6)), lerp(0.6, 1, easeOut(phase(f, 0, 0.25))));
+            return { x: 4, y: 0 };
+        },
+
+        // A phone slides up and the witness's messages pop in.
+        slack(r, f) {
+            const y = lerp(420, 0, easeOut(phase(f, 0, 0.35)));
+            ctx.save();
+            ctx.translate(0, y);
+            drawBox(ctx, -110, -150, 220, 300, '#111318', '#3a4658', 24);
+            drawBox(ctx, -100, -128, 200, 256, '#f8f9fb', '#d0d5dc', 6);
+            ctx.fillStyle = '#4a154b';
+            ctx.fillRect(-100, -128, 200, 30);
+            textLine(`# dm · ${suspects[r.witness].name}`, -90, -113, { font: `bold 12px ${UI_FONT}`, color: '#fff', max: 180 });
+            drawAvatar(-84, -70, 10, suspects[r.witness].hue);
+            if (f > 0.2 && f < 0.38) {
+                for (let k = 0; k < 3; k++) {
+                    ctx.fillStyle = '#9aa3ad';
+                    ctx.beginPath();
+                    ctx.arc(-60 + k * 9, -70 + Math.sin(f * 30 + k) * 2, 3, 0, TAU);
+                    ctx.fill();
+                }
+            }
+            const h1 = chatBubble(-70, -70, 166, `${suspects[r.who[0]].name} was ${r.activity}`, easeOut(phase(f, 0.38, 0.5)), false);
+            chatBubble(-70, -70 + h1 + 6, 120, 'at 03:07 📸', easeOut(phase(f, 0.55, 0.67)), false);
+            chatBubble(92, -70 + h1 + 42, 90, 'Thanks!! 🙏', easeOut(phase(f, 0.72, 0.84)), true);
+            const burst = phase(f, 0.85, 1.05);
+            if (burst > 0) {
+                ctx.font = `${16 + 6 * Math.sin(burst * Math.PI)}px ${UI_FONT}`;
+                ctx.textAlign = 'center';
+                ctx.fillText('✅ 4  🕵️ 2  ☕ 7', 0, 50);
+            }
+            ctx.restore();
+            return { x: 0, y: 90 };
+        },
+
+        // A terminal swings round and git log is typed in.
+        git(r, f) {
+            const s = r.who[0];
+            const o = paint('git', 400, 210, () => {
+                drawBox(ctx, -200, -105, 400, 210, '#0d1117', '#30363d', 10);
+                for (let k = 0; k < 3; k++) {
+                    ctx.fillStyle = ['#ff5f56', '#ffbd2e', '#27c93f'][k];
+                    ctx.beginPath();
+                    ctx.arc(-184 + k * 14, -92, 4.5, 0, TAU);
+                    ctx.fill();
+                }
+                const cmd = `git log --author="${suspects[s].name}" --since=03:00`;
+                textLine(`$ ${typed(cmd, f, 80)}${f < 0.55 && Math.floor(f * 6) % 2 === 0 ? '▌' : ''}`, -186, -64, { color: '#7ee787', max: 372 });
+                const lines = [[`a1f3c9e  03:04  ${r.commits[0]}`, '(feature/docs)'], [`9be2d01  03:07  ${r.commits[1]}`, '(feature/tests)']];
+                lines.forEach(([a, b], k) => {
+                    const p = phase(f, 0.55 + k * 0.12, 0.62 + k * 0.12);
+                    if (p <= 0) return;
+                    ctx.globalAlpha = p;
+                    textLine(a, -186, -30 + k * 26, { color: '#e3b341', max: 260 });
+                    textLine(b, 186, -30 + k * 26, { color: '#79c0ff', align: 'right' });
+                    ctx.globalAlpha = 1;
+                });
+                if (f > 0.85) textLine('→ 0 commits to prod. Ever.', -186, 40, { font: `bold 14px ${MONO}`, color: '#3fb950' });
+            });
+            drawTurned(o, 0, 0, (1 - easeOut(phase(f, 0, 0.4))) * 1.3, 1);
+            return { x: 120, y: 50 };
+        },
+
+        // A tear-off desk calendar drops in and the top page rips away.
+        calendar(r, f) {
+            const drop = easeOut(phase(f, 0, 0.3));
+            ctx.save();
+            ctx.translate(0, lerp(-420, 0, drop) + Math.sin(phase(f, 0.3, 0.45) * Math.PI) * -10);
+            drawBox(ctx, -120, -110, 240, 210, '#fffaf0', '#8a939e', 8);
+            ctx.fillStyle = '#c0262d';
+            ctx.fillRect(-120, -110, 240, 36);
+            textLine('THURSDAY', 0, -92, { font: `bold 16px ${UI_FONT}`, color: '#fff', align: 'center' });
+            textLine('03:00', -104, -52, { font: `bold 12px ${UI_FONT}`, color: '#7a6343' });
+            drawBox(ctx, -60, -64, 168, 74, '#cfe3ff', '#2f7de1', 6);
+            textLine(r.meeting, -52, -48, { font: `bold 12px ${UI_FONT}`, color: '#123', max: 152 });
+            textLine(`${suspects[r.who[0]].name}, ${suspects[r.witness].name}`, -52, -28, { font: `12px ${UI_FONT}`, color: '#123', max: 152 });
+            textLine('03:00 – 03:30 · ✓ attended', -52, -10, { font: `11px ${UI_FONT}`, color: '#2f5ca0', max: 152 });
+            // The page on top tears off and tumbles away.
+            const tear = phase(f, 0.45, 0.85);
+            if (tear < 1) {
+                ctx.save();
+                ctx.translate(-120 + tear * 160, -74 + tear * tear * 380);
+                ctx.rotate(tear * 1.4);
+                drawBox(ctx, 0, 0, 240, 174, '#fffaf0', '#c9b27e', 2);
+                textLine('3', 120, 80, { font: `900 96px ${SERIF_FONT}`, color: '#2b1e12', align: 'center' });
+                textLine(':07 AM', 120, 142, { font: `bold 18px ${SERIF_FONT}`, color: '#7a6343', align: 'center' });
+                ctx.restore();
+            }
+            ctx.restore();
+            return { x: 40, y: 40 };
+        },
+
+        // A receipt prints out of the coffee machine, line by line.
+        receipt(r, f) {
+            const len = 230 * easeOut(phase(f, 0.1, 0.8));
+            ctx.save();
+            ctx.translate(0, -120);
+            drawBox(ctx, -90, -30, 180, 40, '#2b2f36', '#111', 8);
+            textLine('BEAN-O-MATIC 3000', 0, -12, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+            ctx.fillStyle = '#1b1b1b';
+            ctx.fillRect(-64, 4, 128, 4);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-70, 8, 140, len);
+            ctx.clip();
+            ctx.fillStyle = '#fbfaf5';
+            ctx.fillRect(-60, 8, 120, 230);
+            const lines = ['*** RECEIPT ***', 'BREAK ROOM · 03:07:12', '1 x Triple espresso', '1 x Emergency biscuit', '--------------',
+                `CARD: ${nameUp(r.who[0])}`, 'THANK YOU, NIGHT OWL'];
+            lines.forEach((l, k) => textLine(l, 0, 26 + k * 26, { font: `11px ${MONO}`, color: '#222', align: 'center', max: 112 }));
+            ctx.restore();
+            ctx.restore();
+            return { x: 0, y: 40 };
+        },
+
+        // A 3D globe spins and traces the VPN ping home.
+        vpn(r, f) {
+            drawBox(ctx, -190, -120, 380, 240, '#05080c', '#36d6c6', 12);
+            ctx.save();
+            ctx.translate(-70, 0);
+            drawGlobe(92 * easeOut(phase(f, 0, 0.3)), f * 1.6, phase(f, 0.3, 0.8));
+            ctx.restore();
+            textLine('VPN · 03:07:02', 40, -70, { font: `bold 13px ${MONO}`, color: '#36d6c6' });
+            textLine(`user=${suspects[r.who[0]].name.toLowerCase()}`, 40, -40, { font: `12px ${MONO}`, color: '#e8eef6', max: 140 });
+            textLine('from: home wifi', 40, -16, { font: `12px ${MONO}`, color: '#e8eef6' });
+            if (f > 0.8) textLine('dist: 11 km ✓', 40, 10, { font: `bold 12px ${MONO}`, color: '#2fbf5a' });
+            return { x: 90, y: 60 };
+        },
+
+        // Camera flash, then a Polaroid drops in and develops.
+        polaroid(r, f) {
+            const flash = 1 - phase(f, 0, 0.18);
+            ctx.save();
+            ctx.translate(0, lerp(-260, -10, easeOut(phase(f, 0.1, 0.4))));
+            ctx.rotate(lerp(-0.5, 0.06, easeOut(phase(f, 0.1, 0.5))));
+            drawBox(ctx, -95, -115, 190, 230, '#fdfdfb', '#d8d4c8', 3);
+            ctx.fillStyle = '#333a33';
+            ctx.fillRect(-80, -100, 160, 160);
+            ctx.save();
+            ctx.globalAlpha = phase(f, 0.35, 0.95);
+            const g = ctx.createLinearGradient(0, -100, 0, 60);
+            g.addColorStop(0, '#6b8fb5');
+            g.addColorStop(1, '#2f5a3a');
+            ctx.fillStyle = g;
+            ctx.fillRect(-80, -100, 160, 160);
+            drawBox(ctx, -60, 0, 80, 26, '#2f7a45', '#173d22', 2); // a ping-pong table
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(-21, 0, 2, 26);
+            drawPawn(ctx, 38, 40, suspects[r.who[0]].hue, { scale: 2 });
+            drawPawn(ctx, -40, 34, suspects[r.witness].hue, { scale: 1.6 });
+            ctx.restore();
+            textLine(`${suspects[r.who[0]].name} @ 03:07 🏓`, 0, 88, { font: `italic bold 15px ${SERIF_FONT}`, color: '#2f5ca0', align: 'center', max: 170 });
+            ctx.restore();
+            if (flash > 0) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${flash * 0.85})`;
+                ctx.fillRect(-W / 2, -360, W, H);
+            }
+            return { x: 10, y: 20 };
+        },
+
+        // A fingerprint is laser-scanned against the scene: no match.
+        fingerprint(r, f) {
+            drawBox(ctx, -170, -120, 340, 240, '#0b1220', '#2f7de1', 12);
+            ctx.save();
+            ctx.translate(-70, 0);
+            ctx.strokeStyle = '#8fb8ff';
+            ctx.lineWidth = 2;
+            const rand = decorRandom(r.who[0] + 3);
+            for (let k = 1; k < 11; k++) {
+                ctx.beginPath();
+                ctx.ellipse(0, 0, k * 6.5, k * 8.5, 0, -2.8 + rand() * 0.5, 0.3 + rand() * 0.8);
+                ctx.stroke();
+            }
+            const scan = phase(f, 0.1, 0.75);
+            if (scan > 0 && scan < 1) {
+                const y = lerp(-95, 95, scan);
+                ctx.fillStyle = 'rgba(255, 59, 59, 0.25)';
+                ctx.fillRect(-90, y - 10, 180, 20);
+                ctx.fillStyle = '#ff3b3b';
+                ctx.fillRect(-90, y, 180, 2);
+            }
+            ctx.restore();
+            textLine('PRINT ON THE KIT', 30, -60, { font: `bold 13px ${MONO}`, color: '#8fb8ff' });
+            textLine(`vs ${nameUp(r.who[0])}`, 30, -34, { font: `13px ${MONO}`, color: '#e8eef6', max: 130 });
+            if (f > 0.75) textLine('NO MATCH', 30, 0, { font: `bold 20px ${MONO}`, color: '#2fbf5a' });
+            return { x: 50, y: 60 };
+        },
+
+        // Group: the CCTV tape rewinds through static, then settles.
+        cctv(r, f) {
+            const w = 380, h = 230;
+            drawBox(ctx, -w / 2 - 10, -h / 2 - 10, w + 20, h + 20, '#1d2430', '#3a4658', 12);
+            ctx.fillStyle = '#0b1a13';
+            ctx.fillRect(-w / 2, -h / 2, w, h);
+            const settle = phase(f, 0.15, 0.55);
+            if (settle < 1) {
+                // Static is cosmetic, so Math.random is fine here.
+                for (let k = 0; k < 120 * (1 - settle); k++) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5})`;
+                    ctx.fillRect(-w / 2 + Math.random() * w, -h / 2 + Math.random() * h, 3 + Math.random() * 30, 2);
+                }
+                textLine('◀◀ REW', 0, 0, { font: `bold 30px ${MONO}`, color: '#ffffff', align: 'center' });
+            } else {
+                r.who.forEach((i, k) => {
+                    const gap = Math.min(100, (w - 30) / r.who.length);
+                    const x = (k - (r.who.length - 1) / 2) * gap;
+                    drawPawn(ctx, x, 40, suspects[i].hue, { scale: 1.8, sat: 30 });
+                    textLine(nameUp(i), x, 66, { font: `bold 12px ${MONO}`, color: '#7dffa8', align: 'center', max: gap - 6 });
+                });
+            }
+            textLine(`CAM 0${r.room + 1} · ${ROOM_NAMES[r.room].toUpperCase()}`, -w / 2 + 12, -h / 2 + 18, { font: `bold 12px ${MONO}`, color: '#7dffa8' });
+            textLine(`03:07:${String(10 + Math.floor(f * 30)).padStart(2, '0')}`, w / 2 - 12, -h / 2 + 18, { font: `bold 12px ${MONO}`, color: '#7dffa8', align: 'right' });
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            for (let y = -h / 2; y < h / 2; y += 3) ctx.fillRect(-w / 2, y, w, 1);
+            return { x: 0, y: -10 };
+        },
+
+        // Group: door-log rows beep in one at a time.
+        badge(r, f) {
+            const w = 380;
+            drawBox(ctx, -w / 2, -120, w, 240, '#0b1a13', '#2fbf5a', 10);
+            textLine(`DOOR LOG · ${ROOM_NAMES[r.room].toUpperCase()}`, -w / 2 + 14, -100, { font: `bold 12px ${MONO}`, color: '#7dffa8' });
+            r.who.forEach((i, k) => {
+                const p = phase(f, 0.15 + k * 0.15, 0.25 + k * 0.15);
+                if (p <= 0) return;
+                const y = -64 + k * 32;
+                ctx.globalAlpha = p;
+                ctx.fillStyle = p < 1 ? '#2fbf5a' : 'rgba(47, 191, 90, 0.12)';
+                ctx.fillRect(-w / 2 + 8, y - 13, w - 16, 26);
+                textLine(`02:${String(41 + k * 6).padStart(2, '0')}  #${1000 + ((i * 137) % 9000)}`, -w / 2 + 16, y, { color: '#7dffa8' });
+                textLine(nameUp(i), -w / 2 + 160, y, { color: '#e8eef6', max: 150 });
+                textLine('OUT ➜', w / 2 - 16, y, { color: '#ffb43b', align: 'right' });
+                ctx.globalAlpha = 1;
+            });
+            return { x: 0, y: 70 };
+        },
+
+        // Group: a Zoom grid where everyone's camera clicks on.
+        zoom(r, f) {
+            const n = r.who.length, cols = n > 2 ? 2 : n, rows = Math.ceil(n / cols);
+            const tw = 170, th = 96;
+            drawBox(ctx, -(cols * tw) / 2 - 14, -(rows * th) / 2 - 36, cols * tw + 28, rows * th + 52, '#1f1f24', '#3a3a44', 10);
+            textLine('Weekly sync · recording · 03:07', -(cols * tw) / 2, -(rows * th) / 2 - 20, { font: `bold 12px ${UI_FONT}`, color: '#e8eef6' });
+            r.who.forEach((i, k) => {
+                const x = -(cols * tw) / 2 + (k % cols) * tw + 4, y = -(rows * th) / 2 + Math.floor(k / cols) * th + 2;
+                drawBox(ctx, x, y, tw - 8, th - 6, '#2b2b33', '#45454f', 6);
+                const on = phase(f, 0.2 + k * 0.14, 0.35 + k * 0.14);
+                if (on > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = on;
+                    ctx.fillStyle = `hsl(${(suspects[i].hue + 180) % 360}, 25%, 35%)`;
+                    ctx.fillRect(x + 2, y + 2, tw - 12, th - 10);
+                    drawPawn(ctx, x + (tw - 8) / 2, y + th - 14, suspects[i].hue, { scale: 1.9 });
+                    ctx.restore();
+                }
+                textLine(`${on > 0 ? '🎥' : '🚫'} ${suspects[i].name}`, x + 6, y + th - 16, { font: `bold 11px ${UI_FONT}`, color: '#fff', max: tw - 20 });
+            });
+            return { x: 0, y: 0 };
+        },
+
+        // Group: the on-call rota on a clipboard, each name ticked off with a pen.
+        rota(r, f) {
+            ctx.save();
+            ctx.rotate(lerp(0.4, -0.04, easeOut(phase(f, 0, 0.35))));
+            ctx.translate(lerp(500, 0, easeOut(phase(f, 0, 0.35))), 0);
+            drawBox(ctx, -150, -130, 300, 260, '#a8743e', '#5a3d20', 10);
+            drawBox(ctx, -134, -110, 268, 230, '#fffaf0', '#c9b27e', 2);
+            drawBox(ctx, -40, -140, 80, 22, '#b8bec7', '#5a6370', 4);
+            textLine('ON-CALL ROTA · TONIGHT', -120, -90, { font: `bold 13px ${UI_FONT}`, color: '#2b1e12' });
+            r.who.forEach((i, k) => {
+                const y = -56 + k * 34;
+                textLine(suspects[i].name, -120, y, { font: `16px ${SERIF_FONT}`, color: '#2b1e12', max: 150 });
+                textLine('off call · asleep 💤', 40, y, { font: `11px ${UI_FONT}`, color: '#7a6343' });
+                const p = phase(f, 0.35 + k * 0.12, 0.47 + k * 0.12);
+                if (p > 0) {
+                    ctx.strokeStyle = '#2f8f46';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(-140, y);
+                    ctx.lineTo(-140 + 6 * Math.min(1, p * 2), y + 6 * Math.min(1, p * 2));
+                    if (p > 0.5) ctx.lineTo(-134 + 14 * (p - 0.5) * 2, y + 6 - 18 * (p - 0.5) * 2);
+                    ctx.stroke();
+                }
+            });
+            ctx.restore();
+            return { x: 40, y: 70 };
+        },
+
+        // Group: a thermal camera finds their heat signatures somewhere else entirely.
+        thermal(r, f) {
+            const w = 380, h = 230;
+            drawBox(ctx, -w / 2 - 8, -h / 2 - 8, w + 16, h + 16, '#111', '#444', 10);
+            ctx.fillStyle = '#0a0a3a';
+            ctx.fillRect(-w / 2, -h / 2, w, h);
+            r.who.forEach((i, k) => {
+                const x = (k - (r.who.length - 1) / 2) * Math.min(90, (w - 40) / r.who.length);
+                const heat = phase(f, 0.15 + k * 0.1, 0.5 + k * 0.1);
+                const g = ctx.createRadialGradient(x, 10, 2, x, 10, 40);
+                g.addColorStop(0, `rgba(255, 255, 210, ${heat})`);
+                g.addColorStop(0.4, `rgba(255, 140, 0, ${heat * 0.9})`);
+                g.addColorStop(1, 'rgba(120, 0, 160, 0)');
+                ctx.fillStyle = g;
+                ctx.fillRect(x - 40, -30, 80, 80);
+                if (heat > 0.6) textLine(nameUp(i), x, 66, { font: `bold 11px ${MONO}`, color: '#ffd27a', align: 'center', max: 86 });
+            });
+            const sweep = lerp(-w / 2, w / 2, phase(f, 0, 0.8));
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(sweep, -h / 2);
+            ctx.lineTo(sweep, h / 2);
+            ctx.stroke();
+            textLine('THERMAL · BREAK ROOM · 03:07', -w / 2 + 10, -h / 2 + 16, { font: `bold 12px ${MONO}`, color: '#ffd27a' });
+            return { x: 0, y: -20 };
+        },
+
+        // Fake-out: the witness hurls the card, spinning, from where they stand.
+        thrown(r, f, from) {
+            const u = easeOut(phase(f, 0, 0.5));
+            const x = lerp(from.x - W / 2, 0, u), y = lerp(from.y - 320, -10, u) - Math.sin(Math.PI * u) * 120;
+            const spin = (1 - u) * 6 * Math.PI;
+            const turns = spin % TAU;
+            const face = turns < Math.PI / 2 || turns > 1.5 * Math.PI;
+            const angle = face ? (turns > Math.PI ? turns - TAU : turns) : turns - Math.PI;
+            drawTurned(cardImage(face ? r.face : null), x, y, angle, lerp(0.3, 1, u));
+            if (u >= 1 && f < 0.75) {
+                ctx.fillStyle = `rgba(230, 220, 200, ${1 - phase(f, 0.5, 0.75)})`;
+                for (let k = 0; k < 8; k++) {
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(k) * 80 * phase(f, 0.5, 0.75), 80 + Math.sin(k) * 10, 8, 0, TAU);
+                    ctx.fill();
+                }
+            }
+            return { x: 4, y: 0 };
+        },
+
+        // Fake-out: kit goes in an evidence bag; a room comes up as an unrolling blueprint.
+        bag(r, f) {
+            if (r.face.type === 'weapon') {
+                ctx.save();
+                ctx.translate(0, lerp(-400, 0, easeOut(phase(f, 0, 0.35))) + Math.sin(phase(f, 0.35, 0.55) * Math.PI) * -12);
+                ctx.fillStyle = 'rgba(225, 235, 245, 0.85)';
+                roundRect(ctx, -110, -120, 220, 230, 8);
+                ctx.fill();
+                ctx.strokeStyle = '#8a97a6';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = '#c0262d';
+                ctx.fillRect(-110, -120, 220, 22);
+                textLine('EVIDENCE', 0, -109, { font: `900 13px ${UI_FONT}`, color: '#fff', align: 'center' });
+                drawWeaponIcon(ctx, r.face.index, 0, -10, 3);
+                drawBox(ctx, -90, 54, 180, 44, '#fffaf0', '#c9b27e', 3);
+                textLine(`EXHIBIT B: ${WEAPON_NAMES[r.face.index]}`, -80, 68, { font: `bold 11px ${UI_FONT}`, color: '#2b1e12', max: 160 });
+                textLine(`Witness: ${suspects[r.witness].name}`, -80, 86, { font: `11px ${UI_FONT}`, color: '#7a6343', max: 160 });
+                ctx.restore();
+            } else {
+                const open = easeOut(phase(f, 0.05, 0.5));
+                const w = 360 * open;
+                drawBox(ctx, -w / 2, -110, w, 220, '#1d4f91', '#0e2c55', 4);
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(-w / 2, -110, w, 220);
+                ctx.clip();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                for (let x = -180; x < 180; x += 18) { ctx.beginPath(); ctx.moveTo(x, -110); ctx.lineTo(x, 110); ctx.stroke(); }
+                drawMiniPlan(ctx, r.face.index, 280);
+                textLine(`BLUEPRINT · ${ROOM_NAMES[r.face.index].toUpperCase()}`, -168, -94, { font: `bold 12px ${MONO}`, color: '#fff' });
+                ctx.restore();
+                for (const side of [-1, 1]) drawBox(ctx, side * w / 2 - 8, -116, 16, 232, '#e8dcc0', '#8a6a2a', 8);
+            }
+            return { x: 10, y: 10 };
+        },
+
+        // Fake-out: a literal red herring flops across, dragging the card in.
+        herring(r, f) {
+            const u = phase(f, 0, 0.7);
+            const fx = lerp(-W / 2 - 80, W / 2 + 80, u);
+            drawCard3D(lerp(-W / 2 - 200, 0, easeOut(phase(f, 0, 0.45))), -10, r.face, 1, 1);
+            ctx.save();
+            ctx.translate(fx, -120 + Math.sin(f * 18) * 18);
+            ctx.rotate(Math.sin(f * 22) * 0.4);
+            ctx.fillStyle = '#e0353c';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 46, 18, 0, 0, TAU);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-40, 0);
+            ctx.lineTo(-70, -20);
+            ctx.lineTo(-70, 20);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(30, -4, 5, 0, TAU);
+            ctx.fill();
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(31, -4, 2.5, 0, TAU);
+            ctx.fill();
+            ctx.restore();
+            if (u > 0.2 && u < 0.95) textLine('RED HERRING!', 0, -170, { font: `900 26px ${UI_FONT}`, color: '#ff5a5a', align: 'center' });
+            return { x: 4, y: 0 };
+        },
+
+        // Fake-out: a magnifying glass sweeps over the card, which is only seen through the lens at first.
+        magnify(r, f) {
+            const img = cardImage(r.face);
+            const full = phase(f, 0.6, 0.75);
+            drawTurned(cardImage(null), 0, -10, 0, 1, 1 - full);
+            const a = phase(f, 0, 0.6) * Math.PI * 1.6;
+            const lx = Math.cos(a) * 40, ly = -10 + Math.sin(a) * 50;
+            ctx.save();
+            if (full < 1) {
+                ctx.beginPath();
+                ctx.arc(lx, ly, 48, 0, TAU);
+                ctx.clip();
+            }
+            drawTurned(img, 0, -10, 0, 1);
+            ctx.restore();
+            if (full < 1) {
+                ctx.strokeStyle = '#c9ced6';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.arc(lx, ly, 50, 0, TAU);
+                ctx.stroke();
+                ctx.strokeStyle = '#5a4326';
+                ctx.lineWidth = 14;
+                ctx.beginPath();
+                ctx.moveTo(lx + 36, ly + 36);
+                ctx.lineTo(lx + 90, ly + 90);
+                ctx.stroke();
+            }
+            return { x: 4, y: 0 };
+        },
+    };
+
+    // A reveal, its stamp, and a caption saying what's being checked and then what it found.
+    // `from` is where the witness stands on screen.
+    function drawReveal(r, t, from) {
+        if (t < r.t0 || t >= r.t1) return;
+        const f = Math.max(0, t - r.t0 - REVEAL_LEAD) / REVEAL_SLOW;
+        const alpha = 1 - phase(t, r.t1 - 0.25, r.t1);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(W / 2, 312);
+        const at = REVEAL_DRAW[r.kind](r, f, from) || { x: 0, y: 0 };
+        drawStamp(at.x, at.y, r.stamp, r.good ? '#2f8f46' : '#c0262d', phase(t, r.stampAt, r.stampAt + 0.25));
+        ctx.restore();
+        const done = t >= r.stampAt;
+        drawRevealCaption(done ? r.result : r.pending, done ? (r.good ? 'good' : 'bad') : 'pending',
+            alpha * phase(t, r.t0, r.t0 + 0.2), t);
+    }
+
+    function drawRevealCaption(text, state, alpha, t) {
+        if (alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        const icon = state === 'pending' ? '🔎 ' : state === 'good' ? '✅ ' : '❌ ';
+        ctx.font = `bold 16px ${UI_FONT}`;
+        const label = fitText(ctx, icon + text, W - 110);
+        const w = ctx.measureText(label).width + 40;
+        const color = state === 'pending' ? `rgba(255, 180, 59, ${0.55 + 0.45 * Math.sin(t * 8)})` : state === 'good' ? '#2fbf5a' : '#ff5a5a';
+        ctx.fillStyle = 'rgba(8, 11, 17, 0.93)';
+        roundRect(ctx, W / 2 - w / 2, 478, w, 38, 19);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        textLine(label, W / 2, 497.5, { font: `bold 16px ${UI_FONT}`, color: '#f4e8c8', align: 'center' });
+        ctx.restore();
+    }
+
+    // Cards are painted once per face into a cache, then turned in 3D.
+    const cardCache = new Map();
+    function cardImage(face) {
+        const key = face ? `${face.type}:${face.index}` : 'back';
+        let o = cardCache.get(key);
+        if (!o || o.ratio !== pixelRatio) {
+            o = makeLayer(CARD_W, CARD_H);
+            withContext(o.g, () => {
+                ctx.translate(CARD_W / 2, CARD_H / 2);
+                if (face) drawCardFace(face); else drawCardBack();
+            });
+            cardCache.set(key, o);
+        }
+        return o;
+    }
+
+    // flip: 0 face down, 1 face up, turning over in 3D.
+    function drawCard3D(x, y, face, flip, scale = 1, alpha = 1) {
+        const a = flip * Math.PI;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(x + 6, y + (CARD_H / 2) * scale + 8, (CARD_W / 2) * scale * Math.abs(Math.cos(a)), 8 * scale, 0, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+        if (a < Math.PI / 2) drawTurned(cardImage(null), x, y, a, scale, alpha);
+        else drawTurned(cardImage(face), x, y, a - Math.PI, scale, alpha);
+    }
+
+    // --- The #inc-0307 channel ---
+    function drawChat(game, t) {
+        const live = game.chat.filter(m => t >= m.t && t < m.t + 3.6).slice(-3).reverse();
+        live.forEach((m, k) => {
+            const age = t - m.t;
+            const slide = easeOut(phase(age, 0, 0.3));
+            const alpha = 1 - phase(age, 3.2, 3.6);
+            const x = W - 258 + (1 - slide) * 280, y = 62 + k * 50;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            drawBox(ctx, x, y, 246, 44, 'rgba(26, 29, 41, 0.94)', '#4a154b', 8);
+            drawAvatar(x + 20, y + 22, 12, m.hue);
+            textLine(`${m.from}  ·  #inc-0307`, x + 40, y + 13, { font: `bold 11px ${UI_FONT}`, color: '#e8eef6', max: 196 });
+            textLine(m.text, x + 40, y + 31, { font: `12px ${UI_FONT}`, color: '#c8d0da', max: 198 });
+            ctx.restore();
+        });
+    }
+
+    // --- The evidence corkboard ---
+    function polaroid(g, x, y, i, crossed, scale = 1) {
+        g.save();
+        g.translate(x, y);
+        g.scale(scale, scale);
+        g.rotate(((i * 37) % 9 - 4) * 0.012);
+        g.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        g.fillRect(-29, -33, 62, 76);
+        g.fillStyle = '#fdfdfb';
+        g.fillRect(-31, -36, 62, 76);
+        g.fillStyle = `hsl(${(suspects[i].hue + 180) % 360}, 20%, 30%)`;
+        g.fillRect(-26, -31, 52, 48);
+        drawPawn(g, 0, 12, suspects[i].hue, { scale: 1.3, cleared: crossed });
+        g.font = `bold 10px ${UI_FONT}`;
+        g.fillStyle = '#2b1e12';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(fitText(g, suspects[i].name, 56), 0, 26);
+        g.font = `8px ${UI_FONT}`;
+        g.fillStyle = '#7a6343';
+        g.fillText(fitText(g, run ? run.roles[i] : '', 56), 0, 35);
+        g.fillStyle = '#c0262d';
+        g.beginPath();
+        g.arc(0, -33, 4, 0, TAU);
+        g.fill();
+        if (crossed) {
+            g.strokeStyle = 'rgba(192, 38, 45, 0.85)';
+            g.lineWidth = 5;
+            g.beginPath();
+            g.moveTo(-26, -28);
+            g.lineTo(26, 20);
+            g.moveTo(26, -28);
+            g.lineTo(-26, 20);
+            g.stroke();
+        }
+        g.restore();
+    }
+
+    function corkTexture(w, h) {
+        ctx.fillStyle = '#b98a55';
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        const rand = decorRandom(99);
+        for (let k = 0; k < 500; k++) {
+            ctx.fillStyle = rand() < 0.5 ? 'rgba(90, 55, 25, 0.35)' : 'rgba(230, 190, 140, 0.35)';
+            ctx.fillRect(-w / 2 + rand() * w, -h / 2 + rand() * h, 2, 2);
+        }
+        ctx.strokeStyle = '#6b4a2a';
+        ctx.lineWidth = 10;
+        ctx.strokeRect(-w / 2 + 5, -h / 2 + 5, w - 10, h - 10);
+    }
+
+    // During the recap a big corkboard swings in: everyone's polaroid, red string through the
+    // clearings in order, ending at the last two (shown side by side in list order, not culprit order).
+    function drawCorkboard(game, t) {
+        const R = game.recap;
+        if (t < R.t0 || t >= R.t1) return;
+        const f = t - R.t0;
+        const w = 760, h = 430;
+        const n = suspects.length;
+        const scale = n <= 6 ? 1.5 : n <= 10 ? 1.25 : 1;
+        const cols = n <= 6 ? n : n <= 10 ? 5 : 8, rows = Math.ceil(n / cols);
+        const gapX = 84 * scale, gapY = 96 * scale;
+        const spots = suspects.map((_, i) => {
+            const row = Math.floor(i / cols), col = i % cols, inRow = Math.min(cols, n - row * cols);
+            return { x: (col - (inRow - 1) / 2) * gapX, y: -10 - ((rows - 1) * gapY) / 2 + row * gapY };
+        });
+        const o = paint('cork', w, h, () => {
+            corkTexture(w, h);
+            drawBox(ctx, -170, -h / 2 + 16, 340, 30, '#fffaf0', '#c9b27e', 2);
+            textLine('INC-0307 · PERSONS OF INTEREST', 0, -h / 2 + 31, { font: `bold 15px ${SERIF_FONT}`, color: '#2b1e12', align: 'center' });
+            // Red string through the clearing order, drawn out over the recap.
+            const order = game.clearOrder.filter(i => game.clearedAt[i] <= R.t0);
+            const path = [...order.map(i => spots[i]), { x: 0, y: h / 2 - 50 }];
+            const drawn = phase(f, 0.35, 1.9) * (path.length - 1);
+            ctx.strokeStyle = '#d0202a';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let k = 0; k < Math.min(drawn, path.length - 1); k++) {
+                const a = path[k], b = path[k + 1], u = Math.min(1, drawn - k);
+                const pin = 33 * scale;
+                const mx = (a.x + b.x) / 2, my = Math.max(a.y, b.y) + 30;
+                if (k === 0) ctx.moveTo(a.x, a.y - pin);
+                const ex = lerp(a.x, b.x, u), ey = lerp(a.y, b.y, u);
+                ctx.quadraticCurveTo(lerp(a.x, mx, u), lerp(a.y - pin, my, u), ex, ey - pin);
+            }
+            ctx.stroke();
+            suspects.forEach((_, i) => polaroid(ctx, spots[i].x, spots[i].y, i, game.clearedAt[i] <= R.t0, scale));
+            drawBox(ctx, -60, h / 2 - 72, 120, 44, '#fff27a', '#c9b02a', 2);
+            textLine('2 left. Who?', 0, h / 2 - 50, { font: `bold 16px ${SERIF_FONT}`, color: '#2b1e12', align: 'center' });
+        });
+        const swing = (1 - easeOut(phase(f, 0, 0.45))) * 1.2 - easeIn(phase(f, R.t1 - R.t0 - 0.35, R.t1 - R.t0)) * 1.2;
+        drawTurned(o, W / 2, 360, swing, 1);
+    }
+    const easeIn = t => t * t;
+
+    // The little corkboard on the War Room wall, updated as the case goes on.
+    function drawMiniCorkboard(t, clearedAt) {
+        const R = ROOM_RECTS[WAR];
+        const x = R.x + 116, y = R.y + 10;
+        drawBox(ctx, x, y, 138, 34, '#b98a55', '#6b4a2a', 3);
+        suspects.forEach((s, i) => {
+            const px = x + 6 + (i % 8) * 16.5, py = y + 4 + Math.floor(i / 8) * 15;
+            ctx.fillStyle = '#fdfdfb';
+            ctx.fillRect(px, py, 12, 12);
+            ctx.fillStyle = `hsl(${s.hue}, 70%, 50%)`;
+            ctx.fillRect(px + 2, py + 2, 8, 7);
+            if (t >= clearedAt[i]) {
+                ctx.strokeStyle = '#c0262d';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(px + 12, py + 12);
+                ctx.moveTo(px + 12, py);
+                ctx.lineTo(px, py + 12);
+                ctx.stroke();
+            }
+        });
+    }
+
+    // --- Noir soundtrack: walking bass and brushes, faster as suspects drop ---
+    const BASS = [[73.42, 87.31, 110, 130.81], [98, 116.54, 146.83, 174.61], [110, 138.59, 164.81, 196], [146.83, 130.81, 110, 87.31]];
+    let musicTimer = null, nextBeat = 0, beatCount = 0;
+
+    function musicOn() {
+        return run && !run.done && !run.skipped && !run.paused && !muted && run.t >= run.musicFrom && run.t < run.musicTo && audioCtx;
+    }
+
+    function musicTick() {
+        if (!musicOn()) return;
+        const ac = audioCtx;
+        const left = suspects.filter((_, i) => run.t < run.clearedAt[i]).length;
+        const progress = 1 - (left - 1) / Math.max(1, suspects.length - 1);
+        const beat = 60 / (94 + 40 * progress);
+        if (nextBeat < ac.currentTime) nextBeat = ac.currentTime + 0.05;
+        while (nextBeat < ac.currentTime + 0.25) {
+            const at = nextBeat, inBar = beatCount % 4;
+            tone({ type: 'triangle', from: BASS[Math.floor(beatCount / 4) % 4][inBar], dur: beat * 0.9, vol: 0.16, at });
+            noise({ dur: 0.05, vol: 0.025, filter: 'highpass', from: 7000, at });
+            noise({ dur: 0.04, vol: 0.018, filter: 'highpass', from: 7000, at: at + beat * 0.66 });
+            if (inBar === 1 || inBar === 3) noise({ dur: 0.14, vol: 0.05, filter: 'bandpass', from: 1800, q: 0.7, at });
+            if (inBar === 0 && progress > 0.45) tone({ type: 'sine', from: 110, to: 45, dur: 0.18, vol: 0.18, at });
+            if (inBar === 0 && beatCount % 8 === 0) {
+                [293.66, 349.23, 440].forEach(fq => tone({ type: 'triangle', from: fq, dur: beat * 1.5, vol: 0.025, at }));
+            }
+            nextBeat += beat;
+            beatCount++;
+        }
+    }
+
+    function startMusic() {
+        if (!musicTimer) musicTimer = setInterval(musicTick, 40);
+        nextBeat = 0;
+        beatCount = 0;
+    }
+
+    function stopMusic() {
+        clearInterval(musicTimer);
+        musicTimer = null;
+    }
 
     // --- Drawing: helpers ---
     function roundRect(g, x, y, w, h, r) {
@@ -1949,16 +3243,8 @@
             }
             drawBox(g, R.x + 102, R.y + 56, 134, 16, '#3d3d46', '#1b1b22', 3);
         },
-        // War Room: the incident table and the whiteboard.
+        // War Room: the incident table (the corkboard on the wall is drawn live).
         (g, R) => {
-            drawBox(g, R.x + 120, R.y + 11, 130, 30, '#e9edf1', '#8a939e', 2);
-            g.font = `bold 10px ${UI_FONT}`;
-            g.fillStyle = '#c0262d';
-            g.textAlign = 'center';
-            g.fillText('INC-0307 · PROD-01 DOWN', R.x + 185, R.y + 24);
-            g.font = `9px ${UI_FONT}`;
-            g.fillStyle = '#2f5ca0';
-            g.fillText('who? where? with what?', R.x + 185, R.y + 36);
             for (let k = 0; k < 4; k++) {
                 drawBox(g, R.x + 84 + k * 28, R.y + 54, 14, 8, '#22262e');
                 drawBox(g, R.x + 84 + k * 28, R.y + 144, 14, 8, '#22262e');
@@ -2024,23 +3310,18 @@
         g.textBaseline = 'alphabetic';
     }
 
+    // The floor plan is drawn at extra resolution so it stays sharp when the camera zooms in.
     function buildBoard() {
+        const res = Math.min(3, pixelRatio * 2);
         const layer = document.createElement('canvas');
-        layer.width = W * pixelRatio;
-        layer.height = H * pixelRatio;
+        layer.width = W * res;
+        layer.height = H * res;
         const g = layer.getContext('2d');
-        g.scale(pixelRatio, pixelRatio);
+        g.scale(res, res);
         ledSpots = [];
         fanSpots = [];
         g.fillStyle = '#0b0f17';
         g.fillRect(0, 0, W, H);
-        const hud = g.createLinearGradient(0, 0, 0, 54);
-        hud.addColorStop(0, '#161d2a');
-        hud.addColorStop(1, '#0d121b');
-        g.fillStyle = hud;
-        g.fillRect(0, 0, W, 54);
-        g.fillStyle = '#c0262d';
-        g.fillRect(0, 52, W, 2);
         g.fillStyle = '#05070b';
         roundRect(g, OX - 7, OY - 6, COLS * TILE + 14, ROWS * TILE + 12, 8);
         g.fill();
@@ -2118,9 +3399,9 @@
     }
 
     // A classic cone-and-ball pawn standing at (0, 0), drawn into any context.
-    function drawPawn(g, x, y, hue, { scale = 1, cleared = false, culprit = false, lift = 0, sat = null } = {}) {
+    function drawPawn(g, x, y, hue, { scale = 1, cleared = false, culprit = false, lift = 0, sat = null, shake = 0 } = {}) {
         g.save();
-        g.translate(x, y);
+        g.translate(x + shake, y);
         g.fillStyle = 'rgba(0, 0, 0, 0.4)';
         g.beginPath();
         g.ellipse(0, 0, 10 * scale, 4 * scale, 0, 0, TAU);
@@ -2367,9 +3648,19 @@
         g.restore();
     }
 
-    function drawWeaponToken(s, w) {
+    // `fx` is the kit acting out its crime: [seconds in, 0..1 progress], or null.
+    function drawWeaponToken(s, w, fx, t) {
+        if (s.style === 'roomba') drawRoomba(s.x, s.y + 6, t);
+        let dx = 0, spin = 0;
+        if (fx) {
+            const [secs, f] = fx;
+            drawAct(w, s, secs, f, t);
+            if (w === 3) spin = easeInOut(f) * TAU * 2;
+            if (w === 4) dx = Math.sin(secs * 9) * 8;
+        }
         ctx.save();
-        ctx.translate(s.x, s.y - s.lift * 0.6);
+        ctx.translate(s.x + dx, s.y - s.lift * 0.6);
+        ctx.rotate(spin);
         ctx.fillStyle = 'rgba(8, 11, 17, 0.85)';
         ctx.strokeStyle = '#ffb43b';
         ctx.lineWidth = 1.5;
@@ -2403,29 +3694,6 @@
     const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
         5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
 
-    function drawDie(x, y, face, spin, pop) {
-        const size = 20 * pop;
-        if (size < 1) return;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(spin);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        roundRect(ctx, -size / 2 + 1.5, -size / 2 + 2, size, size, 4);
-        ctx.fill();
-        ctx.fillStyle = '#f4e8c8';
-        roundRect(ctx, -size / 2, -size / 2, size, size, 4);
-        ctx.fill();
-        ctx.strokeStyle = '#7d1418';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.fillStyle = face === 1 ? '#c0262d' : '#2b1e12';
-        for (const [px, py] of PIPS[face]) {
-            ctx.beginPath();
-            ctx.arc(px * size * 0.27, py * size * 0.27, size * (face === 1 ? 0.13 : 0.09), 0, TAU);
-            ctx.fill();
-        }
-        ctx.restore();
-    }
 
     function drawBubble(x, y, text, pop, accent) {
         if (pop <= 0) return;
@@ -2539,21 +3807,6 @@
     }
 
     // flip: 0 face down, 1 face up (the card turns edge-on half way).
-    function drawCard(x, y, face, flip, scale = 1, alpha = 1) {
-        const sx = Math.abs(Math.cos(flip * Math.PI)) * scale;
-        if (sx < 0.01 || alpha <= 0) return;
-        ctx.save();
-        ctx.globalAlpha *= alpha;
-        ctx.translate(x, y);
-        ctx.scale(sx, scale);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        roundRect(ctx, -CARD_W / 2 + 4, -CARD_H / 2 + 6, CARD_W, CARD_H, 10);
-        ctx.fill();
-        if (flip < 0.5 || !face) drawCardBack();
-        else drawCardFace(face);
-        ctx.restore();
-    }
-
     function drawStamp(x, y, text, color, pop) {
         if (pop <= 0) return;
         const s = lerp(2.2, 1, easeOut(pop));
@@ -2594,97 +3847,339 @@
         ctx.restore();
     }
 
-    function drawShownCard(card, t) {
-        if (t < card.t0 || t >= card.t1) return;
-        const alpha = 1 - phase(t, card.t1 - 0.2, card.t1);
-        const pop = easeOut(phase(t, card.t0, card.t0 + 0.2));
-        drawCard(W / 2, 320, card.face, phase(t, card.t0 + 0.1, card.t0 + 0.5), 0.6 + 0.4 * pop, alpha);
-        ctx.save();
-        ctx.globalAlpha = alpha;
-        const green = card.stamp === 'ALIBI';
-        drawStamp(W / 2 + 4, 330, card.stamp, green ? '#2f8f46' : '#c0262d', phase(t, card.stampAt, card.stampAt + 0.18));
-        drawCaption(W / 2, 430, `Shown by ${card.by}`);
-        ctx.restore();
+
+    // --- Drawing: life on the floor ---
+    // Inverse of easeInOut: when the Inspector reached a fraction f of a walk.
+    const unease = y => (y < 0.5 ? Math.sqrt(y / 2) : 1 - Math.sqrt((1 - y) / 2));
+
+    function drawFootprints(game, t) {
+        ctx.fillStyle = 'rgba(8, 10, 16, 0.6)';
+        for (const m of game.inspTrack.moves) {
+            if (m.type !== 'path' || t < m.t0 || t > m.t1 + 2.5) continue;
+            const count = Math.floor(m.path.total / 15);
+            for (let k = 1; k < count; k++) {
+                const f = k / count;
+                const age = t - (m.t0 + unease(f) * (m.t1 - m.t0));
+                if (age < 0 || age > 2.5) continue;
+                const a = along(m.path, f), b = along(m.path, Math.min(1, f + 0.01));
+                const ang = Math.atan2(b.y - a.y, b.x - a.x) || 0;
+                const side = k % 2 ? 3 : -3;
+                ctx.save();
+                ctx.globalAlpha = 1 - age / 2.5;
+                ctx.translate(a.x - Math.sin(ang) * side, a.y + Math.cos(ang) * side);
+                ctx.rotate(ang);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 3.6, 2, 0, 0, TAU);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
     }
 
-    function drawCctv(c, t) {
-        if (t < c.t0 || t >= c.t1) return;
-        const pop = easeOut(phase(t, c.t0, c.t0 + 0.25)) * (1 - phase(t, c.t1 - 0.2, c.t1));
-        const w = 380, h = 230;
-        ctx.save();
-        ctx.translate(W / 2, 330);
-        ctx.scale(pop, pop);
-        drawBox(ctx, -w / 2 - 10, -h / 2 - 10, w + 20, h + 20, '#1d2430', '#3a4658', 12);
-        ctx.fillStyle = '#0b1a13';
-        ctx.fillRect(-w / 2, -h / 2, w, h);
-        const mono = 'ui-monospace, Menlo, Consolas, monospace';
-        ctx.font = `bold 12px ${mono}`;
-        ctx.fillStyle = '#7dffa8';
-        ctx.textAlign = 'left';
-        const title = c.flavour === 'cctv' ? `CAM 0${c.room + 1} · ${ROOM_NAMES[c.room].toUpperCase()}` : `DOOR LOG · ${ROOM_NAMES[c.room].toUpperCase()}`;
-        ctx.fillText(title, -w / 2 + 12, -h / 2 + 20);
-        ctx.textAlign = 'right';
-        ctx.fillText(`03:07:${String(10 + (Math.floor(t * 4) % 50)).padStart(2, '0')}`, w / 2 - 12, -h / 2 + 20);
-        if (Math.floor(t * 2) % 2 === 0) {
-            ctx.fillStyle = '#ff3b3b';
+    // The interrogation lamp: its light pool goes under the suspect, the lamp and sweat over them.
+    function drawLamp(lamp, p, t, behind) {
+        const k = envelope(t, lamp.t0, lamp.t1, 0.2);
+        if (k <= 0) return;
+        const a = Math.sin(t * 3.4) * 0.35;
+        const px = p.x, py = p.y - 100;
+        const hx = px + Math.sin(a) * 34, hy = py + Math.cos(a) * 34;
+        if (behind) {
+            ctx.fillStyle = `rgba(255, 228, 140, ${0.22 * k})`;
             ctx.beginPath();
-            ctx.arc(w / 2 - 92, -h / 2 + 16, 4, 0, TAU);
+            ctx.moveTo(hx - 6, hy + 4);
+            ctx.lineTo(hx + 6, hy + 4);
+            ctx.lineTo(p.x + 30, p.y + 4);
+            ctx.lineTo(p.x - 30, p.y + 4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 30, 9, 0, 0, TAU);
+            ctx.fill();
+            return;
+        }
+        ctx.save();
+        ctx.globalAlpha = k;
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 24);
+        ctx.lineTo(hx, hy);
+        ctx.stroke();
+        ctx.fillStyle = '#2f5a3a';
+        ctx.beginPath();
+        ctx.moveTo(hx - 10, hy + 5);
+        ctx.lineTo(hx - 4, hy - 5);
+        ctx.lineTo(hx + 4, hy - 5);
+        ctx.lineTo(hx + 10, hy + 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#fff6c0';
+        ctx.beginPath();
+        ctx.arc(hx, hy + 5, 3.5, 0, Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#7fc8ff';
+        for (let d = 0; d < 2; d++) {
+            const u = (t * 1.6 + d * 0.5) % 1;
+            ctx.globalAlpha = k * (1 - u);
+            ctx.beginPath();
+            ctx.arc(p.x + (d ? 8 : -8), p.y - p.lift - 30 + u * 14, 1.8, 0, TAU);
             ctx.fill();
         }
-        const who = c.who;
-        if (c.flavour === 'cctv') {
-            const cols = who.length, gap = Math.min(110, (w - 40) / cols);
-            who.forEach((i, k) => {
-                const x = (k - (cols - 1) / 2) * gap;
-                drawPawn(ctx, x, 40, suspects[i].hue, { scale: 1.9, sat: 30 });
-                ctx.font = `bold 12px ${mono}`;
-                ctx.fillStyle = '#7dffa8';
-                ctx.textAlign = 'center';
-                ctx.fillText(fitText(ctx, suspects[i].name.toUpperCase(), gap - 6), x, 66);
-            });
-        } else {
-            ctx.font = `bold 13px ${mono}`;
-            ctx.textAlign = 'left';
-            who.forEach((i, k) => {
-                const y = -h / 2 + 58 + k * 30;
-                ctx.fillStyle = '#7dffa8';
-                ctx.fillText(`02:${String(41 + k * 6).padStart(2, '0')}  #${1000 + ((i * 137) % 9000)}`, -w / 2 + 16, y);
-                ctx.fillText(fitText(ctx, suspects[i].name.toUpperCase(), 150), -w / 2 + 160, y);
-                ctx.fillStyle = '#ffb43b';
-                ctx.textAlign = 'right';
-                ctx.fillText('OUT', w / 2 - 16, y);
-                ctx.textAlign = 'left';
-            });
-        }
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-        for (let y = -h / 2; y < h / 2; y += 3) ctx.fillRect(-w / 2, y, w, 1);
-        drawStamp(0, 0, 'ALL CLEARED', '#2f8f46', phase(t, c.stampAt, c.stampAt + 0.18));
         ctx.restore();
     }
 
-    // --- Drawing: intro, twists and the accusation ---
+    // Each piece of kit acts out its crime while it's being asked about.
+    function drawAct(w, s, secs, f, t) {
+        switch (w) {
+            case 0:
+                ctx.fillStyle = 'rgba(90, 52, 24, 0.75)';
+                ctx.beginPath();
+                ctx.ellipse(s.x + 8, s.y + 10, 6 + 18 * f, 3 + 6 * f, 0, 0, TAU);
+                ctx.fill();
+                break;
+            case 1:
+                ctx.strokeStyle = '#2f7de1';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                for (let k = 0; k <= 20; k++) {
+                    const x = s.x + 10 + k * 2.2, y = s.y + Math.sin(k * 0.6 - t * 14) * 7 * (k / 20);
+                    if (k) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+                }
+                ctx.stroke();
+                break;
+            case 2:
+                for (let k = 0; k < 2; k++) {
+                    const u = (t * 1.5 + k * 0.5) % 1;
+                    ctx.strokeStyle = `rgba(255, 59, 59, ${1 - u})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, 14 + u * 22, 0, TAU);
+                    ctx.stroke();
+                }
+                break;
+            case 4:
+                ctx.fillStyle = 'rgba(210, 210, 210, 0.5)';
+                for (let k = 0; k < 4; k++) {
+                    const u = (t * 2 + k * 0.25) % 1;
+                    ctx.beginPath();
+                    ctx.arc(s.x - 14 - u * 20, s.y + 6 - u * 8 + k * 3, 3 + u * 4, 0, TAU);
+                    ctx.fill();
+                }
+                break;
+            case 5:
+                textLine(typed('rm -rf /', secs, 14) + (Math.floor(t * 4) % 2 ? '▌' : ''), s.x, s.y - 22, { font: `bold 11px ${MONO}`, color: '#ff5a5a', align: 'center' });
+                break;
+        }
+    }
+
+    function drawRoomba(x, y, t) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + 2, 14, 6, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#2b2f36';
+        ctx.beginPath();
+        ctx.ellipse(x, y, 13, 6.5, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#4a515c';
+        ctx.beginPath();
+        ctx.ellipse(x, y - 2, 9, 4, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = Math.floor(t * 3) % 2 ? '#2fbf5a' : '#0d3a1a';
+        ctx.beginPath();
+        ctx.arc(x + 6, y - 2, 1.5, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawGuard(x, y) {
+        drawPawn(ctx, x, y, 220, { sat: 28 });
+        ctx.fillStyle = '#1d2430';
+        ctx.fillRect(x - 6.5, y - 35, 13, 5);
+        ctx.fillRect(x - 2, y - 31, 10, 2);
+    }
+
+    function drawDuck(x, y) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 9, 3, 0, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#ffd23f';
+        ctx.beginPath();
+        ctx.ellipse(0, -6, 9, 6, 0, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(5, -14, 5, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#ff8a1f';
+        ctx.beginPath();
+        ctx.moveTo(9, -14);
+        ctx.lineTo(14, -12);
+        ctx.lineTo(9, -11);
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(6.5, -15.5, 1, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    // Cleared suspects leave in style: the extras drawn with them while they move.
+    function drawRide(s, t, behind) {
+        if (!s.style) return;
+        if (behind && s.style === 'roomba') drawRoomba(s.x, s.y + 2, t);
+        if (behind && s.style === 'escort') drawGuard(s.x - 18 * s.dir, s.y + 3);
+        if (behind && s.style === 'zip') {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+            ctx.lineWidth = 2;
+            for (let k = 0; k < 3; k++) {
+                ctx.beginPath();
+                ctx.moveTo(s.x - s.dir * 12, s.y - 8 - k * 8);
+                ctx.lineTo(s.x - s.dir * 40, s.y - 8 - k * 8);
+                ctx.stroke();
+            }
+        }
+        if (!behind && s.style === 'moonwalk') {
+            textLine('♪', s.x + 12, s.y - 46 + Math.sin(t * 8) * 4, { font: `bold 16px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+            textLine('♫', s.x - 12, s.y - 54 + Math.cos(t * 7) * 4, { font: `bold 13px ${UI_FONT}`, color: '#36d6c6', align: 'center' });
+        }
+    }
+
+    // The robot vacuum's endless lap round the War Room corridor.
+    const ROOMBA_LOOP = polyline([[8, 6], [19, 6], [19, 13], [8, 13], [8, 6]].map(([c, r]) => tileCentre(c, r)));
+
+    function drawPolygraph(i, t, sd) {
+        const P = POLYGRAPHS[i];
+        const isCulprit = sd.culpritSide === i;
+        drawBox(ctx, P.x - 24, P.y - 15, 48, 28, '#3a3f48', '#111', 4);
+        ctx.fillStyle = '#fffaf0';
+        ctx.fillRect(P.x - 20, P.y - 11, 40, 16);
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        for (let k = 0; k <= 40; k++) {
+            const tt = t - (40 - k) * 0.02;
+            const after = tt >= sd.land;
+            const amp = after ? (isCulprit ? 7 : 0.5) : 3;
+            const y = P.y - 3 + amp * (Math.sin(tt * 23 + i * 1.7) * 0.6 + Math.sin(tt * 37 + i * 0.9) * 0.4);
+            const yy = Math.max(P.y - 10, Math.min(P.y + 4, y));
+            if (k) ctx.lineTo(P.x - 20 + k, yy); else ctx.moveTo(P.x - 20 + k, yy);
+        }
+        ctx.strokeStyle = t >= sd.land ? (isCulprit ? '#c0262d' : '#2f8f46') : '#2b1e12';
+        ctx.stroke();
+        if (t >= sd.land) {
+            textLine(isCulprit ? 'LIE!' : 'TRUTH', P.x, P.y + 24, { font: `900 12px ${UI_FONT}`, color: isCulprit ? '#ff5a5a' : '#2fbf5a', align: 'center' });
+        }
+    }
+
+    // Where the light falls: the showdown's swinging spotlight, then the accusation's.
+    function spotlightAt(game, t, pawns) {
+        const sd = game.showdown;
+        if (!sd || t < sd.t0) return null;
+        const mid = (SEATS[0].x + SEATS[1].x) / 2, half = (SEATS[1].x - SEATS[0].x) / 2, y = SEATS[0].y;
+        if (t >= game.accuseAt) {
+            const p = pawns[game.plan.culprit];
+            return { x: p.x, y: p.y, r: lerp(64, 92, phase(t, game.accuseAt, game.accuseAt + 0.8)) };
+        }
+        if (t < sd.sweep) return { x: mid, y, r: lerp(700, 190, easeOut(phase(t, sd.t0, sd.t0 + 0.8))) };
+        // The same swing for everyone; only how many half-swings it makes depends on where it ends.
+        const swings = 6 + (sd.culpritSide !== sd.startSide ? 1 : 0);
+        const th = sd.startSide * Math.PI + easeOut(phase(t, sd.sweep, sd.land)) * swings * Math.PI;
+        return { x: mid - half * Math.cos(th), y, r: lerp(190, 64, easeOut(phase(t, sd.sweep, sd.sweep + 0.4))) };
+    }
+
+    function drawDarkness(x, y, r, alpha) {
+        const g = ctx.createRadialGradient(x, y - 16, r * 0.55, x, y - 16, r);
+        g.addColorStop(0, 'rgba(2, 4, 10, 0)');
+        g.addColorStop(1, `rgba(2, 4, 10, ${alpha})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(-W, -H, W * 3, H * 3);
+    }
+
+    function drawBlackout(tw, t, insp) {
+        const k = envelope(t, tw.t0, tw.t1, 0.25);
+        const flicker = reduceMotion.matches || t > tw.t0 + 0.35 || Math.sin(t * 70) > -0.2 ? 1 : 0.3;
+        drawDarkness(insp.x, insp.y, 160, 0.9 * k * flicker);
+        ctx.fillStyle = `rgba(255, 0, 0, ${0.07 * k * flicker})`;
+        ctx.fillRect(-W, -H, W * 3, H * 3);
+    }
+
+    function drawPager(p, age) {
+        const pop = easeOut(phase(age, 0, 0.15)) * (1 - phase(age, 1.0, 1.2));
+        if (pop <= 0) return;
+        ctx.save();
+        ctx.translate(p.x + 10, p.y - 40 + Math.sin(age * 40) * 1.5);
+        ctx.scale(pop, pop);
+        drawBox(ctx, -16, -9, 32, 16, '#1d2430', '#ffb43b', 4);
+        textLine('BEEP', 0, -1, { font: `bold 8px ${MONO}`, color: '#ffb43b', align: 'center' });
+        ctx.restore();
+    }
+
+    // --- Camera ---
+    // The camera follows the Inspector, leans into rooms for questioning and pulls back for reveals.
+    const FULL_VIEW = { x: W / 2, y: H / 2, s: 1 };
+    function cameraTarget(key, insp) {
+        if (key.mode === 'full') return FULL_VIEW;
+        const max = reduceMotion.matches ? 1.2 : 1.85;
+        if (key.mode === 'follow') return reduceMotion.matches ? FULL_VIEW : { x: insp.x, y: insp.y - 20, s: 1.35 };
+        const R = ROOM_RECTS[key.room];
+        const s = Math.min(max, key.zoom || Math.min(W / (R.w + 170), (H - 60) / (R.h + 130)));
+        return { x: R.x + R.w / 2, y: R.y + R.h / 2 + 8, s };
+    }
+
+    function clampView(c) {
+        const hw = W / (2 * c.s), hh = H / (2 * c.s);
+        return { s: c.s, x: Math.min(W - hw, Math.max(hw, c.x)), y: Math.min(H - hh, Math.max(hh, c.y)) };
+    }
+
+    function cameraAt(game, t, insp) {
+        if (!game) return FULL_VIEW;
+        const keys = game.camKeys;
+        let k = 0;
+        while (k + 1 < keys.length && keys[k + 1].t <= t) k++;
+        const cur = clampView(cameraTarget(keys[k], insp));
+        if (k === 0) return cur;
+        const prev = clampView(cameraTarget(keys[k - 1], insp));
+        const u = easeInOut(phase(t, keys[k].t, keys[k].t + 0.5));
+        return { x: lerp(prev.x, cur.x, u), y: lerp(prev.y, cur.y, u), s: lerp(prev.s, cur.s, u) };
+    }
+
+    // The 3D tilt: the opening fly-in, and a low angle during the showdown.
+    function tiltAt(game, t) {
+        if (reduceMotion.matches) return null;
+        let tilt = 0, roll = 0, zoom = 1;
+        if (t < 2.7) {
+            const u = 1 - easeInOut(phase(t, 0.1, 2.6));
+            tilt = 1.05 * u;
+            roll = -0.45 * u;
+            zoom = lerp(1, 0.8, u);
+        }
+        if (game.showdown) tilt += 0.36 * envelope(t, game.showdown.t0, game.accuseAt + 1.1, 0.7);
+        return tilt > 0.002 ? { tilt, roll, zoom } : null;
+    }
+
+    const toScreen = (p, cam) => ({ x: (p.x - cam.x) * cam.s + W / 2, y: (p.y - cam.y) * cam.s + H / 2 });
+
+    // --- Drawing: intro, twists and the accusation (screen space) ---
     function drawIntro(t) {
-        if (t >= 2.6) return;
-        const alarm = 1 - phase(t, 2.0, 2.6);
+        if (t >= 3.4) return;
+        const alarm = 1 - phase(t, 2.4, 3.0);
         ctx.fillStyle = `rgba(255, 30, 30, ${(reduceMotion.matches ? 0.12 : 0.1 + 0.1 * Math.sin(t * 12)) * alarm})`;
         ctx.fillRect(0, 0, W, H);
-        const pop = easeOut(phase(t, 0.15, 0.45)) * (1 - phase(t, 2.25, 2.55));
+        const pop = easeOut(phase(t, 1.2, 1.5)) * (1 - phase(t, 3.1, 3.4));
         if (pop <= 0) return;
         const w = 420, h = 170;
         ctx.save();
         ctx.translate(W / 2, 330);
         ctx.scale(pop, pop);
         drawBox(ctx, -w / 2, -h / 2, w, h, '#05080c', '#36d6c6', 10);
-        ctx.font = `bold 14px ${UI_FONT}`;
-        ctx.fillStyle = '#36d6c6';
-        ctx.textAlign = 'left';
-        ctx.fillText('PROD-01 · HEALTH', -w / 2 + 16, -h / 2 + 24);
-        const flat = t > 1.25;
-        ctx.textAlign = 'right';
-        ctx.fillStyle = flat ? '#ff3b3b' : '#7dffa8';
-        ctx.fillText(flat ? '0 req/s · DOWN' : '1,204 req/s', w / 2 - 16, -h / 2 + 24);
+        const flat = t > 2.3;
+        textLine('PROD-01 · HEALTH', -w / 2 + 16, -h / 2 + 22, { font: `bold 14px ${UI_FONT}`, color: '#36d6c6' });
+        textLine(flat ? '0 req/s · DOWN' : '1,204 req/s', w / 2 - 16, -h / 2 + 22, { font: `bold 14px ${UI_FONT}`, color: flat ? '#ff3b3b' : '#7dffa8', align: 'right' });
         // The heartbeat draws across the screen and goes flat.
-        const cursor = phase(t, 0.3, 2.1);
+        const cursor = phase(t, 1.35, 3.0);
         ctx.strokeStyle = flat ? '#ff3b3b' : '#7dffa8';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
@@ -2699,22 +4194,25 @@
     }
 
     // Three face-down cards slide into the Incident Report.
-    function drawSealing(t) {
-        if (t < 2.3 || t >= 4.3) return;
+    function drawSealing(t, folder) {
+        if (t < 3.3 || t >= 5.2) return;
         for (let k = 0; k < 3; k++) {
-            const start = 2.9 + k * 0.4;
+            const start = 3.8 + k * 0.35;
             const f = easeInOut(phase(t, start, start + 0.55));
             if (f >= 1) continue;
-            const x = lerp(W / 2 + (k - 1) * 150, FOLDER.x, f), y = lerp(250, FOLDER.y, f);
-            drawCard(x, y, null, 0, lerp(0.8, 0.15, f) * easeOut(phase(t, 2.3, 2.5)));
+            drawCard3D(lerp(W / 2 + (k - 1) * 150, folder.x, f), lerp(250, folder.y, f), null, 0,
+                lerp(0.8, 0.15, f) * easeOut(phase(t, 3.3, 3.5)));
         }
     }
 
-    function drawTwist(tw, t, insp) {
+    function drawScreenTwist(tw, t) {
         if (!tw) return;
         const k = envelope(t, tw.t0, tw.t1, 0.25);
         if (tw.kind === 'heat') {
             ctx.fillStyle = `rgba(255, 70, 0, ${k * (0.12 + 0.06 * Math.sin(t * 6))})`;
+            ctx.fillRect(0, 0, W, H);
+        } else if (tw.kind === 'firedrill') {
+            ctx.fillStyle = `rgba(255, 20, 20, ${k * (reduceMotion.matches ? 0.12 : 0.08 + 0.1 * Math.max(0, Math.sin(t * 14)))})`;
             ctx.fillRect(0, 0, W, H);
         } else if (tw.kind === 'surge') {
             const f = phase(t, tw.t0, tw.t1);
@@ -2723,52 +4221,208 @@
             // Sparks are cosmetic, so Math.random is fine here.
             ctx.strokeStyle = '#fff6b0';
             ctx.lineWidth = 2;
-            for (let s = 0; s < 6; s++) {
-                const x = 140 + Math.random() * 180, y = 90 + Math.random() * 70;
+            for (let s = 0; s < 8; s++) {
+                const x = 120 + Math.random() * 760, y = 90 + Math.random() * 500;
                 ctx.beginPath();
                 ctx.moveTo(x, y);
                 ctx.lineTo(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30);
                 ctx.stroke();
             }
-        } else if (tw.kind === 'blackout') {
-            // Lights flicker out, the Inspector carries on by torchlight, the generator brings them back.
-            const flicker = reduceMotion.matches || t > tw.t0 + 0.35 || Math.sin(t * 70) > -0.2 ? 1 : 0.3;
-            const dark = k * flicker;
-            const g = ctx.createRadialGradient(insp.x, insp.y - 18, 25, insp.x, insp.y - 18, 150);
-            g.addColorStop(0, 'rgba(2, 4, 10, 0)');
-            g.addColorStop(1, `rgba(2, 4, 10, ${0.9 * dark})`);
-            ctx.fillStyle = g;
-            ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = `rgba(255, 0, 0, ${0.07 * dark})`;
-            ctx.fillRect(0, 0, W, H);
         }
     }
 
-    function drawSpotlight(game, t, at) {
-        const sp = game.spotlight;
-        if (!sp || t < sp.t0) return;
-        const r = lerp(760, 95, easeInOut(phase(t, sp.t0, sp.t1)));
-        const g = ctx.createRadialGradient(at.x, at.y - 16, r * 0.55, at.x, at.y - 16, r);
-        g.addColorStop(0, 'rgba(2, 4, 10, 0)');
-        g.addColorStop(1, 'rgba(2, 4, 10, 0.84)');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-    }
-
-    // The Incident Report opens: who, where, with what.
-    function drawReport(game, t) {
+    // The Incident Report opens: who, where, with what, each card turning over in 3D.
+    function drawReport(game, t, folder) {
         const rep = game.report;
         if (!rep || t < rep.t0) return;
         const { plan } = game;
         const faces = [{ type: 'suspect', index: plan.culprit }, { type: 'room', index: plan.room }, { type: 'weapon', index: plan.weapon }];
         faces.forEach((face, k) => {
             const f = easeInOut(phase(t, rep.t0 + k * 0.12, rep.t0 + k * 0.12 + 0.5));
-            const x = lerp(FOLDER.x, W / 2 + (k - 1) * 140, f), y = lerp(FOLDER.y, 200, f);
-            drawCard(x, y, face, phase(t, rep.flips[k], rep.flips[k] + 0.35), lerp(0.2, 0.86, f));
+            drawCard3D(lerp(folder.x, W / 2 + (k - 1) * 140, f), lerp(folder.y, 200, f), face,
+                easeInOut(phase(t, rep.flips[k], rep.flips[k] + 0.45)), lerp(0.2, 0.86, f));
         });
         drawStamp(W / 2 - 140, 214, 'GUILTY', '#c0262d', phase(t, rep.flips[2] + 0.5, rep.flips[2] + 0.68));
     }
 
+    // Night blue giving way to sunrise as the case goes on.
+    function drawDawn(game, t) {
+        const p = game ? t / game.end : 0;
+        ctx.fillStyle = `rgba(20, 40, 120, ${0.2 * (1 - p)})`;
+        ctx.fillRect(0, 0, W, H);
+        if (p > 0) {
+            ctx.fillStyle = `rgba(255, 140, 60, ${0.13 * easeInOut(p)})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    }
+
+    function drawHud(game, t, time, typedText, cursor, left, total) {
+        ctx.save();
+        const hud = ctx.createLinearGradient(0, 0, 0, 54);
+        hud.addColorStop(0, 'rgba(22, 29, 42, 0.97)');
+        hud.addColorStop(1, 'rgba(13, 18, 27, 0.97)');
+        ctx.fillStyle = hud;
+        ctx.fillRect(0, 0, W, 54);
+        ctx.fillStyle = '#c0262d';
+        ctx.fillRect(0, 52, W, 2);
+        if (Math.floor(time * 2) % 2 === 0) {
+            ctx.fillStyle = '#ff3b3b';
+            ctx.beginPath();
+            ctx.arc(18, 15, 4, 0, TAU);
+            ctx.fill();
+        }
+        const sev = !game ? 3 : left <= 2 ? 1 : left <= Math.ceil((total * 2) / 3) ? 2 : 3;
+        const mins = 7 + Math.round(185 * (game ? t / game.end : 0));
+        const clock = `${3 + Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} am`;
+        textLine(`INC-0307 · SEV-${sev} · ${clock}`, 28, 15.5, { font: `bold 11px ${UI_FONT}`, color: sev === 1 ? '#ff3b3b' : '#ff6b6b' });
+        if (total) textLine(`NO ALIBI: ${left} / ${total}`, W - 16, 15.5, { font: `bold 11px ${UI_FONT}`, color: '#36d6c6', align: 'right' });
+        if (game && game.paused) {
+            textLine('⏸ PAUSED · press Space or Resume', W / 2, 13, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+        } else if (speed > 1) {
+            textLine(`▶▶ ${speed}×`, W / 2, 13, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+        }
+        textLine(typedText + (cursor ? '▌' : ''), W / 2, 37, { font: `bold 17px ${UI_FONT}`, color: '#f4e8c8', align: 'center', max: W - 60 });
+        ctx.restore();
+    }
+
+    // --- Frame ---
+    const IDLE_WEAPONS = WEAPON_HOME.map((room, w) => ({ start: weaponSpot(room, WEAPON_HOME.slice(0, w).filter(r => r === room).length), moves: [] }));
+
+    function idleStatus() {
+        if (participants.length < 2) return 'Add at least two suspects to open the case.';
+        return 'Press Start Investigation (or Space) to open the case.';
+    }
+
+    // Everything on the floor plan, drawn through the camera into the world layer.
+    function drawWorld(game, t, time) {
+        const still = p => ({ x: p.x, y: p.y, lift: 0, scale: 1, moving: false, dir: 1, style: null });
+        const pawns = suspects.map((_, i) => (game ? trackAt(game.pawnTracks[i], t) : still(START_SPOTS[i])));
+        const insp = game ? trackAt(game.inspTrack, t) : still(INSP_SPOTS[WAR]);
+        const weapons = (game ? game.weaponTracks : IDLE_WEAPONS).map(tr => trackAt(tr, t));
+        const cam = cameraAt(game, t, insp);
+        const cleared = i => game !== null && t >= game.clearedAt[i];
+        const active = list => (game ? list.filter(x => t >= x.t0 && t < x.t1) : []);
+        const twist = active(game ? game.twists : [])[0] || null;
+        const lamps = active(game ? game.lamps : []);
+        const r = pixelRatio;
+
+        ctx.setTransform(r * cam.s, 0, 0, r * cam.s, r * (W / 2 - cam.x * cam.s), r * (H / 2 - cam.y * cam.s));
+        ctx.drawImage(boardLayer, 0, 0, W, H);
+        drawMiniCorkboard(t, game ? game.clearedAt : suspects.map(() => Infinity));
+        drawFans(time, twist && twist.kind === 'heat');
+        drawFolder(game && game.report ? phase(t, game.report.t0 - 0.3, game.report.t0) : 0);
+        if (game) drawFootprints(game, t);
+        if (game && game.showdown && t >= game.showdown.t0) [0, 1].forEach(i => drawPolygraph(i, t, game.showdown));
+
+        for (const ring of active(game ? game.rings : [])) {
+            const p = pawns[ring.who];
+            ctx.strokeStyle = `rgba(255, 180, 59, ${0.6 + 0.4 * Math.sin(t * 10)})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(p.x, p.y, 17, 7, 0, 0, TAU);
+            ctx.stroke();
+        }
+        for (const lamp of lamps) drawLamp(lamp, pawns[lamp.who], t, true);
+
+        // Back to front: anything further up the board is further away.
+        const items = [];
+        const acts = active(game ? game.acts : []);
+        weapons.forEach((s, w) => {
+            const act = acts.find(a => a.weapon === w);
+            items.push({ y: s.y - 20, draw: () => drawWeaponToken(s, w, act ? [t - act.t0, phase(t, act.t0, act.t1)] : null, t) });
+        });
+        pawns.forEach((s, i) => items.push({ y: s.y, draw: () => {
+            drawRide(s, t, true);
+            const shaking = lamps.some(l => l.who === i) && !reduceMotion.matches;
+            drawPawn(ctx, s.x, s.y, suspects[i].hue, { lift: s.lift, cleared: cleared(i), culprit: game && t >= game.namedAt && i === game.plan.culprit,
+                shake: shaking ? Math.sin(t * 60) * 1.2 : 0 });
+            drawRide(s, t, false);
+        } }));
+        items.push({ y: insp.y + 0.1, draw: () => drawInspector(insp) });
+        if (twist && twist.kind === 'duck') items.push({ y: insp.y + 2, draw: () => drawDuck(insp.x + 22, insp.y + 2) });
+        if (!(twist && twist.kind === 'roomba')) {
+            const p = along(ROOMBA_LOOP, (time / 26) % 1);
+            items.push({ y: p.y, draw: () => drawRoomba(p.x, p.y, time) });
+        }
+        items.sort((a, b) => a.y - b.y);
+        for (const item of items) item.draw();
+        for (const lamp of lamps) drawLamp(lamp, pawns[lamp.who], t, false);
+        // Cleared suspects relaxing in the Break Room drop their name tags to keep it readable.
+        pawns.forEach((s, i) => {
+            if (!(cleared(i) && !s.moving)) drawTag(suspects[i], s, cleared(i) ? 0.75 : 1);
+        });
+        if (game) for (const pg of game.pagers) if (t >= pg.t && t < pg.t + 1.2) drawPager(pawns[pg.who], t - pg.t);
+
+        if (twist && twist.kind === 'blackout') drawBlackout(twist, t, insp);
+        drawLeds(time);
+        const light = game ? spotlightAt(game, t, pawns) : null;
+        if (light) drawDarkness(light.x, light.y, light.r, game.showdown && t < game.showdown.sweep ? 0.55 : 0.82);
+
+        if (game) {
+            for (const d of game.dice) {
+                if (t < d.t0 || t >= d.t1) continue;
+                const pop = easeOut(phase(t, d.t0, d.t0 + 0.15)) * (1 - phase(t, d.t1 - 0.15, d.t1));
+                const spin = 1 - easeOut(phase(t, d.t0, d.roll));
+                const hop = Math.abs(Math.sin(phase(t, d.t0, d.roll) * Math.PI * 3)) * 18 * spin;
+                d.faces.forEach((face, k) => drawDie3D(insp.x + (k ? 16 : -16), insp.y - 70 - hop, 8 * pop, face, spin, d.axes[k]));
+            }
+            for (const b of active(game.bubbles)) {
+                const pop = easeOut(phase(t, b.t0, b.t0 + 0.15)) * (1 - phase(t, b.t1 - 0.12, b.t1));
+                const p = b.who === 'insp' ? insp : b.who === 'duck' ? { x: insp.x + 22, y: insp.y + 16, lift: 0 } : pawns[b.who];
+                drawBubble(p.x, p.y - p.lift - (b.who === 'insp' ? 46 : 52), b.text, pop, b.who === 'insp' ? '#c0262d' : '#ffb43b');
+            }
+        }
+        return { pawns, insp, cam, twist };
+    }
+
+    function draw(time) {
+        sizeCanvas();
+        if (!boardLayer) boardLayer = buildBoard();
+        const game = run;
+        const t = game ? game.t : 0;
+
+        const world = scratch('world', W, H);
+        let scene;
+        withContext(world.g, () => { scene = drawWorld(game, t, time); });
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#05070b';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        const tilt = game ? tiltAt(game, t) : null;
+        if (tilt) drawTilted(world, tilt.tilt, tilt.roll, tilt.zoom);
+        else ctx.drawImage(world.canvas, 0, 0, W, H);
+
+        drawScreenTwist(scene.twist && scene.twist.kind !== 'blackout' ? scene.twist : null, t);
+        drawDawn(game, t);
+        if (game) {
+            const folder = toScreen(FOLDER, scene.cam);
+            drawIntro(t);
+            drawSealing(t, folder);
+            for (const r of game.reveals) {
+                const from = r.witness !== undefined ? toScreen(scene.pawns[r.witness], scene.cam) : { x: W / 2, y: H };
+                drawReveal(r, t, from);
+            }
+            drawCorkboard(game, t);
+            drawReport(game, t, folder);
+            drawChat(game, t);
+        }
+        drawConfetti();
+
+        if (!suspects.length) {
+            textLine('Add suspects to open the case', W / 2, ROOM_RECTS[WAR].y + ROOM_RECTS[WAR].h + 22,
+                { font: `bold 18px ${UI_FONT}`, color: '#f4e8c8', align: 'center' });
+        }
+        const s = game ? statusAt(game, t) : null;
+        const full = game ? (s ? s.text : '') : idleStatus();
+        const shown = game && s && !game.paused ? full.slice(0, Math.floor((t - s.t) * TYPE_RATE)) : full;
+        const left = suspects.filter((_, i) => !(game && t >= game.clearedAt[i])).length;
+        drawHud(game, t, time, shown, shown.length < full.length, left, suspects.length);
+        if (full !== lastStatus) {
+            lastStatus = full;
+            statusEl.textContent = full;
+        }
+    }
     function drawConfetti() {
         confetti = confetti.filter(c => c.life > 0 && c.y < H + 40);
         for (const c of confetti) {
@@ -2805,130 +4459,6 @@
         }
     }
 
-    function drawHud(status, left, total, time) {
-        ctx.save();
-        ctx.textBaseline = 'middle';
-        ctx.font = `bold 11px ${UI_FONT}`;
-        if (Math.floor(time * 2) % 2 === 0) {
-            ctx.fillStyle = '#ff3b3b';
-            ctx.beginPath();
-            ctx.arc(18, 15, 4, 0, TAU);
-            ctx.fill();
-        }
-        ctx.fillStyle = '#ff6b6b';
-        ctx.textAlign = 'left';
-        ctx.fillText('INC-0307 · PROD-01 DOWN', 28, 15.5);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#36d6c6';
-        if (total) ctx.fillText(`NO ALIBI: ${left} / ${total}`, W - 16, 15.5);
-        if (speed > 1) {
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#ffb43b';
-            ctx.fillText(`▶▶ ${speed}×`, W / 2, 13);
-        }
-        ctx.font = `bold 17px ${UI_FONT}`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#f4e8c8';
-        ctx.fillText(fitText(ctx, status, W - 60), W / 2, 37);
-        ctx.restore();
-    }
-
-    // --- Frame ---
-    const IDLE_WEAPONS = WEAPON_HOME.map((room, w) => ({ start: weaponSpot(room, WEAPON_HOME.slice(0, w).filter(r => r === room).length), moves: [] }));
-
-    function idleStatus() {
-        if (participants.length < 2) return 'Add at least two suspects to open the case.';
-        return 'Press Start Investigation (or Space) to open the case.';
-    }
-
-    function draw(time) {
-        sizeCanvas();
-        if (!boardLayer) boardLayer = buildBoard();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.drawImage(boardLayer, 0, 0);
-        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-
-        const game = run;
-        const t = game ? game.t : 0;
-        const twist = game ? game.twists.find(x => t >= x.t0 && t < x.t1) : null;
-        drawFans(time, twist && twist.kind === 'heat');
-        drawFolder(game && game.report ? phase(t, game.report.t0 - 0.3, game.report.t0) : 0);
-
-        const still = p => ({ x: p.x, y: p.y, lift: 0, scale: 1, moving: false, dir: 1 });
-        const pawns = suspects.map((_, i) => (game ? trackAt(game.pawnTracks[i], t) : still(START_SPOTS[i])));
-        const insp = game ? trackAt(game.inspTrack, t) : still(INSP_SPOTS[WAR]);
-        const weapons = (game ? game.weaponTracks : IDLE_WEAPONS).map(tr => trackAt(tr, t));
-        const cleared = i => game !== null && t >= game.clearedAt[i];
-        const named = game && t >= game.accuseAt + 1.4;
-
-        // Witness rings sit on the floor under the pawns.
-        if (game) {
-            for (const ring of game.rings) {
-                if (t < ring.t0 || t >= ring.t1) continue;
-                const p = pawns[ring.who];
-                ctx.strokeStyle = `rgba(255, 180, 59, ${0.6 + 0.4 * Math.sin(t * 10)})`;
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.ellipse(p.x, p.y, 17, 7, 0, 0, TAU);
-                ctx.stroke();
-            }
-        }
-
-        // Back to front: anything further up the board is further away.
-        const items = [];
-        weapons.forEach((s, w) => items.push({ y: s.y - 20, draw: () => drawWeaponToken(s, w) }));
-        pawns.forEach((s, i) => items.push({ y: s.y, draw: () => drawPawn(ctx, s.x, s.y, suspects[i].hue,
-            { lift: s.lift, cleared: cleared(i), culprit: named && i === game.plan.culprit }) }));
-        items.push({ y: insp.y + 0.1, draw: () => drawInspector(insp) });
-        items.sort((a, b) => a.y - b.y);
-        for (const item of items) item.draw();
-        // Cleared suspects relaxing in the Break Room drop their name tags to keep it readable.
-        pawns.forEach((s, i) => {
-            if (!(cleared(i) && !s.moving)) drawTag(suspects[i], s, cleared(i) ? 0.75 : 1);
-        });
-
-        drawTwist(twist, t, insp);
-        drawLeds(time);
-        if (game) drawSpotlight(game, t, pawns[game.plan.culprit]);
-
-        if (game) {
-            for (const d of game.dice) {
-                if (t < d.t0 || t >= d.t1) continue;
-                const rolling = t < d.roll;
-                const pop = easeOut(phase(t, d.t0, d.t0 + 0.15)) * (1 - phase(t, d.t1 - 0.15, d.t1));
-                d.faces.forEach((face, k) => {
-                    const shown = rolling ? 1 + (Math.floor(t * 18 + k * 3) % 6) : face;
-                    drawDie(insp.x + (k ? 15 : -15), insp.y - 66, shown, rolling ? t * 9 + k : 0.1 * (k ? 1 : -1), pop);
-                });
-            }
-            for (const b of game.bubbles) {
-                if (t < b.t0 || t >= b.t1) continue;
-                const pop = easeOut(phase(t, b.t0, b.t0 + 0.15)) * (1 - phase(t, b.t1 - 0.12, b.t1));
-                const p = b.who === 'insp' ? insp : pawns[b.who];
-                drawBubble(p.x, p.y - p.lift - (b.who === 'insp' ? 46 : 52), b.text, pop, b.who === 'insp' ? '#c0262d' : '#ffb43b');
-            }
-            drawIntro(t);
-            drawSealing(t);
-            for (const card of game.cards) drawShownCard(card, t);
-            for (const c of game.cctv) drawCctv(c, t);
-            drawReport(game, t);
-        }
-        drawConfetti();
-
-        if (!suspects.length) {
-            ctx.font = `bold 18px ${UI_FONT}`;
-            ctx.textAlign = 'center';
-            ctx.fillStyle = '#f4e8c8';
-            ctx.fillText('Add suspects to open the case', W / 2, ROOM_RECTS[WAR].y + ROOM_RECTS[WAR].h + 22);
-        }
-        const status = game ? statusAt(game, t) : idleStatus();
-        const left = suspects.filter((_, i) => !cleared(i)).length;
-        drawHud(status, left, suspects.length, time);
-        if (status !== lastStatus) {
-            lastStatus = status;
-            statusEl.textContent = status;
-        }
-    }
 
     let lastNow = null;
     function frame(now) {
