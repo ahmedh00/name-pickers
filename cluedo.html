@@ -1,0 +1,3029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cluedo Name Picker</title>
+    <style>
+        :root {
+            --bg-color: #0a0e16;
+            --paper: #f4e8c8;
+            --paper-dark: #e6d4a6;
+            --paper-edge: #c9b27e;
+            --ink: #2b1e12;
+            --ink-soft: #7a6343;
+            --clue-red: #c0262d;
+            --clue-red-dark: #7d1418;
+            --steel: #3a4658;
+            --steel-dark: #1d2430;
+            --led-teal: #36d6c6;
+            --amber: #ffb43b;
+            --alibi-green: #2f8f46;
+            --error-color: #b3122e;
+        }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+            background:
+                radial-gradient(circle at 50% -10%, rgba(54, 214, 198, 0.12) 0%, transparent 55%),
+                repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 32px),
+                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 32px),
+                var(--bg-color);
+            background-color: var(--bg-color);
+            color: var(--ink);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-weight: 900;
+            font-size: 46px;
+            letter-spacing: 6px;
+            margin: 0;
+            text-align: center;
+            line-height: 1.05;
+            color: #f6efe0;
+            text-shadow: 0 0 18px rgba(192, 38, 45, 0.55), 3px 3px 0 var(--clue-red-dark);
+        }
+        h1 .glass { display: inline-block; transform: rotate(-12deg); text-shadow: none; }
+        .tagline {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-style: italic;
+            color: var(--led-teal);
+            letter-spacing: 2px;
+            margin: 4px 0 16px;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            max-width: 1320px;
+            width: 100%;
+        }
+        .sidebar {
+            flex: 1;
+            min-width: 240px;
+            max-width: 310px;
+            background:
+                repeating-linear-gradient(180deg, transparent 0 25px, rgba(47, 92, 160, 0.13) 25px 26px),
+                var(--paper);
+            padding: 18px 18px 14px 26px;
+            border-radius: 6px 14px 14px 6px;
+            box-shadow: 0 8px 0 var(--paper-edge), 0 14px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+        /* The red margin line of a detective's notebook. */
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0; bottom: 0; left: 14px;
+            border-left: 2px solid rgba(192, 38, 45, 0.45);
+        }
+        .game-area {
+            flex: 4;
+            position: relative;
+            min-width: 0;
+        }
+        #gameCanvas {
+            background: #121722;
+            border: 4px solid var(--steel);
+            border-radius: 14px;
+            box-shadow: 0 6px 0 var(--steel-dark), 0 0 40px rgba(54, 214, 198, 0.08);
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 10 / 7;
+            box-sizing: border-box;
+        }
+        .game-area:fullscreen {
+            background: var(--bg-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .game-area:fullscreen #gameCanvas { width: min(100vw, calc(100vh * 10 / 7)); border-radius: 0; border-width: 0; }
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #fffaf0;
+            color: var(--ink);
+            border: 2px solid var(--paper-edge);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 16px;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--clue-red); }
+        button {
+            width: 100%;
+            padding: 10px;
+            background: var(--steel);
+            color: #f6efe0;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 0 var(--steel-dark);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            transition: background 0.15s, transform 0.05s, box-shadow 0.05s;
+        }
+        button:hover:not(:disabled) { background: #4b5a71; }
+        button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--steel-dark); }
+        button:disabled, input:disabled { opacity: 0.45; cursor: not-allowed; }
+        button:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+        #startBtn { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); font-size: 16px; }
+        #startBtn:hover:not(:disabled) { background: #d8393f; }
+        #startBtn:active:not(:disabled) { box-shadow: 0 1px 0 var(--clue-red-dark); }
+        .tool-row { display: flex; gap: 6px; }
+        .tool-row button {
+            background: transparent;
+            color: var(--ink);
+            border: 2px solid var(--paper-edge);
+            box-shadow: none;
+            font-size: 11px;
+            padding: 7px 4px;
+            letter-spacing: 0;
+        }
+        .tool-row button:hover:not(:disabled) { background: var(--paper-dark); }
+        #nameError {
+            min-height: 1.2em;
+            margin: -2px 0 6px;
+            color: var(--error-color);
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .notebook-head {
+            font-family: Georgia, 'Times New Roman', serif;
+            font-weight: bold;
+            font-size: 17px;
+            margin: 6px 0 2px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .count { font-family: 'Trebuchet MS', sans-serif; font-size: 12px; font-weight: normal; color: var(--ink-soft); }
+        .nb-label {
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--clue-red-dark);
+            margin: 10px 0 4px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 4px;
+        }
+        #nameList { max-height: 300px; overflow-y: auto; }
+        #nameList li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px 4px 8px;
+            background: rgba(255, 255, 255, 0.7);
+            margin-bottom: 4px;
+            border: 1px solid var(--paper-dark);
+            border-left: 7px solid var(--swatch, #888);
+            border-radius: 5px;
+            transition: background 0.3s, opacity 0.3s;
+        }
+        #nameList li .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: bold; flex: 1; }
+        #nameList li .mark {
+            font-size: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        #nameList li.cleared { opacity: 0.6; background: rgba(255, 255, 255, 0.35); }
+        #nameList li.cleared .name { text-decoration: line-through; text-decoration-color: var(--clue-red); text-decoration-thickness: 2px; }
+        #nameList li.cleared .mark { color: #fff; background: var(--alibi-green); }
+        #nameList li.suggested .mark { color: var(--ink); background: var(--amber); }
+        #nameList li.culprit { background: #fff; box-shadow: 0 0 0 2px var(--clue-red); }
+        #nameList li.culprit .mark { color: #fff; background: var(--clue-red); }
+        .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+        .chips li {
+            font-size: 11.5px;
+            padding: 3px 7px;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid var(--paper-dark);
+            border-radius: 10px;
+            white-space: nowrap;
+            transition: opacity 0.3s;
+        }
+        .chips li.crossed { opacity: 0.5; text-decoration: line-through; text-decoration-color: var(--clue-red); text-decoration-thickness: 2px; }
+        .chips li.answer { background: var(--clue-red); color: #fff; border-color: var(--clue-red-dark); font-weight: bold; }
+        .remove-btn {
+            width: auto;
+            margin: 0;
+            padding: 3px 7px;
+            background: var(--clue-red);
+            font-size: 11px;
+            box-shadow: none;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+        .remove-btn:hover:not(:disabled) { background: #d8393f; }
+        hr { border: none; border-top: 2px dashed var(--paper-edge); margin: 14px 0; }
+        .fair-note, .keys { font-size: 12px; line-height: 1.5; color: var(--ink-soft); margin: 6px 0 0; }
+        .fair-note a { color: var(--clue-red-dark); font-weight: bold; }
+        .keys kbd {
+            font-family: inherit;
+            font-size: 10.5px;
+            padding: 0 4px;
+            border: 1px solid var(--paper-edge);
+            border-bottom-width: 2px;
+            border-radius: 3px;
+            background: #fffaf0;
+        }
+
+        /* --- The verdict: a newspaper front page --- */
+        #verdictOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 8, 14, 0.45);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .paper {
+            width: min(640px, 86%);
+            background:
+                radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.5), transparent 60%),
+                #efe6cf;
+            color: #1b1a17;
+            padding: 16px 24px 12px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            transform: rotate(-2deg);
+            font-family: Georgia, 'Times New Roman', serif;
+            animation: paperSpin 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+        }
+        @keyframes paperSpin {
+            from { transform: rotate(-1080deg) scale(0.04); opacity: 0; }
+            70% { opacity: 1; }
+            to { transform: rotate(-2deg) scale(1); opacity: 1; }
+        }
+        .masthead {
+            font-family: 'Old English Text MT', Georgia, serif;
+            font-size: 40px;
+            font-weight: 900;
+            text-align: center;
+            letter-spacing: 1px;
+            line-height: 1;
+            border-bottom: 3px double #1b1a17;
+            padding-bottom: 6px;
+        }
+        .dateline {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #1b1a17;
+            padding: 3px 0;
+            margin-bottom: 8px;
+        }
+        #headline {
+            font-family: Impact, 'Arial Black', 'Helvetica Neue', sans-serif;
+            font-size: calc(56px * var(--hl, 1));
+            line-height: 0.95;
+            margin: 4px 0 8px;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            word-break: break-word;
+        }
+        .paper-body { display: flex; gap: 14px; align-items: flex-start; }
+        #mugshot { width: 150px; height: 170px; flex-shrink: 0; border: 2px solid #1b1a17; background: #ddd; }
+        .subhead { font-size: 19px; font-weight: bold; font-style: italic; margin: 0 0 6px; }
+        .story { font-size: 13px; line-height: 1.45; margin: 0; columns: 2; column-gap: 14px; }
+        .paper-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .paper-actions button { margin: 0; font-size: 13px; padding: 8px; }
+        #playAgainBtn { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); }
+        #copyMsg { min-height: 1.1em; font-size: 12px; text-align: center; margin-top: 4px; font-family: 'Trebuchet MS', sans-serif; }
+
+        /* Read out by screen readers; shown as text under the board on small screens. */
+        #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+        #selftestPanel {
+            max-width: 820px;
+            width: 100%;
+            background: var(--paper);
+            border-radius: 10px;
+            padding: 20px 24px;
+            box-sizing: border-box;
+            box-shadow: 0 8px 0 var(--paper-edge);
+        }
+        #selftestPanel h2 { font-family: Georgia, 'Times New Roman', serif; margin-top: 0; }
+        #selftestPanel a { color: var(--clue-red-dark); }
+        .check { padding: 10px 0; border-bottom: 1px solid var(--paper-dark); }
+        .check .title { font-weight: bold; }
+        .check .detail { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+        .check.pass .title::before { content: '✔ '; color: var(--alibi-green); }
+        .check.fail .title::before { content: '✖ '; color: var(--error-color); }
+        .summary { font-size: 22px; font-weight: bold; margin: 16px 0 8px; }
+        .summary.pass { color: var(--alibi-green); }
+        .summary.fail { color: var(--error-color); }
+
+        @media (prefers-reduced-motion: reduce) {
+            .paper { animation: none; }
+        }
+        @media (max-width: 820px) {
+            body { padding: 12px; }
+            h1 { font-size: 30px; letter-spacing: 3px; }
+            .tagline { font-size: 14px; margin-bottom: 10px; }
+            .container { flex-direction: column-reverse; align-items: stretch; }
+            .sidebar { max-width: none; }
+            #nameList { max-height: 220px; }
+            .paper { width: 92%; padding: 6px 10px 6px; }
+            .masthead { font-size: 18px; padding-bottom: 2px; }
+            .dateline { font-size: 8px; padding: 1px 0; margin-bottom: 3px; }
+            .dateline span:last-child { display: none; }
+            #headline { font-size: calc(24px * var(--hl, 1)); margin: 2px 0 4px; }
+            #mugshot { width: 54px; height: 62px; }
+            .subhead { font-size: 12px; margin: 0; }
+            .story { display: none; }
+            .paper-actions { margin-top: 5px; gap: 4px; }
+            .paper-actions button { font-size: 10px; padding: 4px; box-shadow: none; }
+            #copyMsg { font-size: 10px; min-height: 0; }
+            #status {
+                position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal;
+                margin-top: 8px; padding: 6px 10px; background: var(--paper); border-radius: 10px;
+                text-align: center; font-weight: bold; font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1><span class="glass" aria-hidden="true">🔍</span> CLUEDO PICKER</h1>
+    <p class="tagline">3:07 am. PROD-01 is down. Somebody did it.</p>
+
+    <div class="container" id="gameView">
+        <div class="sidebar">
+            <input type="text" id="nameInput" placeholder="Name a suspect..." autocomplete="off" maxlength="18">
+            <div id="nameError" role="alert" aria-live="polite"></div>
+            <button id="addBtn">Add Suspect</button>
+
+            <div class="notebook-head">Detective's notebook <span class="count" id="nameCount"></span></div>
+            <div class="nb-label">Suspects</div>
+            <ul id="nameList"></ul>
+            <div class="nb-label">Locations</div>
+            <ul class="chips" id="roomList"></ul>
+            <div class="nb-label">Equipment</div>
+            <ul class="chips" id="weaponList"></ul>
+            <hr>
+            <button id="startBtn" disabled>Start Investigation</button>
+            <button id="skipBtn" hidden>Skip to verdict</button>
+            <div class="tool-row">
+                <button id="speedBtn" aria-label="Playback speed">Speed 1×</button>
+                <button id="muteBtn" aria-pressed="false">Sound: on</button>
+                <button id="fullBtn">Fullscreen</button>
+            </div>
+            <p class="fair-note">
+                The culprit is drawn with your browser's secure random generator before the Inspector takes a step,
+                so every name has exactly the same chance. Fake-outs and witnesses are drawn just as evenly, so nothing
+                on screen gives the culprit away. <a href="?selftest">Run the fairness self-test</a>
+            </p>
+            <p class="keys"><kbd>Space</kbd> start · <kbd>S</kbd> skip · <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd> speed · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen</p>
+        </div>
+
+        <div class="game-area" id="gameArea">
+            <canvas id="gameCanvas" width="1000" height="700" aria-label="Data centre floor plan"></canvas>
+            <div id="status" aria-live="polite"></div>
+            <div id="verdictOverlay" hidden aria-live="polite">
+                <article class="paper">
+                    <div class="masthead">The Daily Standup</div>
+                    <div class="dateline"><span id="paperDate"></span><span>Late edition · 3:07 am</span><span>Price: one coffee</span></div>
+                    <h2 id="headline"></h2>
+                    <div class="paper-body">
+                        <canvas id="mugshot" width="300" height="340" aria-hidden="true"></canvas>
+                        <div>
+                            <p class="subhead" id="subhead"></p>
+                            <p class="story" id="story"></p>
+                        </div>
+                    </div>
+                    <div class="paper-actions">
+                        <button id="copyBtn">Copy verdict</button>
+                        <button id="playAgainBtn">New case</button>
+                        <button id="editBtn">Edit suspects</button>
+                    </div>
+                    <div id="copyMsg" aria-live="polite"></div>
+                </article>
+            </div>
+        </div>
+    </div>
+
+    <div id="selftestPanel" hidden>
+        <h2>Fairness self-test</h2>
+        <div id="selftestResults">Running…</div>
+        <p><a id="backLink" href="?">Back to the investigation</a></p>
+    </div>
+
+<script id="clue-core">
+    // --- Fairness core: decides every case before anyone moves. No DOM access. ---
+    const ClueCore = (() => {
+        const MAX_NAMES = 15;
+        const MAX_NAME_LENGTH = 18;
+        const ROOMS = ['Server Room', 'NOC', 'Power Room', 'Break Room', 'Cooling Plant',
+            'Boardroom', 'Loading Dock', 'Open-Plan Office', 'Security Desk'];
+        const WEAPONS = ['Coffee Mug', 'Ethernet Cable', 'Rogue USB Stick', 'Screwdriver', 'Vacuum Cleaner', 'Keyboard'];
+        const START_ROOM = -1;      // the Inspector starts in the War Room, which is not a suspect room
+        const MIN_TURNS = 3;        // even two names get a proper investigation
+        const FINAL_SINGLES = 3;    // the last three suspects are always cleared one at a time
+        // Seconds each part of a case takes at 1x. buildRun lays the timeline out with the same numbers.
+        const TIMING = { intro: 5.5, turn: 4.8, deduction: 3, accusation: 5.2 };
+        // Chi-square critical values at p = 0.001, indexed by degrees of freedom.
+        const CHI_CRITICAL = [NaN, 10.828, 13.816, 16.266, 18.467, 20.515, 22.458, 24.322,
+            26.124, 27.877, 29.588, 31.264, 32.909, 34.528, 36.123];
+        const Z_CRITICAL = 3.291; // two-sided p = 0.001
+
+        const pool = new Uint32Array(1024);
+        let poolPos = pool.length;
+        function cryptoU32() {
+            if (poolPos === pool.length) {
+                crypto.getRandomValues(pool);
+                poolPos = 0;
+            }
+            return pool[poolPos++];
+        }
+
+        // Uniform integer in [0, n). Draws from the top of the 2^32 range that would
+        // make some results more likely (modulo bias) are thrown away and redrawn.
+        function secureInt(n, nextU32 = cryptoU32) {
+            if (!Number.isInteger(n) || n < 1) throw new RangeError(`secureInt needs a positive integer, got ${n}`);
+            const limit = 2 ** 32 - (2 ** 32 % n);
+            let x;
+            do { x = nextU32(); } while (x >= limit);
+            return x % n;
+        }
+
+        // Fisher-Yates on a copy.
+        function shuffle(items, rng = secureInt) {
+            const out = [...items];
+            for (let i = out.length - 1; i > 0; i--) {
+                const j = rng(i + 1);
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+
+        // A uniform pick from `items`.
+        function pickFrom(items, rng) {
+            return items[rng(items.length)];
+        }
+
+        function chiSquare(observed, expected) {
+            return observed.reduce((sum, o, i) => sum + (o - expected[i]) ** 2 / expected[i], 0);
+        }
+
+        function criticalValue(df) {
+            if (!(df in CHI_CRITICAL) || df < 1) throw new RangeError(`No critical value for df=${df}`);
+            return CHI_CRITICAL[df];
+        }
+
+        // Names that look the same on screen must count as the same person, or one
+        // person could be two suspects: unify accents, drop zero-width characters, collapse spaces.
+        function normalizeName(raw) {
+            return String(raw).normalize('NFC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/\s+/g, ' ').trim();
+        }
+
+        function validateName(raw, existing) {
+            const name = normalizeName(raw);
+            if (!name) return { error: 'Type a name first.' };
+            if (name.length > MAX_NAME_LENGTH) return { error: `Names can be up to ${MAX_NAME_LENGTH} characters.` };
+            const lower = name.toLowerCase();
+            if (existing.some(e => normalizeName(e).toLowerCase() === lower)) return { error: `${name} is already a suspect.` };
+            if (existing.length >= MAX_NAMES) return { error: `The data centre holds ${MAX_NAMES} suspects at most.` };
+            return { name };
+        }
+
+        function parseSavedNames(json) {
+            let data;
+            try { data = JSON.parse(json); } catch { return []; }
+            if (!Array.isArray(data)) return [];
+            const names = [];
+            for (const item of data) {
+                if (typeof item !== 'string') continue;
+                const result = validateName(item, names);
+                if (result.name) names.push(result.name);
+            }
+            return names;
+        }
+
+        // How many suspects one turn clears, given how many innocent ones are left.
+        // It looks only at the count, never at who is left, so it can't give anyone away.
+        function batchSize(left, rng) {
+            if (left <= FINAL_SINGLES) return 1;
+            const size = left >= 9 ? 3 + rng(2) : left >= 5 ? 1 + rng(2) : 1;
+            return Math.min(size, left - FINAL_SINGLES);
+        }
+
+        // A room for the next suggestion: anywhere but where the Inspector already is.
+        function nextRoom(current, rng, avoid = -1) {
+            const choices = ROOMS.map((_, i) => i).filter(i => i !== current && i !== avoid);
+            return pickFrom(choices, rng);
+        }
+
+        // The culprit is one uniform draw, made before anything else. Everything after it
+        // treats the culprit exactly like any suspect who hasn't been cleared yet:
+        //  - the clearing order is a uniform shuffle of everyone else;
+        //  - how many are cleared per turn depends only on how many are left;
+        //  - a fake-out suggests a uniform pick from *everyone* still uncleared, culprit included;
+        //  - a witness is a uniform pick from everyone not being cleared that turn, culprit included.
+        // So nothing on screen says anything about who did it until the final accusation.
+        function planGame(names, rng = secureInt) {
+            const n = names.length;
+            if (n < 2) throw new RangeError('planGame needs at least 2 names');
+            const culprit = rng(n);
+            const room = rng(ROOMS.length);
+            const weapon = rng(WEAPONS.length);
+
+            const order = shuffle([...Array(n).keys()].filter(i => i !== culprit), rng);
+            const batches = [];
+            for (let k = 0; k < order.length;) {
+                const size = batchSize(order.length - k, rng);
+                batches.push(order.slice(k, k + size));
+                k += size;
+            }
+
+            // Fake-outs never come after the last clearing: by then only the culprit is left,
+            // so a fake-out there would point straight at them.
+            const fakes = Math.max(0, MIN_TURNS - batches.length) + (n >= 4 ? rng(2) : 0);
+            const kinds = shuffle([...new Array(batches.length - 1).fill('clear'), ...new Array(fakes).fill('fake')], rng);
+            kinds.push('clear');
+
+            const uncleared = new Set([...Array(n).keys()]);
+            const turns = [];
+            let at = START_ROOM, b = 0;
+            for (const kind of kinds) {
+                if (kind === 'clear') {
+                    const suspects = batches[b++];
+                    const others = [...Array(n).keys()].filter(i => !suspects.includes(i));
+                    const turnRoom = nextRoom(at, rng);
+                    turns.push({
+                        kind, suspects, room: turnRoom, weapon: rng(WEAPONS.length),
+                        witness: suspects.length === 1 ? pickFrom(others, rng) : null,
+                    });
+                    suspects.forEach(i => uncleared.delete(i));
+                    at = turnRoom;
+                } else {
+                    const suspect = pickFrom([...uncleared], rng);
+                    const others = [...Array(n).keys()].filter(i => i !== suspect);
+                    // The witness disproves the suggestion with the room or the weapon card,
+                    // so that card can't be in the Incident Report.
+                    let turnRoom, turnWeapon, shown;
+                    if (rng(2) === 0) {
+                        turnRoom = nextRoom(at, rng, room);
+                        turnWeapon = rng(WEAPONS.length);
+                        shown = { type: 'room', index: turnRoom };
+                    } else {
+                        turnRoom = nextRoom(at, rng);
+                        turnWeapon = pickFrom(WEAPONS.map((_, i) => i).filter(i => i !== weapon), rng);
+                        shown = { type: 'weapon', index: turnWeapon };
+                    }
+                    turns.push({ kind, suspects: [suspect], room: turnRoom, weapon: turnWeapon, witness: pickFrom(others, rng), shown });
+                    at = turnRoom;
+                }
+            }
+            return { culprit, room, weapon, turns };
+        }
+
+        // Re-checks a plan turn by turn against the rules above.
+        function planIsValid(plan, n) {
+            const { culprit, room, weapon, turns } = plan;
+            const inRange = (x, max) => Number.isInteger(x) && x >= 0 && x < max;
+            if (!inRange(culprit, n) || !inRange(room, ROOMS.length) || !inRange(weapon, WEAPONS.length)) return false;
+            if (turns.length < MIN_TURNS || turns.at(-1).kind !== 'clear') return false;
+            const uncleared = new Set([...Array(n).keys()]);
+            const clearSizes = [];
+            let at = START_ROOM;
+            for (const t of turns) {
+                if (!inRange(t.room, ROOMS.length) || t.room === at || !inRange(t.weapon, WEAPONS.length)) return false;
+                if (!Array.isArray(t.suspects) || t.suspects.length < 1) return false;
+                if (t.suspects.some(i => !uncleared.has(i)) || new Set(t.suspects).size !== t.suspects.length) return false;
+                if (t.kind === 'clear') {
+                    if (t.suspects.includes(culprit)) return false;
+                    if (t.suspects.length === 1 ? (!inRange(t.witness, n) || t.witness === t.suspects[0]) : t.witness !== null) return false;
+                    t.suspects.forEach(i => uncleared.delete(i));
+                    clearSizes.push(t.suspects.length);
+                } else if (t.kind === 'fake') {
+                    if (t.suspects.length !== 1 || !inRange(t.witness, n) || t.witness === t.suspects[0]) return false;
+                    const s = t.shown;
+                    if (!s) return false;
+                    if (s.type === 'room' && (s.index !== t.room || s.index === room)) return false;
+                    if (s.type === 'weapon' && (s.index !== t.weapon || s.index === weapon)) return false;
+                    if (s.type !== 'room' && s.type !== 'weapon') return false;
+                } else {
+                    return false;
+                }
+                at = t.room;
+            }
+            if (uncleared.size !== 1 || !uncleared.has(culprit)) return false;
+            return clearSizes.slice(-FINAL_SINGLES).every(size => size === 1);
+        }
+
+        function estimateDuration(plan) {
+            return TIMING.intro + plan.turns.length * TIMING.turn + TIMING.deduction + TIMING.accusation;
+        }
+
+        const pct = x => (x * 100).toFixed(1) + '%';
+
+        // Tracks "was the culprit picked as often as a fair draw from the same group would pick them?"
+        // Each draw adds its chance p of landing on the culprit; z compares the total with the count.
+        function tellCounter() {
+            let observed = 0, expected = 0, variance = 0, draws = 0;
+            return {
+                add(p, hit) { observed += hit ? 1 : 0; expected += p; variance += p * (1 - p); draws++; },
+                z: () => (variance > 0 ? (observed - expected) / Math.sqrt(variance) : 0),
+                get observed() { return observed; },
+                get expected() { return expected; },
+                get draws() { return draws; },
+            };
+        }
+
+        // Plans `trials` games for each size and checks them. Runs in slices (step plans at
+        // most `budget` games) so a page can show progress; runSelfTest does it all at once.
+        function startSelfTest({ trials = 5000, plan = planGame, sizes = [2, 5, 10, 15] } = {}) {
+            const checks = [];
+            const total = trials * sizes.length;
+            const fakeTell = tellCounter(), witnessTell = tellCounter();
+            let sizeIdx = 0, t = 0, wins = null, positions = null;
+            let broken = 0, plans = 0, minTime = Infinity, maxTime = 0;
+
+            function finishSize(n) {
+                const even = new Array(n).fill(trials / n);
+                const chi = chiSquare(wins, even);
+                const limit = criticalValue(n - 1);
+                checks.push({
+                    name: `Every name equally likely to be the culprit (${n} names)`,
+                    passed: chi < limit,
+                    detail: `lowest ${pct(Math.min(...wins) / trials)} · highest ${pct(Math.max(...wins) / trials)} · ` +
+                        `target ${pct(1 / n)} · χ² ${chi.toFixed(1)} (limit ${limit})`,
+                });
+                const posChi = chiSquare(positions, even);
+                checks.push({
+                    name: `A name is equally likely to be cleared 1st, 2nd, … or last standing (${n} names)`,
+                    passed: posChi < limit,
+                    detail: `first name's place in the clearing order · χ² ${posChi.toFixed(1)} (limit ${limit})`,
+                });
+            }
+
+            function step(budget) {
+                while (budget-- > 0 && sizeIdx < sizes.length) {
+                    const n = sizes[sizeIdx];
+                    if (t === 0) {
+                        wins = new Array(n).fill(0);
+                        positions = new Array(n).fill(0);
+                    }
+                    const p = plan(Array.from({ length: n }, (_, i) => `P${i}`));
+                    plans++;
+                    if (!planIsValid(p, n)) {
+                        broken++;
+                    } else {
+                        wins[p.culprit]++;
+                        const order = p.turns.filter(x => x.kind === 'clear').flatMap(x => x.suspects);
+                        const place = order.indexOf(0);
+                        positions[place < 0 ? n - 1 : place]++;
+                        const uncleared = new Set([...Array(n).keys()]);
+                        for (const turn of p.turns) {
+                            if (turn.kind === 'fake') {
+                                fakeTell.add(1 / uncleared.size, turn.suspects[0] === p.culprit);
+                            }
+                            // Among the witness's possible picks, only those still uncleared and not
+                            // the suggested suspect are rivals of the culprit; the culprit must be no likelier.
+                            if (turn.witness !== null && turn.suspects[0] !== p.culprit) {
+                                const rivals = [...uncleared].filter(i => !turn.suspects.includes(i));
+                                if (rivals.includes(turn.witness)) witnessTell.add(1 / rivals.length, turn.witness === p.culprit);
+                            }
+                            if (turn.kind === 'clear') turn.suspects.forEach(i => uncleared.delete(i));
+                        }
+                        const time = estimateDuration(p);
+                        minTime = Math.min(minTime, time);
+                        maxTime = Math.max(maxTime, time);
+                    }
+                    if (++t === trials) {
+                        finishSize(n);
+                        sizeIdx++;
+                        t = 0;
+                    }
+                }
+                return sizeIdx === sizes.length;
+            }
+
+            function result() {
+                const all = [...checks];
+                all.push({
+                    name: 'Every case follows the rules: the culprit is never cleared and no Incident Report card is ever shown',
+                    passed: broken === 0,
+                    detail: `${broken} broken out of ${plans.toLocaleString()} cases, each replayed turn by turn`,
+                });
+                all.push({
+                    name: 'Fake-outs give nothing away: the culprit is suggested no more or less than anyone uncleared',
+                    passed: Math.abs(fakeTell.z()) < Z_CRITICAL,
+                    detail: `culprit suggested ${fakeTell.observed.toLocaleString()} times · fair draw expects ` +
+                        `${fakeTell.expected.toFixed(1)} · z ${fakeTell.z().toFixed(2)} (limit ±${Z_CRITICAL})`,
+                });
+                all.push({
+                    name: 'Witnesses give nothing away: the culprit vouches no more or less than anyone uncleared',
+                    passed: Math.abs(witnessTell.z()) < Z_CRITICAL,
+                    detail: `culprit was the witness ${witnessTell.observed.toLocaleString()} times · fair draw expects ` +
+                        `${witnessTell.expected.toFixed(1)} · z ${witnessTell.z().toFixed(2)} (limit ±${Z_CRITICAL})`,
+                });
+                all.push({
+                    name: 'Every case takes between 20 and 70 seconds at normal speed',
+                    passed: minTime >= 20 && maxTime <= 70,
+                    detail: `shortest ${minTime.toFixed(1)} s · longest ${maxTime.toFixed(1)} s`,
+                });
+                return { passed: all.every(c => c.passed), checks: all, plans };
+            }
+
+            return { step, result, progress: () => ({ done: plans, total }) };
+        }
+
+        function runSelfTest(options) {
+            const test = startSelfTest(options);
+            while (!test.step(Infinity));
+            return test.result();
+        }
+
+        return {
+            MAX_NAMES, MAX_NAME_LENGTH, ROOMS, WEAPONS, START_ROOM, TIMING,
+            secureInt, shuffle, chiSquare, criticalValue,
+            validateName, parseSavedNames, planGame, planIsValid, estimateDuration, startSelfTest, runSelfTest,
+        };
+    })();
+</script>
+
+<script>
+    // --- UI Elements ---
+    const nameInput = document.getElementById('nameInput');
+    const nameError = document.getElementById('nameError');
+    const addBtn = document.getElementById('addBtn');
+    const nameCount = document.getElementById('nameCount');
+    const nameList = document.getElementById('nameList');
+    const roomList = document.getElementById('roomList');
+    const weaponList = document.getElementById('weaponList');
+    const startBtn = document.getElementById('startBtn');
+    const skipBtn = document.getElementById('skipBtn');
+    const speedBtn = document.getElementById('speedBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const fullBtn = document.getElementById('fullBtn');
+    const gameArea = document.getElementById('gameArea');
+    const statusEl = document.getElementById('status');
+    const verdictOverlay = document.getElementById('verdictOverlay');
+    const headlineEl = document.getElementById('headline');
+    const subheadEl = document.getElementById('subhead');
+    const storyEl = document.getElementById('story');
+    const paperDateEl = document.getElementById('paperDate');
+    const mugshot = document.getElementById('mugshot');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyMsg = document.getElementById('copyMsg');
+    const playAgainBtn = document.getElementById('playAgainBtn');
+    const editBtn = document.getElementById('editBtn');
+
+    // --- Canvas & Context ---
+    // Everything is drawn in a 1000 x 700 world; the backing store is scaled up on
+    // high-DPI screens so the artwork stays crisp.
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 1000, H = 700;
+    const TAU = Math.PI * 2;
+    let pixelRatio = 0;
+    let boardLayer = null;
+
+    function sizeCanvas() {
+        const ratio = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+        if (ratio === pixelRatio) return;
+        pixelRatio = ratio;
+        canvas.width = W * ratio;
+        canvas.height = H * ratio;
+        boardLayer = null;
+    }
+    window.addEventListener('resize', sizeCanvas);
+
+    const UI_FONT = "'Trebuchet MS', 'Segoe UI', system-ui, sans-serif";
+    const SERIF_FONT = "Georgia, 'Times New Roman', serif";
+    const STORAGE_KEY = 'cluedoNames';
+    const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+
+    // --- Small helpers ---
+    const clamp01 = x => Math.max(0, Math.min(1, x));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const easeInOut = t => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    const easeOut = t => 1 - (1 - t) ** 2;
+    const phase = (T, a, b) => clamp01((T - a) / (b - a));
+    // Fades in over `fade` seconds after a and out over `fade` seconds before b.
+    const envelope = (T, a, b, fade = 0.2) => Math.min(phase(T, a, a + fade), 1 - phase(T, b - fade, b));
+
+    function polyline(points) {
+        const cum = [0];
+        for (let k = 1; k < points.length; k++) {
+            cum.push(cum[k - 1] + Math.hypot(points[k].x - points[k - 1].x, points[k].y - points[k - 1].y));
+        }
+        return { points, cum, total: cum[cum.length - 1] };
+    }
+
+    // Point a fraction f of the way along a polyline, with the direction it is heading.
+    function along(path, f) {
+        const { points, cum, total } = path;
+        if (total === 0) return { ...points[0], dx: 0 };
+        const d = clamp01(f) * total;
+        let k = 1;
+        while (k < points.length - 1 && cum[k] < d) k++;
+        const a = points[k - 1], b = points[k];
+        const seg = cum[k] - cum[k - 1] || 1;
+        const u = (d - cum[k - 1]) / seg;
+        return { x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), dx: b.x - a.x };
+    }
+
+    function listNames(names) {
+        return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+    }
+
+    // --- The floor plan ---
+    // A grid of raised-floor tiles. Rooms are rectangles of tiles and every tile outside
+    // a room is corridor. Doors are [column, row, dc, dr]: a tile on the room's edge and
+    // the step (dc, dr) out of it into the corridor.
+    const TILE = 33, COLS = 28, ROWS = 19;
+    const OX = 38, OY = 62;
+    const BREAK = 3;  // where cleared suspects go for a coffee
+    const WAR = 9;    // the War Room: the Inspector's base, with the Incident Report on the table
+    const ROOM_DEFS = [
+        { c: 0, r: 0, w: 8, h: 6, doors: [[5, 5, 0, 1], [7, 3, 1, 0]], floor: '#1b2534', hatch: [1, 4] },      // Server Room
+        { c: 10, r: 0, w: 8, h: 5, doors: [[13, 4, 0, 1], [10, 2, -1, 0], [17, 2, 1, 0]], floor: '#1a2136' }, // NOC
+        { c: 20, r: 0, w: 8, h: 6, doors: [[22, 5, 0, 1], [20, 3, -1, 0]], floor: '#29281f', hatch: [26, 4] }, // Power Room
+        { c: 0, r: 7, w: 7, h: 5, doors: [[6, 9, 1, 0], [3, 7, 0, -1]], floor: '#3a2d22' },                   // Break Room
+        { c: 21, r: 7, w: 7, h: 3, doors: [[21, 8, -1, 0]], floor: '#1a2f35' },                                // Cooling Plant
+        { c: 21, r: 11, w: 7, h: 3, doors: [[21, 12, -1, 0], [24, 11, 0, -1]], floor: '#33261c' },            // Boardroom
+        { c: 0, r: 13, w: 8, h: 6, doors: [[4, 13, 0, -1], [7, 16, 1, 0]], floor: '#2a2a2a', hatch: [1, 17] }, // Loading Dock
+        { c: 10, r: 14, w: 8, h: 5, doors: [[13, 14, 0, -1], [10, 16, -1, 0], [17, 16, 1, 0]], floor: '#2b2833' }, // Open-Plan Office
+        { c: 20, r: 15, w: 8, h: 4, doors: [[23, 15, 0, -1], [20, 17, -1, 0]], floor: '#202a31', hatch: [26, 17] }, // Security Desk
+        { c: 10, r: 7, w: 8, h: 6, doors: [[13, 7, 0, -1], [14, 12, 0, 1]], floor: '#2a221d' },               // War Room
+    ];
+    const ROOM_NAMES = [...ClueCore.ROOMS, 'War Room'];
+    const WEAPON_NAMES = ClueCore.WEAPONS;
+    // Raised-floor cable tunnels join opposite corners, like Cluedo's secret passages.
+    const TUNNELS = { 0: 8, 8: 0, 2: 6, 6: 2 };
+    // Where each piece of kit starts the case.
+    const WEAPON_HOME = [BREAK, 0, 7, 2, 6, 1];
+    // Edge-of-corridor squares the suspects wait on before anyone is summoned.
+    const START_SQUARES = [[8, 1], [18, 1], [2, 6], [25, 6], [9, 4], [19, 4], [9, 6], [17, 6],
+        [7, 11], [20, 9], [2, 12], [19, 13], [8, 18], [18, 18], [24, 14]];
+
+    const tileCentre = (c, r) => ({ x: OX + (c + 0.5) * TILE, y: OY + (r + 0.5) * TILE });
+    const ROOM_RECTS = ROOM_DEFS.map(d => ({ x: OX + d.c * TILE, y: OY + d.r * TILE, w: d.w * TILE, h: d.h * TILE }));
+    const roomAt = (c, r) => ROOM_DEFS.findIndex(d => c >= d.c && c < d.c + d.w && r >= d.r && r < d.r + d.h);
+    const WALKABLE = Array.from({ length: ROWS }, (_, r) => Array.from({ length: COLS }, (_, c) => roomAt(c, r) < 0));
+    const HATCHES = ROOM_DEFS.map(d => (d.hatch ? tileCentre(...d.hatch) : null));
+    const START_SPOTS = START_SQUARES.map(([c, r]) => tileCentre(c, r));
+
+    // Where the Inspector stands in each room, and where the culprit is made to stand at the end.
+    const INSP_SPOTS = ROOM_RECTS.map((R, i) => (i === WAR
+        ? { x: R.x + 34, y: R.y + R.h - 46 }
+        : { x: R.x + R.w * 0.3, y: R.y + R.h * 0.5 + 10 }));
+    const CULPRIT_SPOT = { x: ROOM_RECTS[WAR].x + ROOM_RECTS[WAR].w - 34, y: ROOM_RECTS[WAR].y + ROOM_RECTS[WAR].h - 46 };
+    const FOLDER = { x: ROOM_RECTS[WAR].x + ROOM_RECTS[WAR].w / 2, y: ROOM_RECTS[WAR].y + 104 };
+
+    // Spots for suspects inside a room: rows from the bottom wall up, centre first,
+    // keeping clear of where the Inspector stands.
+    function roomSlots(i) {
+        if (i === WAR) return [CULPRIT_SPOT];
+        const R = ROOM_RECTS[i], insp = INSP_SPOTS[i];
+        const cols = Math.floor((R.w - 36) / 30) + 1;
+        const order = [...Array(cols).keys()].sort((a, b) => Math.abs(a - (cols - 1) / 2) - Math.abs(b - (cols - 1) / 2));
+        const slots = [];
+        for (let y = R.y + R.h - 12; y >= R.y + Math.max(46, R.h * 0.38); y -= 32) {
+            for (const k of order) {
+                const x = R.x + R.w / 2 + (k - (cols - 1) / 2) * 30;
+                if (Math.hypot(x - insp.x, y - insp.y) > 30) slots.push({ x, y });
+            }
+        }
+        return slots;
+    }
+    const SLOTS = ROOM_DEFS.map((_, i) => roomSlots(i));
+    const weaponSpot = (room, k) => ({ x: ROOM_RECTS[room].x + ROOM_RECTS[room].w - 22 - k * 30, y: ROOM_RECTS[room].y + 26 + (k >= 4 ? 30 : 0) });
+
+    // Shortest corridor walk between two tiles (breadth-first search over the raised floor).
+    function corridorRoute(from, to) {
+        const key = (c, r) => r * COLS + c;
+        const prev = new Map([[key(...from), null]]);
+        const queue = [from];
+        for (let q = 0; q < queue.length; q++) {
+            const [c, r] = queue[q];
+            if (c === to[0] && r === to[1]) break;
+            for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const nc = c + dc, nr = r + dr;
+                if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS || !WALKABLE[nr][nc] || prev.has(key(nc, nr))) continue;
+                prev.set(key(nc, nr), [c, r]);
+                queue.push([nc, nr]);
+            }
+        }
+        const tiles = [];
+        for (let p = to; p; p = prev.get(key(...p))) tiles.unshift(p);
+        return tiles;
+    }
+
+    // The Inspector's walk from one room to another, out of whichever pair of doors is closest.
+    const routeCache = new Map();
+    function route(a, b) {
+        const k = `${a}>${b}`;
+        if (!routeCache.has(k)) {
+            let best = null;
+            for (const da of ROOM_DEFS[a].doors) {
+                for (const db of ROOM_DEFS[b].doors) {
+                    const tiles = corridorRoute([da[0] + da[2], da[1] + da[3]], [db[0] + db[2], db[1] + db[3]]);
+                    if (!best || tiles.length < best.tiles.length) best = { da, db, tiles };
+                }
+            }
+            routeCache.set(k, polyline([INSP_SPOTS[a], tileCentre(best.da[0], best.da[1]),
+                ...best.tiles.map(([c, r]) => tileCentre(c, r)), tileCentre(best.db[0], best.db[1]), INSP_SPOTS[b]]));
+        }
+        return routeCache.get(k);
+    }
+
+    // --- State ---
+    let participants = [];
+    let suspects = [];  // drawing info per participant: { name, hue, tag }
+    let run = null;     // the case on screen (it stays after the verdict until the next one)
+    let confetti = [];
+    let flashes = [];
+    let speed = 1;
+    let lastStatus = '';
+    let notebook = null;
+    const playing = () => run !== null && !run.done;
+
+    // --- Audio Context (created on user interaction) ---
+    let audioCtx;
+    let muted = false;
+    let noiseBuffer = null;
+    let hum = null;
+    function audio() {
+        if (muted) return null;
+        if (!audioCtx) {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return null;
+            audioCtx = new AC();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+    }
+
+    function tone({ type = 'square', from, to = from, dur, vol = 0.08, delay = 0 }) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime + delay;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(from, t0);
+        osc.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(t0);
+        osc.stop(t0 + dur);
+    }
+
+    function getNoise(ac) {
+        if (!noiseBuffer) {
+            noiseBuffer = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            // Noise is cosmetic, so Math.random is fine here.
+            for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuffer;
+    }
+
+    // Filtered white noise for footsteps, card flicks, static and thuds.
+    function noise({ dur, vol = 0.1, delay = 0, filter = 'lowpass', from = 1200, to = from, q = 1 }) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime + delay;
+        const src = ac.createBufferSource();
+        src.buffer = getNoise(ac);
+        const f = ac.createBiquadFilter();
+        f.type = filter;
+        f.Q.value = q;
+        f.frequency.setValueAtTime(from, t0);
+        f.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+        src.connect(f);
+        f.connect(gain);
+        gain.connect(ac.destination);
+        src.start(t0);
+        src.stop(t0 + dur);
+    }
+
+    // The low roar of a data hall, looped while a case is open.
+    function startHum() {
+        const ac = audio();
+        if (!ac || hum) return;
+        const src = ac.createBufferSource();
+        src.buffer = getNoise(ac);
+        src.loop = true;
+        const f = ac.createBiquadFilter();
+        f.type = 'lowpass';
+        f.frequency.value = 170;
+        const gain = ac.createGain();
+        gain.gain.setValueAtTime(0.0001, ac.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.09, ac.currentTime + 1.5);
+        src.connect(f);
+        f.connect(gain);
+        gain.connect(ac.destination);
+        src.start();
+        hum = { src, gain };
+    }
+
+    function stopHum() {
+        if (!hum) return;
+        const now = audioCtx.currentTime;
+        hum.gain.gain.cancelScheduledValues(now);
+        hum.gain.gain.setValueAtTime(Math.max(0.0001, hum.gain.gain.value), now);
+        hum.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+        hum.src.stop(now + 0.7);
+        hum = null;
+    }
+
+    function playSound(kind) {
+        switch (kind) {
+            case 'klaxon':
+                for (let i = 0; i < 3; i++) tone({ type: 'sawtooth', from: 520, to: 880, dur: 0.38, vol: 0.045, delay: i * 0.45 });
+                break;
+            case 'flatline':
+                [0, 0.42].forEach(d => tone({ type: 'sine', from: 880, dur: 0.09, vol: 0.08, delay: d }));
+                tone({ type: 'sine', from: 880, to: 870, dur: 1.5, vol: 0.07, delay: 0.84 });
+                break;
+            case 'cards':
+                for (let i = 0; i < 3; i++) noise({ dur: 0.16, vol: 0.12, delay: i * 0.55, filter: 'highpass', from: 5000, to: 1800 });
+                break;
+            case 'start':
+                [294, 349, 440, 587].forEach((f, i) => tone({ type: 'triangle', from: f, dur: 0.22, vol: 0.1, delay: i * 0.1 }));
+                break;
+            case 'dice':
+                for (let i = 0; i < 5; i++) noise({ dur: 0.05, vol: 0.12, delay: i * 0.075, filter: 'bandpass', from: 2400 + i * 300, q: 6 });
+                break;
+            case 'step':
+                noise({ dur: 0.05, vol: 0.06, filter: 'lowpass', from: 500, to: 200 });
+                break;
+            case 'badge':
+                tone({ type: 'sine', from: 1320, dur: 0.07, vol: 0.06 });
+                tone({ type: 'sine', from: 1760, dur: 0.1, vol: 0.06, delay: 0.09 });
+                break;
+            case 'tunnel':
+                tone({ type: 'sine', from: 420, to: 70, dur: 0.55, vol: 0.09 });
+                noise({ dur: 0.7, vol: 0.08, filter: 'lowpass', from: 900, to: 150 });
+                tone({ type: 'sine', from: 80, to: 520, dur: 0.45, vol: 0.08, delay: 0.65 });
+                break;
+            case 'summon':
+                tone({ type: 'sine', from: 300, to: 900, dur: 0.25, vol: 0.06 });
+                noise({ dur: 0.25, vol: 0.05, filter: 'bandpass', from: 800, to: 3000, q: 2 });
+                break;
+            case 'cctv':
+                noise({ dur: 0.45, vol: 0.06, filter: 'bandpass', from: 3200, q: 0.8 });
+                [0.1, 0.25].forEach(d => tone({ type: 'square', from: 1000, dur: 0.05, vol: 0.03, delay: d }));
+                break;
+            case 'flip':
+                noise({ dur: 0.13, vol: 0.14, filter: 'highpass', from: 4000, to: 1500 });
+                break;
+            case 'alibi':
+                noise({ dur: 0.22, vol: 0.3, from: 700, to: 90 });
+                tone({ type: 'sine', from: 130, to: 55, dur: 0.22, vol: 0.3 });
+                tone({ type: 'triangle', from: 1047, dur: 0.3, vol: 0.09, delay: 0.16 });
+                tone({ type: 'triangle', from: 1319, dur: 0.4, vol: 0.09, delay: 0.26 });
+                break;
+            case 'nope':
+                noise({ dur: 0.2, vol: 0.25, from: 700, to: 90 });
+                tone({ type: 'square', from: 233, dur: 0.16, vol: 0.04, delay: 0.12 });
+                tone({ type: 'square', from: 175, dur: 0.32, vol: 0.04, delay: 0.3 });
+                break;
+            case 'tick':
+                noise({ dur: 0.06, vol: 0.07, filter: 'bandpass', from: 5200, q: 3 });
+                break;
+            case 'blackout':
+                tone({ type: 'sawtooth', from: 240, to: 35, dur: 1.0, vol: 0.06 });
+                [0.9, 1.25].forEach(d => tone({ type: 'sine', from: 1000, dur: 0.12, vol: 0.05, delay: d }));
+                break;
+            case 'generator':
+                noise({ dur: 1.2, vol: 0.18, from: 150, to: 600 });
+                tone({ type: 'sawtooth', from: 38, to: 70, dur: 1.2, vol: 0.05 });
+                break;
+            case 'surge':
+                // Crackle timing is cosmetic, so Math.random is fine here.
+                for (let i = 0; i < 9; i++) {
+                    noise({ dur: 0.03, vol: 0.2, delay: Math.random() * 0.5, filter: 'bandpass', from: 1500 + Math.random() * 4000, q: 2 });
+                }
+                tone({ type: 'sawtooth', from: 60, dur: 0.6, vol: 0.05 });
+                break;
+            case 'heat':
+                [0, 0.25, 0.5].forEach(d => tone({ type: 'square', from: 1500, dur: 0.09, vol: 0.035, delay: d }));
+                noise({ dur: 2.2, vol: 0.08, filter: 'bandpass', from: 300, to: 1300, q: 1, delay: 0.4 });
+                break;
+            case 'sting':
+                tone({ type: 'sawtooth', from: 196, dur: 0.28, vol: 0.06 });
+                tone({ type: 'sawtooth', from: 196, dur: 0.28, vol: 0.06, delay: 0.34 });
+                [155.6, 233, 311].forEach(f => tone({ type: 'sawtooth', from: f, to: f * 0.98, dur: 1.6, vol: 0.05, delay: 0.7 }));
+                tone({ type: 'sine', from: 78, dur: 1.6, vol: 0.18, delay: 0.7 });
+                break;
+            case 'reveal':
+                noise({ dur: 0.18, vol: 0.25, from: 400, to: 80 });
+                tone({ type: 'sine', from: 95, to: 50, dur: 0.2, vol: 0.25 });
+                noise({ dur: 0.12, vol: 0.12, filter: 'highpass', from: 4000, to: 1500, delay: 0.05 });
+                break;
+            case 'headline':
+                for (let i = 0; i < 10; i++) noise({ dur: 0.03, vol: 0.16, delay: 0.15 + i * 0.075, filter: 'highpass', from: 2500 });
+                tone({ type: 'triangle', from: 2093, dur: 0.8, vol: 0.09, delay: 0.95 });
+                [523, 622, 784].forEach((f, i) => tone({ type: 'square', from: f, dur: 0.3, vol: 0.035, delay: 1.1 + i * 0.12 }));
+                break;
+        }
+    }
+
+    function setMuted(on) {
+        muted = on;
+        muteBtn.setAttribute('aria-pressed', String(muted));
+        muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
+        if (muted) stopHum();
+        else if (playing()) startHum();
+    }
+    muteBtn.addEventListener('click', () => setMuted(!muted));
+
+    const SPEEDS = [1, 2, 4];
+    function setSpeed(s) {
+        speed = s;
+        speedBtn.textContent = `Speed ${speed}×`;
+    }
+    speedBtn.addEventListener('click', () => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]));
+
+    function toggleFullscreen() {
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+            (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        } else {
+            const request = gameArea.requestFullscreen || gameArea.webkitRequestFullscreen;
+            if (request) request.call(gameArea);
+        }
+    }
+    fullBtn.addEventListener('click', toggleFullscreen);
+    const fullscreenChanged = () => {
+        fullBtn.textContent = document.fullscreenElement || document.webkitFullscreenElement ? 'Exit full' : 'Fullscreen';
+    };
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+    document.addEventListener('webkitfullscreenchange', fullscreenChanged);
+
+    // --- Logic: Name Management ---
+    function saveNames() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(participants)); } catch { /* storage unavailable */ }
+    }
+
+    function loadNames() {
+        try { return ClueCore.parseSavedNames(localStorage.getItem(STORAGE_KEY)); } catch { return []; }
+    }
+
+    function hueFor(index) {
+        return Math.round((index * 137.508) % 360);
+    }
+
+    const TAG_FONT = `bold 10.5px ${UI_FONT}`;
+    const TAG_MAX = 70;
+    function fitText(g, text, maxW) {
+        if (g.measureText(text).width <= maxW) return text;
+        while (text.length > 1 && g.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+        return text + '…';
+    }
+    function fitTag(name) {
+        ctx.font = TAG_FONT;
+        const text = fitText(ctx, name, TAG_MAX);
+        return { text, w: ctx.measureText(text).width + 12 };
+    }
+
+    // --- The detective's notebook (sidebar) ---
+    let nameItems = [], roomChips = [], weaponChips = [];
+    const freshNotebook = () => ({ cleared: new Set(), questioned: new Set(), rooms: new Set(), weapons: new Set(), culprit: -1, room: -1, weapon: -1 });
+
+    function buildChips() {
+        const chips = (list, names) => names.map(name => {
+            const li = document.createElement('li');
+            li.textContent = name;
+            list.appendChild(li);
+            return li;
+        });
+        roomChips = chips(roomList, ClueCore.ROOMS);
+        weaponChips = chips(weaponList, WEAPON_NAMES);
+    }
+
+    function renderNotebook() {
+        nameItems.forEach((li, i) => {
+            const culprit = notebook.culprit === i, cleared = notebook.cleared.has(i), questioned = notebook.questioned.has(i);
+            li.classList.toggle('culprit', culprit);
+            li.classList.toggle('cleared', cleared);
+            li.classList.toggle('suggested', questioned && !cleared && !culprit);
+            const mark = li.querySelector('.mark');
+            mark.textContent = culprit ? 'CULPRIT' : cleared ? 'ALIBI ✓' : questioned ? 'QUESTIONED' : '';
+            mark.hidden = !mark.textContent;
+        });
+        roomChips.forEach((li, i) => {
+            li.classList.toggle('crossed', notebook.rooms.has(i));
+            li.classList.toggle('answer', notebook.room === i);
+        });
+        weaponChips.forEach((li, i) => {
+            li.classList.toggle('crossed', notebook.weapons.has(i));
+            li.classList.toggle('answer', notebook.weapon === i);
+        });
+    }
+
+    function applyMark(mark) {
+        switch (mark.type) {
+            case 'question': mark.who.forEach(i => notebook.questioned.add(i)); break;
+            case 'clear': mark.who.forEach(i => notebook.cleared.add(i)); break;
+            case 'cross': (mark.kind === 'room' ? notebook.rooms : notebook.weapons).add(mark.index); break;
+            case 'culprit': notebook.culprit = mark.who; break;
+            case 'room': notebook.room = mark.index; break;
+            case 'weapon': notebook.weapon = mark.index; break;
+        }
+        renderNotebook();
+    }
+
+    function updateList() {
+        const busy = playing();
+        nameList.innerHTML = '';
+        nameItems = participants.map((name, index) => {
+            const li = document.createElement('li');
+            li.style.setProperty('--swatch', `hsl(${hueFor(index)}, 72%, 52%)`);
+            const span = document.createElement('span');
+            span.className = 'name';
+            span.textContent = name;
+            const mark = document.createElement('span');
+            mark.className = 'mark';
+            mark.hidden = true;
+            const rmBtn = document.createElement('button');
+            rmBtn.textContent = 'X';
+            rmBtn.className = 'remove-btn';
+            rmBtn.setAttribute('aria-label', `Remove ${name}`);
+            rmBtn.disabled = busy;
+            rmBtn.onclick = () => {
+                participants.splice(index, 1);
+                namesChanged();
+            };
+            li.append(span, mark, rmBtn);
+            nameList.appendChild(li);
+            return li;
+        });
+        renderNotebook();
+        nameCount.textContent = participants.length ? `${participants.length} / ${ClueCore.MAX_NAMES} suspects` : '';
+        nameInput.disabled = busy;
+        addBtn.disabled = busy;
+        startBtn.disabled = busy || participants.length < 2;
+        skipBtn.hidden = !busy;
+    }
+
+    // Everyone back on their starting square, the Incident Report empty again.
+    function resetBoard() {
+        suspects = participants.map((name, i) => ({ name, hue: hueFor(i), tag: fitTag(name) }));
+        run = null;
+        notebook = freshNotebook();
+        confetti = [];
+        flashes = [];
+    }
+
+    function namesChanged() {
+        saveNames();
+        verdictOverlay.hidden = true;
+        resetBoard();
+        updateList();
+    }
+
+    function addName() {
+        const result = ClueCore.validateName(nameInput.value, participants);
+        if (result.error) {
+            nameError.textContent = result.error;
+            return;
+        }
+        nameError.textContent = '';
+        participants.push(result.name);
+        nameInput.value = '';
+        namesChanged();
+    }
+
+    addBtn.addEventListener('click', addName);
+    nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addName(); });
+
+    // --- Building a case's timeline ---
+    // A case is a fixed timeline worked out from the plan before anything moves. Every
+    // frame just asks "where is everything at time t?", so Skip only has to jump to the end.
+    const T_ROLL = 0.8, T_WALK = 1.4, T_ASK = 1.2, T_REVEAL = 1.4; // one turn: adds up to ClueCore.TIMING.turn
+
+    // An actor's position at time t: the latest move that has started decides it.
+    function trackAt(track, t) {
+        let s = { x: track.start.x, y: track.start.y, lift: 0, scale: 1, moving: false, dir: 1 };
+        for (const m of track.moves) {
+            if (t < m.t0) break;
+            s = moveAt(m, phase(t, m.t0, m.t1), s);
+        }
+        return s;
+    }
+
+    function moveAt(m, f, prev) {
+        const moving = f > 0 && f < 1;
+        if (m.type === 'glide') {
+            const e = easeInOut(f);
+            return { x: lerp(m.from.x, m.to.x, e), y: lerp(m.from.y, m.to.y, e), lift: Math.sin(Math.PI * f) * 22,
+                scale: 1, moving, dir: Math.sign(m.to.x - m.from.x) || prev.dir };
+        }
+        if (m.type === 'path') {
+            const p = along(m.path, easeInOut(f));
+            return { x: p.x, y: p.y, lift: moving ? Math.abs(Math.sin(f * 40)) * 3 : 0, scale: 1, moving, dir: Math.sign(p.dx) || prev.dir };
+        }
+        // Tunnel: walk to the hatch and drop out of sight, then climb out of the far hatch.
+        if (f < 0.5) {
+            const p = along(m.a, easeInOut(phase(f, 0, 0.3)));
+            return { x: p.x, y: p.y, lift: 0, scale: 1 - phase(f, 0.3, 0.48), moving, dir: Math.sign(p.dx) || prev.dir };
+        }
+        const p = along(m.b, easeInOut(phase(f, 0.7, 1)));
+        return { x: p.x, y: p.y, lift: 0, scale: phase(f, 0.52, 0.7), moving, dir: Math.sign(p.dx) || prev.dir };
+    }
+
+    const lastPos = track => (track.moves.length ? track.moves.at(-1).to : track.start);
+
+    function buildRun(plan) {
+        const { TIMING } = ClueCore;
+        const n = suspects.length;
+        const game = {
+            plan, t: 0, nextEvent: 0, skipped: false, done: false, celebrated: false,
+            events: [], statuses: [], dice: [], bubbles: [], cards: [], cctv: [], rings: [], twists: [],
+            clearedAt: new Array(n).fill(Infinity),
+            pawnTracks: START_SPOTS.slice(0, n).map(p => ({ start: p, moves: [] })),
+            weaponTracks: WEAPON_HOME.map((room, w) => ({ start: weaponSpot(room, WEAPON_HOME.slice(0, w).filter(r => r === room).length), moves: [] })),
+            inspTrack: { start: INSP_SPOTS[WAR], moves: [] },
+        };
+        const ev = (t, props) => game.events.push({ t, ...props });
+        const say = (t, text) => game.statuses.push({ t, text });
+        const nameOf = i => suspects[i].name;
+
+        // Who is standing in which room, so everyone gets a spot of their own.
+        const pawnRoom = new Array(n).fill(-1);
+        const pawnOcc = ROOM_DEFS.map(() => []);
+        const weaponRoom = [...WEAPON_HOME];
+        const weaponOcc = ROOM_DEFS.map((_, r) => WEAPON_HOME.flatMap((home, w) => (home === r ? [w] : [])));
+        function place(occ, rooms, tracks, i, room, t0, t1, spotFor) {
+            if (rooms[i] === room) return;
+            if (rooms[i] >= 0) occ[rooms[i]][occ[rooms[i]].indexOf(i)] = undefined;
+            let k = 0;
+            while (occ[room][k] !== undefined) k++;
+            occ[room][k] = i;
+            rooms[i] = room;
+            tracks[i].moves.push({ type: 'glide', t0, t1, from: lastPos(tracks[i]), to: spotFor(room, k) });
+        }
+        const movePawn = (i, room, t0, t1) => place(pawnOcc, pawnRoom, game.pawnTracks, i, room, t0, t1, (r, k) => {
+            const slots = SLOTS[r];
+            const s = slots[k % slots.length];
+            return k < slots.length ? s : { x: s.x + 7, y: s.y - 6 };
+        });
+        const moveWeapon = (w, room, t0, t1) => place(weaponOcc, weaponRoom, game.weaponTracks, w, room, t0, t1, weaponSpot);
+        function walk(from, to, t0, t1) {
+            if (TUNNELS[from] === to) {
+                game.inspTrack.moves.push({ type: 'tunnel', t0, t1, to: INSP_SPOTS[to],
+                    a: polyline([INSP_SPOTS[from], HATCHES[from]]), b: polyline([HATCHES[to], INSP_SPOTS[to]]) });
+                ev(t0 + 0.1, { sound: 'tunnel' });
+                return true;
+            }
+            game.inspTrack.moves.push({ type: 'path', t0, t1, to: INSP_SPOTS[to], path: route(from, to) });
+            for (let s = 0.12; s < t1 - t0 - 0.25; s += 0.2) ev(t0 + s, { sound: 'step' });
+            ev(t1 - 0.25, { sound: 'badge' });
+            return false;
+        }
+
+        // --- Intro: the alarm, the flatline, the Incident Report sealed ---
+        say(0, '3:07 am. PROD-01 has flatlined!');
+        ev(0, { sound: 'klaxon' });
+        ev(0.6, { sound: 'flatline' });
+        say(2.4, 'The Incident Report is sealed: one suspect, one location, one piece of kit.');
+        ev(2.4, { sound: 'cards' });
+        say(4.3, 'The Inspector takes the case.');
+        ev(4.3, { sound: 'start' });
+
+        // Twists are cosmetic set dressing: which turns get one is Math.random, and none of
+        // them lands on a clearing or changes any timing.
+        const twistKinds = reduceMotion.matches ? ['heat'] : ['blackout', 'surge', 'heat'];
+        const twistTurns = new Map();
+        const candidates = plan.turns.map((_, k) => k).filter(k => k > 0 || plan.turns.length === 1);
+        for (let k = plan.turns.length >= 5 ? 2 : 1; k > 0 && candidates.length; k--) {
+            const turn = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+            const unused = twistKinds.filter(x => ![...twistTurns.values()].includes(x));
+            const pool = unused.length ? unused : twistKinds;
+            twistTurns.set(turn, pool[Math.floor(Math.random() * pool.length)]);
+        }
+
+        // --- The investigation ---
+        let at = WAR;
+        plan.turns.forEach((turn, k) => {
+            const T = TIMING.intro + k * TIMING.turn;
+            const w0 = T + T_ROLL, a0 = w0 + T_WALK, r0 = a0 + T_ASK, end = r0 + T_REVEAL;
+            const roomName = ROOM_NAMES[turn.room], weaponName = WEAPON_NAMES[turn.weapon];
+
+            // Dice faces are cosmetic, so Math.random is fine here.
+            const faces = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+            game.dice.push({ t0: T, roll: w0, t1: w0 + 0.7, faces });
+            ev(T, { sound: 'dice' });
+            say(T, `Lead ${k + 1} of ${plan.turns.length}: the Inspector rolls ${faces[0] + faces[1]}…`);
+
+            const tunnel = walk(at, turn.room, w0, a0);
+            const twist = twistTurns.get(k);
+            if (twist === 'blackout') {
+                game.twists.push({ kind: twist, t0: T + 0.5, t1: a0 + 0.1 });
+                ev(T + 0.5, { sound: 'blackout' });
+                ev(a0 - 0.4, { sound: 'generator' });
+                say(T + 0.5, `⚡ Power cut! The Inspector heads for the ${roomName} by torchlight…`);
+            } else if (twist === 'surge') {
+                game.twists.push({ kind: twist, t0: w0 + 0.2, t1: w0 + 0.75 });
+                ev(w0 + 0.2, { sound: 'surge' });
+                say(w0 + 0.2, `⚡ Power surge! Sparks fly from the racks on the way to the ${roomName}.`);
+            } else if (twist === 'heat') {
+                game.twists.push({ kind: twist, t0: T + 0.4, t1: r0 });
+                ev(T + 0.4, { sound: 'heat' });
+                say(T + 0.4, `🔥 Cooling failure! It's getting hot on the way to the ${roomName}…`);
+            } else {
+                say(w0 + 0.1, tunnel ? `…and slips into the cable tunnel to the ${roomName}!` : `Heading for the ${roomName}…`);
+            }
+            at = turn.room;
+
+            if (turn.suspects.length === 1) {
+                const s = turn.suspects[0], w = turn.witness;
+                game.bubbles.push({ t0: a0, t1: r0 + 0.1, who: 'insp', text: `Was it ${nameOf(s)}?` });
+                say(a0, `"Was it ${nameOf(s)}, in the ${roomName}, with the ${weaponName}?"`);
+                ev(a0, { sound: 'summon', mark: { type: 'question', who: [s] } });
+                movePawn(s, turn.room, a0 + 0.1, a0 + 0.75);
+                moveWeapon(turn.weapon, turn.room, a0 + 0.25, a0 + 0.9);
+                game.rings.push({ t0: r0 - 0.15, t1: end, who: w });
+                ev(r0, { sound: 'flip' });
+                if (turn.kind === 'clear') {
+                    game.bubbles.push({ t0: r0 - 0.15, t1: end - 0.1, who: w, text: 'I can vouch!' });
+                    game.cards.push({ t0: r0, t1: end + 0.15, face: { type: 'suspect', index: s }, stampAt: r0 + 0.5, stamp: 'ALIBI', by: nameOf(w) });
+                    say(r0, `${nameOf(w)} vouches for ${nameOf(s)}. Alibi confirmed: ${nameOf(s)} is in the clear.`);
+                } else {
+                    const shown = turn.shown;
+                    const cardName = shown.type === 'room' ? ROOM_NAMES[shown.index] : WEAPON_NAMES[shown.index];
+                    game.bubbles.push({ t0: r0 - 0.15, t1: end - 0.1, who: w, text: 'Not so fast!' });
+                    game.cards.push({ t0: r0, t1: end + 0.15, face: shown, stampAt: r0 + 0.5, stamp: 'NOT IT', by: nameOf(w) });
+                    say(r0, `${nameOf(w)} shows the ${cardName} card, so that's not it. ${nameOf(s)} isn't in the clear yet…`);
+                    ev(r0 + 0.5, { sound: 'nope', mark: { type: 'cross', kind: shown.type, index: shown.index } });
+                }
+            } else {
+                // Several suspects at once: footage or door logs put them all somewhere else.
+                // Which flavour is cosmetic, so Math.random is fine here.
+                const flavour = Math.random() < 0.5 ? 'cctv' : 'badge';
+                game.bubbles.push({ t0: a0, t1: r0, who: 'insp', text: flavour === 'cctv' ? 'Roll the tape!' : 'Pull the door logs!' });
+                say(a0, flavour === 'cctv' ? `Pulling the CCTV from the ${roomName}…` : `Checking the badge-swipe logs at the ${roomName} door…`);
+                ev(a0, { sound: 'cctv' });
+                game.cctv.push({ t0: a0 + 0.15, t1: end + 0.15, room: turn.room, who: turn.suspects, flavour, stampAt: r0 + 0.5 });
+                say(r0 + 0.5, `${listNames(turn.suspects.map(nameOf))} were nowhere near PROD-01. All cleared!`);
+            }
+            if (turn.kind === 'clear') {
+                ev(r0 + 0.5, { sound: 'alibi', mark: { type: 'clear', who: turn.suspects } });
+                turn.suspects.forEach((s, j) => {
+                    game.clearedAt[s] = r0 + 0.5;
+                    movePawn(s, BREAK, end - 0.25 + j * 0.12, end + 0.75 + j * 0.12);
+                });
+            }
+        });
+
+        // --- Deduction: every other lead closed off in the notebook ---
+        const D = TIMING.intro + plan.turns.length * TIMING.turn;
+        say(D, 'Every other lead is closed. The Inspector heads back to the War Room…');
+        if (at !== WAR) walk(at, WAR, D + 0.1, D + 1.7);
+        const shown = new Set(plan.turns.filter(t => t.kind === 'fake').map(t => `${t.shown.type}${t.shown.index}`));
+        const leftovers = [
+            ...ClueCore.ROOMS.map((_, i) => ({ kind: 'room', index: i })).filter(x => x.index !== plan.room),
+            ...WEAPON_NAMES.map((_, i) => ({ kind: 'weapon', index: i })).filter(x => x.index !== plan.weapon),
+        ].filter(x => !shown.has(`${x.kind}${x.index}`));
+        leftovers.forEach((x, j) => ev(D + 0.3 + (j * 2.4) / leftovers.length, { sound: 'tick', mark: { type: 'cross', ...x } }));
+
+        // --- Accusation ---
+        const A = D + TIMING.deduction;
+        const c = plan.culprit;
+        say(A, 'Only one suspect has no alibi…');
+        movePawn(c, WAR, A + 0.1, A + 0.9);
+        ev(A + 0.1, { sound: 'summon' });
+        game.spotlight = { t0: A + 0.5, t1: A + 1.7, who: c };
+        game.bubbles.push({ t0: A + 1.4, t1: A + 3.2, who: 'insp', text: `It was you, ${nameOf(c)}!` });
+        say(A + 1.4, `"It was you, ${nameOf(c)}!"`);
+        ev(A + 1.4, { sound: 'sting', mark: { type: 'culprit', who: c } });
+        game.report = { t0: A + 2.2, flips: [A + 2.6, A + 3.2, A + 3.8] };
+        ev(A + 2.6, { sound: 'reveal' });
+        ev(A + 3.2, { sound: 'reveal', mark: { type: 'room', index: plan.room } });
+        ev(A + 3.8, { sound: 'reveal', mark: { type: 'weapon', index: plan.weapon } });
+        say(A + 3.8, `It was ${nameOf(c)}, in the ${ROOM_NAMES[plan.room]}, with the ${WEAPON_NAMES[plan.weapon]}!`);
+        game.accuseAt = A;
+        game.end = ClueCore.estimateDuration(plan);
+
+        game.events.sort((a, b) => a.t - b.t);
+        game.statuses.sort((a, b) => a.t - b.t);
+        return game;
+    }
+
+    function statusAt(game, t) {
+        let text = '';
+        for (const s of game.statuses) {
+            if (s.t > t) break;
+            text = s.text;
+        }
+        return text;
+    }
+
+    // --- Main Game ---
+    function startGame() {
+        if (playing() || participants.length < 2) return;
+        audio(); // unlock audio on this click
+        resetBoard();
+        const plan = ClueCore.planGame(participants);
+        run = buildRun(plan);
+        verdictOverlay.hidden = true;
+        copyMsg.textContent = '';
+        startHum();
+        updateList();
+    }
+
+    function advanceRun(dt) {
+        const game = run;
+        game.t = Math.min(game.end, game.t + dt);
+        while (game.nextEvent < game.events.length && game.events[game.nextEvent].t <= game.t) {
+            const e = game.events[game.nextEvent++];
+            if (e.sound && !game.skipped) playSound(e.sound);
+            if (e.mark) applyMark(e.mark);
+        }
+        if (game.t >= game.end) finishGame(game);
+    }
+
+    function finishGame(game) {
+        if (run !== game || game.done) return;
+        game.done = true;
+        stopHum();
+        celebrate(game);
+        showVerdict(game);
+        updateList();
+    }
+
+    function celebrate(game) {
+        game.celebrated = true;
+        playSound('headline');
+        const at = trackAt(game.pawnTracks[game.plan.culprit], game.t);
+        // Confetti and flashbulbs are cosmetic, so Math.random is fine here.
+        const colors = ['#f4e8c8', '#c0262d', '#ffffff', '#36d6c6', '#ffb43b'];
+        for (let i = 0; i < 150; i++) {
+            confetti.push({
+                x: at.x + (Math.random() - 0.5) * 120, y: at.y - 80,
+                vx: (Math.random() - 0.5) * 11, vy: -4 - Math.random() * 10,
+                rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.3,
+                color: colors[i % colors.length], note: i % 5 === 0, life: 1,
+            });
+        }
+        if (!reduceMotion.matches) {
+            for (let i = 0; i < 7; i++) flashes.push({ x: 120 + Math.random() * 760, y: 120 + Math.random() * 480, delay: i * 9 + Math.random() * 6, life: 1 });
+        }
+    }
+
+    const QUIPS = [
+        'A post-mortem has been booked for 10 am. Attendance is mandatory.',
+        'A change freeze is in force until further notice.',
+        'Witnesses report hearing the words "it worked on my machine".',
+        'The on-call engineer has asked for a strongly worded retro.',
+        'Sources confirm the deploy went out at 4:59 pm on a Friday.',
+        'PROD-01 is said to be "resting comfortably" after a reboot.',
+    ];
+
+    function showVerdict(game) {
+        const { plan } = game;
+        const name = suspects[plan.culprit].name;
+        const room = ROOM_NAMES[plan.room], weapon = WEAPON_NAMES[plan.weapon];
+        const cleared = plan.turns.filter(t => t.kind === 'clear').length;
+        const fakes = plan.turns.filter(t => t.kind === 'fake').length;
+        headlineEl.textContent = `${name} took down prod`;
+        headlineEl.style.setProperty('--hl', name.length <= 8 ? 1 : name.length <= 13 ? 0.8 : 0.64);
+        subheadEl.textContent = `…in the ${room}, with the ${weapon}.`;
+        // The quip is cosmetic, so Math.random is fine here.
+        storyEl.textContent = `At 3:07 am PROD-01 stopped answering. After ${plan.turns.length} leads, ` +
+            `${suspects.length - 1} alibis${fakes ? ` and ${fakes} red herring${fakes > 1 ? 's' : ''}` : ''}, ` +
+            `the Inspector named ${name} as the culprit. The ${weapon} was recovered from the ${room}. ` +
+            `${cleared > 1 ? 'Every other suspect was found with a coffee in the Break Room. ' : ''}` +
+            QUIPS[Math.floor(Math.random() * QUIPS.length)];
+        paperDateEl.textContent = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        drawMugshot(plan.culprit);
+        verdictOverlay.hidden = false;
+        playAgainBtn.focus({ preventScroll: true });
+    }
+
+    function verdictText() {
+        if (!run) return '';
+        const { plan } = run;
+        return `🔍 Cluedo Picker verdict: It was ${suspects[plan.culprit].name}, in the ${ROOM_NAMES[plan.room]}, ` +
+            `with the ${WEAPON_NAMES[plan.weapon]}! PROD-01 can rest in peace.`;
+    }
+
+    async function copyVerdict() {
+        const text = verdictText();
+        try {
+            await navigator.clipboard.writeText(text);
+            copyMsg.textContent = 'Copied to the clipboard.';
+        } catch {
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.setAttribute('readonly', '');
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.select();
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch { ok = false; }
+            area.remove();
+            copyMsg.textContent = ok ? 'Copied to the clipboard.' : `Couldn't copy automatically: ${text}`;
+        }
+    }
+
+    function skipToVerdict() {
+        if (!playing()) return;
+        run.skipped = true;
+        run.t = run.end;
+        advanceRun(0);
+    }
+
+    startBtn.addEventListener('click', startGame);
+    playAgainBtn.addEventListener('click', startGame);
+    skipBtn.addEventListener('click', skipToVerdict);
+    copyBtn.addEventListener('click', copyVerdict);
+    editBtn.addEventListener('click', () => {
+        verdictOverlay.hidden = true;
+        nameInput.focus();
+    });
+
+    // Keyboard shortcuts, ignored while typing a name or when a button has focus
+    // (the button handles its own Space/Enter).
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        const key = e.key.toLowerCase();
+        if ((key === ' ' || key === 'enter') && tag !== 'BUTTON' && tag !== 'A') {
+            e.preventDefault();
+            startGame();
+        } else if (key === 's') {
+            skipToVerdict();
+        } else if (key === 'm') {
+            setMuted(!muted);
+        } else if (key === 'f') {
+            toggleFullscreen();
+        } else if (key === '1' || key === '2' || key === '4') {
+            setSpeed(Number(key));
+        }
+    });
+
+    // --- Drawing: helpers ---
+    function roundRect(g, x, y, w, h, r) {
+        g.beginPath();
+        g.roundRect(x, y, w, h, r);
+    }
+
+    // Deterministic pseudo-random numbers for decoration, so the board looks the same every time.
+    function decorRandom(seed) {
+        let s = seed >>> 0;
+        return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    }
+
+    // --- Drawing: the floor plan (drawn once into an offscreen layer) ---
+    let ledSpots = [], fanSpots = [];
+
+    function drawFloorTile(g, c, r) {
+        const x = OX + c * TILE, y = OY + r * TILE;
+        g.fillStyle = '#1f2632';
+        g.fillRect(x, y, TILE, TILE);
+        g.fillStyle = '#2d3646';
+        g.fillRect(x + 1.5, y + 1.5, TILE - 3, TILE - 3);
+        g.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        g.fillRect(x + 1.5, y + 1.5, TILE - 3, 2);
+        g.fillStyle = 'rgba(0, 0, 0, 0.28)';
+        g.fillRect(x + 1.5, y + TILE - 3.5, TILE - 3, 2);
+        // Perforations in the raised-floor tile.
+        g.fillStyle = '#212835';
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+                g.beginPath();
+                g.arc(x + 9.5 + i * 7, y + 9.5 + j * 7, 1.3, 0, TAU);
+                g.fill();
+            }
+        }
+    }
+
+    function drawHatch(g, p) {
+        g.save();
+        g.translate(p.x, p.y);
+        g.fillStyle = '#07090d';
+        roundRect(g, -13, -13, 26, 26, 3);
+        g.fill();
+        g.strokeStyle = '#ffb43b';
+        g.lineWidth = 1.5;
+        g.stroke();
+        g.strokeStyle = '#3a4658';
+        g.lineWidth = 2;
+        for (let k = -8; k <= 8; k += 4) {
+            g.beginPath();
+            g.moveTo(k, -10);
+            g.lineTo(k, 10);
+            g.stroke();
+        }
+        g.font = `bold 7px ${UI_FONT}`;
+        g.fillStyle = '#ffb43b';
+        g.textAlign = 'center';
+        g.fillText('TUNNEL', 0, -16);
+        g.restore();
+    }
+
+    function drawBox(g, x, y, w, h, fill, stroke = 'rgba(0, 0, 0, 0.6)', r = 3) {
+        g.fillStyle = fill;
+        roundRect(g, x, y, w, h, r);
+        g.fill();
+        g.strokeStyle = stroke;
+        g.lineWidth = 1;
+        g.stroke();
+    }
+
+    const FURNITURE = [
+        // Server Room: a row of racks, PROD-01 in the middle with a red outline.
+        (g, R) => {
+            for (let k = 0; k < 7; k++) {
+                const x = R.x + 64 + k * 28, y = R.y + 32;
+                const prod = k === 3;
+                drawBox(g, x, y, 22, 58, '#0d1118', prod ? '#e0353c' : '#3a4658', 2);
+                for (let j = 0; j < 6; j++) {
+                    g.fillStyle = '#1a212d';
+                    g.fillRect(x + 3, y + 5 + j * 8.5, 16, 6);
+                    const color = prod ? '#ff3b3b' : j % 3 === 0 ? '#ffb43b' : '#36d6c6';
+                    ledSpots.push({ x: x + 5, y: y + 7 + j * 8.5, color, seed: k * 7 + j, dead: prod });
+                    ledSpots.push({ x: x + 10, y: y + 7 + j * 8.5, color: '#36d6c6', seed: k * 11 + j * 3, dead: prod });
+                }
+            }
+            g.font = `bold 8px ${UI_FONT}`;
+            g.fillStyle = '#ff5a5a';
+            g.textAlign = 'center';
+            g.fillText('PROD-01', R.x + 64 + 3 * 28 + 11, R.y + 100);
+            g.strokeStyle = '#ffb43b';
+            g.lineWidth = 2;
+            g.beginPath();
+            g.moveTo(R.x + 60, R.y + 28);
+            g.lineTo(R.x + 258, R.y + 28);
+            g.stroke();
+        },
+        // NOC: a wall of graphs (one of them flat) and two desks of monitors.
+        (g, R) => {
+            drawBox(g, R.x + 66, R.y + 12, R.w - 112, 36, '#05080c', '#36d6c6', 3);
+            const rand = decorRandom(7);
+            g.strokeStyle = '#36d6c6';
+            g.lineWidth = 1.2;
+            g.beginPath();
+            for (let k = 0; k <= 22; k++) {
+                const x = R.x + 72 + k * 3.4, y = R.y + 34 - rand() * 14;
+                if (k) g.lineTo(x, y); else g.moveTo(x, y);
+            }
+            g.stroke();
+            g.strokeStyle = '#ff3b3b';
+            g.beginPath();
+            g.moveTo(R.x + 147, R.y + 22);
+            g.lineTo(R.x + 156, R.y + 38);
+            g.lineTo(R.x + R.w - 52, R.y + 38);
+            g.stroke();
+            g.font = `bold 7px ${UI_FONT}`;
+            g.fillStyle = '#ff5a5a';
+            g.textAlign = 'left';
+            g.fillText('PROD-01: 0 req/s', R.x + 152, R.y + 24);
+            for (const dx of [40, 150]) {
+                drawBox(g, R.x + dx, R.y + 64, 76, 14, '#4a3a2a');
+                for (let m = 0; m < 3; m++) drawBox(g, R.x + dx + 6 + m * 24, R.y + 56, 18, 10, '#0b1520', '#36d6c6', 1);
+            }
+        },
+        // Power Room: UPS cabinets and the backup generator.
+        (g, R) => {
+            for (let k = 0; k < 3; k++) {
+                const x = R.x + 112 + k * 28;
+                drawBox(g, x, R.y + 32, 22, 52, '#5b6472', '#2a3038', 2);
+                g.fillStyle = '#1b1f26';
+                g.fillRect(x + 4, R.y + 38, 14, 8);
+                ledSpots.push({ x: x + 6, y: R.y + 41, color: '#ffb43b', seed: 40 + k, dead: false });
+                ledSpots.push({ x: x + 12, y: R.y + 41, color: '#36d6c6', seed: 50 + k, dead: false });
+            }
+            const gx = R.x + R.w - 156, gy = R.y + 112;
+            drawBox(g, gx, gy, 68, 46, '#d9a520', '#6b5010', 4);
+            g.save();
+            g.beginPath();
+            g.rect(gx, gy + 36, 68, 10);
+            g.clip();
+            g.fillStyle = '#111';
+            for (let k = -10; k < 80; k += 10) {
+                g.beginPath();
+                g.moveTo(gx + k, gy + 46);
+                g.lineTo(gx + k + 5, gy + 46);
+                g.lineTo(gx + k + 15, gy + 36);
+                g.lineTo(gx + k + 10, gy + 36);
+                g.fill();
+            }
+            g.restore();
+            g.font = `bold 9px ${UI_FONT}`;
+            g.fillStyle = '#3a2a08';
+            g.textAlign = 'center';
+            g.fillText('GEN-1', gx + 34, gy + 22);
+        },
+        // Break Room: the coffee machine, a fridge and a sofa.
+        (g, R) => {
+            drawBox(g, R.x + 104, R.y + 32, 92, 16, '#6b4a2e');
+            drawBox(g, R.x + 150, R.y + 14, 22, 26, '#1d1d1f', '#000', 3);
+            g.fillStyle = '#ff3b3b';
+            g.beginPath();
+            g.arc(R.x + 161, R.y + 22, 2, 0, TAU);
+            g.fill();
+            drawBox(g, R.x + 118, R.y + 34, 10, 10, '#f5f1e8');
+            drawBox(g, R.x + 200, R.y + 14, 22, 40, '#d8dde3', '#8a939e', 3);
+            drawBox(g, R.x + 12, R.y + 58, 18, 74, '#7a2e2e', '#3d1414', 6);
+        },
+        // Cooling Plant: CRAC units with fans (the fans spin on the live layer).
+        (g, R) => {
+            for (let k = 0; k < 3; k++) {
+                const x = R.x + 118 + k * 36, y = R.y + 12;
+                drawBox(g, x, y, 30, 30, '#9aa7b5', '#4b5563', 3);
+                g.fillStyle = '#2b333f';
+                g.beginPath();
+                g.arc(x + 15, y + 15, 12, 0, TAU);
+                g.fill();
+                fanSpots.push({ x: x + 15, y: y + 15, r: 11, seed: k });
+            }
+            g.strokeStyle = '#2f7de1';
+            g.lineWidth = 4;
+            g.beginPath();
+            g.moveTo(R.x + 112, R.y + 52);
+            g.lineTo(R.x + R.w - 14, R.y + 52);
+            g.stroke();
+        },
+        // Boardroom: a long table and a screen.
+        (g, R) => {
+            for (let k = 0; k < 5; k++) {
+                drawBox(g, R.x + 88 + k * 24, R.y + 32, 12, 8, '#22262e');
+                drawBox(g, R.x + 88 + k * 24, R.y + 70, 12, 8, '#22262e');
+            }
+            drawBox(g, R.x + 80, R.y + 42, 124, 24, '#5a3d26', '#2c1d10', 6);
+            drawBox(g, R.x + R.w - 16, R.y + 20, 6, 58, '#0b0f17', '#36d6c6', 2);
+        },
+        // Loading Dock: roller door, hazard stripes and stacked boxes.
+        (g, R) => {
+            drawBox(g, R.x + 8, R.y + 44, 12, 110, '#6b7684', '#2a3038', 1);
+            g.strokeStyle = '#3a4250';
+            g.lineWidth = 1;
+            for (let y = R.y + 50; y < R.y + 150; y += 6) {
+                g.beginPath();
+                g.moveTo(R.x + 9, y);
+                g.lineTo(R.x + 19, y);
+                g.stroke();
+            }
+            g.save();
+            g.beginPath();
+            g.rect(R.x + 22, R.y + 44, 10, 110);
+            g.clip();
+            for (let y = R.y + 30; y < R.y + 160; y += 12) {
+                g.fillStyle = '#ffb43b';
+                g.beginPath();
+                g.moveTo(R.x + 22, y);
+                g.lineTo(R.x + 32, y - 10);
+                g.lineTo(R.x + 32, y - 4);
+                g.lineTo(R.x + 22, y + 6);
+                g.fill();
+            }
+            g.restore();
+            const boxes = [[0, 0], [30, 0], [15, -18], [60, 4]];
+            for (const [dx, dy] of boxes) {
+                const x = R.x + R.w - 108 + dx, y = R.y + 52 + dy;
+                drawBox(g, x, y, 28, 20, '#b58552', '#6b4a28', 1);
+                g.fillStyle = '#e3c79a';
+                g.fillRect(x + 12, y, 4, 20);
+            }
+        },
+        // Open-Plan Office: desk clusters and plants.
+        (g, R) => {
+            for (const [dx, dy] of [[56, 44], [150, 44]]) {
+                drawBox(g, R.x + dx, R.y + dy, 58, 30, '#d9d2c3', '#8b8270', 2);
+                g.strokeStyle = '#8b8270';
+                g.beginPath();
+                g.moveTo(R.x + dx + 29, R.y + dy);
+                g.lineTo(R.x + dx + 29, R.y + dy + 30);
+                g.stroke();
+                for (const [mx, my] of [[8, 4], [36, 4], [8, 18], [36, 18]]) drawBox(g, R.x + dx + mx, R.y + dy + my, 14, 8, '#151b24', '#36d6c6', 1);
+            }
+            for (const [px, py] of [[R.x + R.w - 22, R.y + 22], [R.x + 22, R.y + R.h - 22]]) {
+                g.fillStyle = '#8a5a3a';
+                g.beginPath();
+                g.arc(px, py, 7, 0, TAU);
+                g.fill();
+                g.fillStyle = '#3a8a4a';
+                for (let k = 0; k < 5; k++) {
+                    g.beginPath();
+                    g.arc(px + Math.cos(k * 1.26) * 5, py + Math.sin(k * 1.26) * 5 - 2, 5, 0, TAU);
+                    g.fill();
+                }
+            }
+        },
+        // Security Desk: a wall of CCTV monitors over the guard's desk.
+        (g, R) => {
+            for (let j = 0; j < 2; j++) {
+                for (let k = 0; k < 4; k++) drawBox(g, R.x + 110 + k * 30, R.y + 12 + j * 19, 26, 16, '#0c1a14', '#2fbf5a', 1);
+            }
+            drawBox(g, R.x + 102, R.y + 56, 134, 16, '#3d3d46', '#1b1b22', 3);
+        },
+        // War Room: the incident table and the whiteboard.
+        (g, R) => {
+            drawBox(g, R.x + 120, R.y + 11, 130, 30, '#e9edf1', '#8a939e', 2);
+            g.font = `bold 10px ${UI_FONT}`;
+            g.fillStyle = '#c0262d';
+            g.textAlign = 'center';
+            g.fillText('INC-0307 · PROD-01 DOWN', R.x + 185, R.y + 24);
+            g.font = `9px ${UI_FONT}`;
+            g.fillStyle = '#2f5ca0';
+            g.fillText('who? where? with what?', R.x + 185, R.y + 36);
+            for (let k = 0; k < 4; k++) {
+                drawBox(g, R.x + 84 + k * 28, R.y + 54, 14, 8, '#22262e');
+                drawBox(g, R.x + 84 + k * 28, R.y + 144, 14, 8, '#22262e');
+            }
+            drawBox(g, R.x + 70, R.y + 62, 124, 80, '#4a3020', '#24160c', 12);
+        },
+    ];
+
+    function drawRoom(g, i) {
+        const R = ROOM_RECTS[i], d = ROOM_DEFS[i];
+        g.fillStyle = d.floor;
+        g.fillRect(R.x, R.y, R.w, R.h);
+        g.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+        g.lineWidth = 1;
+        for (let x = R.x + TILE; x < R.x + R.w; x += TILE) {
+            g.beginPath();
+            g.moveTo(x + 0.5, R.y);
+            g.lineTo(x + 0.5, R.y + R.h);
+            g.stroke();
+        }
+        for (let y = R.y + TILE; y < R.y + R.h; y += TILE) {
+            g.beginPath();
+            g.moveTo(R.x, y + 0.5);
+            g.lineTo(R.x + R.w, y + 0.5);
+            g.stroke();
+        }
+        FURNITURE[i](g, R);
+        if (d.hatch) drawHatch(g, HATCHES[i]);
+        // Walls, then the doorways cut through them, each with a badge reader.
+        g.strokeStyle = '#080b10';
+        g.lineWidth = 6;
+        g.strokeRect(R.x + 3, R.y + 3, R.w - 6, R.h - 6);
+        g.strokeStyle = 'rgba(160, 180, 210, 0.25)';
+        g.lineWidth = 1;
+        g.strokeRect(R.x + 6.5, R.y + 6.5, R.w - 13, R.h - 13);
+        for (const [c, r, dc, dr] of d.doors) {
+            const x = OX + c * TILE, y = OY + r * TILE;
+            g.fillStyle = d.floor;
+            if (dr !== 0) g.fillRect(x + 5, dr > 0 ? y + TILE - 7 : y, TILE - 10, 7);
+            else g.fillRect(dc > 0 ? x + TILE - 7 : x, y + 5, 7, TILE - 10);
+            g.fillStyle = '#ffb43b';
+            if (dr !== 0) g.fillRect(x + 5, dr > 0 ? y + TILE - 2 : y, TILE - 10, 2);
+            else g.fillRect(dc > 0 ? x + TILE - 2 : x, y + 5, 2, TILE - 10);
+            const bx = dr !== 0 ? x + TILE - 6 : (dc > 0 ? x + TILE - 12 : x + 8);
+            const by = dr !== 0 ? (dr > 0 ? y + TILE - 14 : y + 7) : y + TILE - 6;
+            drawBox(g, bx, by, 5, 7, '#111', '#000', 1);
+            g.fillStyle = '#2fbf5a';
+            g.fillRect(bx + 1.5, by + 1.5, 2, 2);
+        }
+        g.font = `bold 11px ${UI_FONT}`;
+        const label = ROOM_NAMES[i].toUpperCase();
+        const lw = g.measureText(label).width + 14;
+        g.fillStyle = 'rgba(8, 11, 17, 0.88)';
+        roundRect(g, R.x + 10, R.y + 9, lw, 18, 4);
+        g.fill();
+        g.strokeStyle = i === WAR ? '#c0262d' : '#36d6c6';
+        g.lineWidth = 1;
+        g.stroke();
+        g.fillStyle = '#e8eef6';
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+        g.fillText(label, R.x + 17, R.y + 18.5);
+        g.textBaseline = 'alphabetic';
+    }
+
+    function buildBoard() {
+        const layer = document.createElement('canvas');
+        layer.width = W * pixelRatio;
+        layer.height = H * pixelRatio;
+        const g = layer.getContext('2d');
+        g.scale(pixelRatio, pixelRatio);
+        ledSpots = [];
+        fanSpots = [];
+        g.fillStyle = '#0b0f17';
+        g.fillRect(0, 0, W, H);
+        const hud = g.createLinearGradient(0, 0, 0, 54);
+        hud.addColorStop(0, '#161d2a');
+        hud.addColorStop(1, '#0d121b');
+        g.fillStyle = hud;
+        g.fillRect(0, 0, W, 54);
+        g.fillStyle = '#c0262d';
+        g.fillRect(0, 52, W, 2);
+        g.fillStyle = '#05070b';
+        roundRect(g, OX - 7, OY - 6, COLS * TILE + 14, ROWS * TILE + 12, 8);
+        g.fill();
+        g.strokeStyle = '#3a4658';
+        g.lineWidth = 2;
+        g.stroke();
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) if (WALKABLE[r][c]) drawFloorTile(g, c, r);
+        }
+        g.strokeStyle = 'rgba(255, 180, 59, 0.45)';
+        g.lineWidth = 1.5;
+        g.setLineDash([3, 3]);
+        for (const p of START_SPOTS) {
+            g.beginPath();
+            g.arc(p.x, p.y, 12, 0, TAU);
+            g.stroke();
+        }
+        g.setLineDash([]);
+        ROOM_DEFS.forEach((_, i) => drawRoom(g, i));
+        return layer;
+    }
+
+    // --- Drawing: the live layer ---
+    function drawLeds(time) {
+        for (const l of ledSpots) {
+            const v = Math.sin(time * (2 + (l.seed % 5)) + l.seed * 1.7);
+            ctx.fillStyle = l.dead ? (v > 0.9 ? '#ff3b3b' : '#4a1010') : v > -0.3 ? l.color : 'rgba(255, 255, 255, 0.08)';
+            ctx.fillRect(l.x, l.y, 2.5, 2);
+        }
+    }
+
+    function drawFans(time, fast) {
+        ctx.save();
+        ctx.fillStyle = '#c9d2dc';
+        for (const f of fanSpots) {
+            const a = time * (fast ? 28 : 5) + f.seed;
+            for (let k = 0; k < 3; k++) {
+                ctx.beginPath();
+                ctx.ellipse(f.x + Math.cos(a + k * TAU / 3) * 5.5, f.y + Math.sin(a + k * TAU / 3) * 5.5, 5.5, 2.4, a + k * TAU / 3, 0, TAU);
+                ctx.fill();
+            }
+        }
+        ctx.restore();
+    }
+
+    // The Incident Report on the War Room table; `open` runs 0 (sealed) to 1 (open).
+    function drawFolder(open) {
+        ctx.save();
+        ctx.translate(FOLDER.x, FOLDER.y);
+        ctx.rotate(-0.06);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(-31, -20, 66, 46);
+        if (open > 0) {
+            const spread = 34 * easeOut(open);
+            drawBox(ctx, -32 - spread, -22, 64, 44, '#d9b56a', '#8a6a2a', 2);
+            drawBox(ctx, -32 + spread, -22, 64, 44, '#e4c27a', '#8a6a2a', 2);
+        } else {
+            drawBox(ctx, -30, -27, 22, 8, '#d9b56a', '#8a6a2a', 2);
+            drawBox(ctx, -32, -22, 64, 44, '#e4c27a', '#8a6a2a', 2);
+            ctx.font = `bold 7px ${UI_FONT}`;
+            ctx.fillStyle = '#2b1e12';
+            ctx.textAlign = 'center';
+            ctx.fillText('INCIDENT REPORT', 0, -8);
+            ctx.save();
+            ctx.rotate(-0.18);
+            ctx.strokeStyle = '#c0262d';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-26, 0, 52, 13);
+            ctx.font = `900 8px ${UI_FONT}`;
+            ctx.fillStyle = '#c0262d';
+            ctx.fillText('CONFIDENTIAL', 0, 10);
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    // A classic cone-and-ball pawn standing at (0, 0), drawn into any context.
+    function drawPawn(g, x, y, hue, { scale = 1, cleared = false, culprit = false, lift = 0, sat = null } = {}) {
+        g.save();
+        g.translate(x, y);
+        g.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        g.beginPath();
+        g.ellipse(0, 0, 10 * scale, 4 * scale, 0, 0, TAU);
+        g.fill();
+        if (culprit) {
+            g.strokeStyle = 'rgba(255, 59, 59, 0.9)';
+            g.lineWidth = 3;
+            g.beginPath();
+            g.ellipse(0, 0, 15 * scale, 6 * scale, 0, 0, TAU);
+            g.stroke();
+        }
+        g.translate(0, -lift);
+        g.scale(scale, scale);
+        const s = sat ?? (cleared ? 14 : 72), l = cleared ? 60 : 52;
+        const body = g.createLinearGradient(-9, 0, 9, 0);
+        body.addColorStop(0, `hsl(${hue}, ${s}%, ${l + 16}%)`);
+        body.addColorStop(1, `hsl(${hue}, ${s}%, ${l - 20}%)`);
+        g.fillStyle = body;
+        g.strokeStyle = `hsl(${hue}, ${s}%, ${l - 32}%)`;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(-9.5, 0);
+        g.quadraticCurveTo(-9.5, -4, -7, -5);
+        g.lineTo(-2.8, -20);
+        g.lineTo(2.8, -20);
+        g.lineTo(7, -5);
+        g.quadraticCurveTo(9.5, -4, 9.5, 0);
+        g.closePath();
+        g.fill();
+        g.stroke();
+        g.beginPath();
+        g.ellipse(0, -20, 5.5, 2.2, 0, 0, TAU);
+        g.fill();
+        g.stroke();
+        const head = g.createRadialGradient(-2, -28, 1, 0, -26, 7);
+        head.addColorStop(0, `hsl(${hue}, ${s}%, ${l + 28}%)`);
+        head.addColorStop(1, `hsl(${hue}, ${s}%, ${l - 14}%)`);
+        g.fillStyle = head;
+        g.beginPath();
+        g.arc(0, -26.5, 6.5, 0, TAU);
+        g.fill();
+        g.stroke();
+        if (cleared) {
+            g.fillStyle = '#2f8f46';
+            g.beginPath();
+            g.arc(7, -31, 5, 0, TAU);
+            g.fill();
+            g.strokeStyle = '#fff';
+            g.lineWidth = 1.6;
+            g.beginPath();
+            g.moveTo(4.6, -31);
+            g.lineTo(6.4, -29);
+            g.lineTo(9.5, -33);
+            g.stroke();
+        }
+        g.restore();
+    }
+
+    // The Inspector: trench coat, fedora and magnifying glass.
+    function drawInspector(s) {
+        if (s.scale <= 0.01) return;
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 12 * s.scale, 4.5 * s.scale, 0, 0, TAU);
+        ctx.fill();
+        ctx.translate(0, -s.lift);
+        ctx.scale(s.scale * (s.dir < 0 ? -1 : 1), s.scale);
+        const coat = ctx.createLinearGradient(-11, 0, 11, 0);
+        coat.addColorStop(0, '#d2ab72');
+        coat.addColorStop(1, '#8a6a3c');
+        ctx.fillStyle = coat;
+        ctx.strokeStyle = '#4a3720';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-11, 0);
+        ctx.lineTo(-4.5, -23);
+        ctx.lineTo(4.5, -23);
+        ctx.lineTo(11, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#4a3720';
+        ctx.fillRect(-7.5, -11, 15, 2.5);
+        ctx.beginPath();
+        ctx.moveTo(0, -23);
+        ctx.lineTo(-3, -15);
+        ctx.moveTo(0, -23);
+        ctx.lineTo(3, -15);
+        ctx.stroke();
+        ctx.fillStyle = '#f0c9a0';
+        ctx.beginPath();
+        ctx.arc(0, -29, 6, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#3b2a1c';
+        ctx.beginPath();
+        ctx.ellipse(0, -33, 10.5, 2.8, 0, 0, TAU);
+        ctx.fill();
+        roundRect(ctx, -6, -42, 12, 9.5, 3);
+        ctx.fill();
+        ctx.fillStyle = '#c0262d';
+        ctx.fillRect(-6, -35.5, 12, 2);
+        ctx.strokeStyle = '#4a3720';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(7, -14);
+        ctx.lineTo(12, -19);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(180, 225, 255, 0.45)';
+        ctx.strokeStyle = '#c9ced6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(15.5, -23, 5, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Kit icons, drawn in a box of about 40 x 40 units round (x, y).
+    function drawWeaponIcon(g, w, x, y, s) {
+        g.save();
+        g.translate(x, y);
+        g.scale(s, s);
+        g.lineCap = 'round';
+        g.lineJoin = 'round';
+        switch (w) {
+            case 0: // Coffee Mug, mid-spill
+                g.fillStyle = '#6b4020';
+                g.beginPath();
+                g.ellipse(7, 13, 10, 2.5, 0, 0, TAU);
+                g.fill();
+                g.strokeStyle = '#f5f1e8';
+                g.lineWidth = 3;
+                g.beginPath();
+                g.arc(8, 1, 5.5, -Math.PI / 2, Math.PI / 2);
+                g.stroke();
+                drawBox(g, -11, -9, 19, 21, '#f5f1e8', '#3a2a1a', 3);
+                g.fillStyle = '#c0262d';
+                g.fillRect(-11, -2, 19, 4);
+                g.fillStyle = '#5a3418';
+                g.beginPath();
+                g.ellipse(-1.5, -9, 9, 2.3, 0, 0, TAU);
+                g.fill();
+                g.strokeStyle = 'rgba(220, 230, 240, 0.7)';
+                g.lineWidth = 1.5;
+                for (const dx of [-5, 1]) {
+                    g.beginPath();
+                    g.moveTo(dx, -12);
+                    g.quadraticCurveTo(dx + 3, -15, dx, -18);
+                    g.quadraticCurveTo(dx - 3, -21, dx, -24);
+                    g.stroke();
+                }
+                break;
+            case 1: // Ethernet Cable
+                g.strokeStyle = '#2f7de1';
+                g.lineWidth = 3;
+                for (let k = 0; k < 3; k++) {
+                    g.beginPath();
+                    g.ellipse(-6 + k * 3, 4, 10, 7, 0.3, 0, TAU);
+                    g.stroke();
+                }
+                g.beginPath();
+                g.moveTo(4, 0);
+                g.quadraticCurveTo(10, -6, 11, -11);
+                g.stroke();
+                drawBox(g, 6, -21, 10, 11, 'rgba(210, 230, 245, 0.9)', '#5a6a7a', 1.5);
+                g.fillStyle = '#d9a520';
+                for (let k = 0; k < 4; k++) g.fillRect(7.5 + k * 2, -21, 1, 4);
+                break;
+            case 2: // Rogue USB Stick
+                g.rotate(-0.5);
+                drawBox(g, 5, -4.5, 10, 9, '#b8bec7', '#5a6370', 1);
+                g.fillStyle = '#5a6370';
+                g.fillRect(8, -2.5, 2.5, 2);
+                g.fillRect(11.5, -2.5, 2.5, 2);
+                drawBox(g, -15, -6, 21, 12, '#1b1b1b', '#000', 3);
+                g.fillStyle = '#ff3b3b';
+                g.beginPath();
+                g.arc(-10, 0, 1.8, 0, TAU);
+                g.fill();
+                g.font = `900 7px ${UI_FONT}`;
+                g.fillStyle = '#ffb43b';
+                g.textAlign = 'center';
+                g.fillText('!!', -2, 2.5);
+                break;
+            case 3: // Screwdriver
+                g.rotate(-0.7);
+                drawBox(g, -17, -4.5, 14, 9, '#ffb43b', '#6b5010', 3);
+                g.fillStyle = '#111';
+                g.fillRect(-13, -4.5, 2, 9);
+                g.fillRect(-8, -4.5, 2, 9);
+                g.fillStyle = '#b8bec7';
+                g.fillRect(-3, -1.5, 17, 3);
+                g.beginPath();
+                g.moveTo(14, -1.5);
+                g.lineTo(18, 0);
+                g.lineTo(14, 1.5);
+                g.fill();
+                break;
+            case 4: // Vacuum Cleaner
+                g.strokeStyle = '#3a3f48';
+                g.lineWidth = 3;
+                g.beginPath();
+                g.moveTo(4, -2);
+                g.quadraticCurveTo(14, -6, 10, -16);
+                g.lineTo(16, -18);
+                g.stroke();
+                drawBox(g, 12, -21, 8, 5, '#3a3f48', '#111', 1);
+                g.fillStyle = '#c0262d';
+                g.beginPath();
+                g.ellipse(-4, 3, 12, 8.5, 0, 0, TAU);
+                g.fill();
+                g.strokeStyle = '#6b1015';
+                g.lineWidth = 1;
+                g.stroke();
+                g.fillStyle = '#f0c9a0';
+                g.beginPath();
+                g.ellipse(-6, 0, 4, 3, 0, 0, TAU);
+                g.fill();
+                g.fillStyle = '#111';
+                for (const dx of [-11, 3]) {
+                    g.beginPath();
+                    g.arc(dx, 11, 3, 0, TAU);
+                    g.fill();
+                }
+                break;
+            case 5: // Keyboard with rm -rf /
+                g.rotate(-0.15);
+                drawBox(g, -17, -8, 34, 17, '#2b2f36', '#111', 3);
+                g.fillStyle = '#d9dde3';
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 7; c++) g.fillRect(-15 + c * 4.4, -6 + r * 4.6, 3.4, 3.4);
+                }
+                g.fillStyle = '#c0262d';
+                g.fillRect(-15 + 6 * 4.4, -6 + 2 * 4.6, 3.4, 3.4);
+                g.font = `bold 7px ui-monospace, Menlo, Consolas, monospace`;
+                g.fillStyle = '#ff5a5a';
+                g.textAlign = 'center';
+                g.fillText('rm -rf /', 0, -12);
+                break;
+        }
+        g.restore();
+    }
+
+    function drawWeaponToken(s, w) {
+        ctx.save();
+        ctx.translate(s.x, s.y - s.lift * 0.6);
+        ctx.fillStyle = 'rgba(8, 11, 17, 0.85)';
+        ctx.strokeStyle = '#ffb43b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        drawWeaponIcon(ctx, w, 0, 1, 0.55);
+        ctx.restore();
+    }
+
+    function drawTag(m, s, alpha = 1) {
+        const y = s.y - s.lift - 42;
+        const { text, w } = m.tag;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        ctx.font = TAG_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(244, 232, 200, 0.95)';
+        roundRect(ctx, s.x - w / 2, y - 8, w, 16, 8);
+        ctx.fill();
+        ctx.strokeStyle = `hsl(${m.hue}, 72%, 45%)`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#2b1e12';
+        ctx.fillText(text, s.x, y + 0.5);
+        ctx.restore();
+    }
+
+    const PIPS = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]],
+        5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] };
+
+    function drawDie(x, y, face, spin, pop) {
+        const size = 20 * pop;
+        if (size < 1) return;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(spin);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        roundRect(ctx, -size / 2 + 1.5, -size / 2 + 2, size, size, 4);
+        ctx.fill();
+        ctx.fillStyle = '#f4e8c8';
+        roundRect(ctx, -size / 2, -size / 2, size, size, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#7d1418';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = face === 1 ? '#c0262d' : '#2b1e12';
+        for (const [px, py] of PIPS[face]) {
+            ctx.beginPath();
+            ctx.arc(px * size * 0.27, py * size * 0.27, size * (face === 1 ? 0.13 : 0.09), 0, TAU);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function drawBubble(x, y, text, pop, accent) {
+        if (pop <= 0) return;
+        ctx.save();
+        ctx.font = `bold 13px ${UI_FONT}`;
+        const w = ctx.measureText(text).width + 20;
+        x = Math.max(w / 2 + 6, Math.min(W - w / 2 - 6, x));
+        ctx.translate(x, y);
+        ctx.scale(pop, pop);
+        ctx.fillStyle = '#fffaf0';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, -w / 2, -34, w, 26, 13);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-6, -9);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(6, -9);
+        ctx.fill();
+        ctx.fillStyle = '#2b1e12';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 0, -20.5);
+        ctx.restore();
+    }
+
+    // --- Drawing: cards ---
+    const CARD_W = 128, CARD_H = 176;
+    const CARD_LABELS = { suspect: 'SUSPECT', room: 'LOCATION', weapon: 'EQUIPMENT' };
+
+    function drawMiniPlan(g, highlight, w) {
+        const k = w / (COLS * TILE);
+        g.save();
+        g.translate(-w / 2, -(ROWS * TILE * k) / 2);
+        g.fillStyle = '#e3d6b4';
+        g.fillRect(0, 0, COLS * TILE * k, ROWS * TILE * k);
+        ROOM_DEFS.forEach((d, i) => {
+            g.fillStyle = i === highlight ? '#c0262d' : i === WAR ? '#9c8a66' : '#c4b48c';
+            g.fillRect(d.c * TILE * k + 0.5, d.r * TILE * k + 0.5, d.w * TILE * k - 1, d.h * TILE * k - 1);
+        });
+        g.strokeStyle = '#2b1e12';
+        g.lineWidth = 1;
+        g.strokeRect(0, 0, COLS * TILE * k, ROWS * TILE * k);
+        g.restore();
+    }
+
+    function drawCardBack() {
+        ctx.fillStyle = '#7d1418';
+        roundRect(ctx, -CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 10);
+        ctx.fill();
+        ctx.save();
+        roundRect(ctx, -CARD_W / 2 + 7, -CARD_H / 2 + 7, CARD_W - 14, CARD_H - 14, 7);
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(244, 232, 200, 0.16)';
+        ctx.lineWidth = 1;
+        for (let k = -CARD_H; k < CARD_H; k += 12) {
+            ctx.beginPath();
+            ctx.moveTo(-CARD_W / 2, k);
+            ctx.lineTo(CARD_W / 2, k + CARD_W);
+            ctx.moveTo(CARD_W / 2, k);
+            ctx.lineTo(-CARD_W / 2, k + CARD_W);
+            ctx.stroke();
+        }
+        ctx.restore();
+        ctx.strokeStyle = '#f4e8c8';
+        ctx.lineWidth = 3;
+        roundRect(ctx, -CARD_W / 2 + 7, -CARD_H / 2 + 7, CARD_W - 14, CARD_H - 14, 7);
+        ctx.stroke();
+        ctx.fillStyle = '#f4e8c8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `900 46px ${SERIF_FONT}`;
+        ctx.fillText('?', 0, -6);
+        ctx.font = `bold 11px ${SERIF_FONT}`;
+        ctx.fillText('C L U E D O', 0, 40);
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    function drawCardFace(face) {
+        ctx.fillStyle = '#f4e8c8';
+        roundRect(ctx, -CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 10);
+        ctx.fill();
+        ctx.strokeStyle = '#c0262d';
+        ctx.lineWidth = 3;
+        roundRect(ctx, -CARD_W / 2 + 6, -CARD_H / 2 + 6, CARD_W - 12, CARD_H - 12, 7);
+        ctx.stroke();
+        ctx.fillStyle = '#c0262d';
+        ctx.fillRect(-CARD_W / 2 + 6, -CARD_H / 2 + 6, CARD_W - 12, 22);
+        ctx.fillStyle = '#f4e8c8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold 11px ${UI_FONT}`;
+        ctx.fillText(CARD_LABELS[face.type], 0, -CARD_H / 2 + 17.5);
+        let name;
+        if (face.type === 'suspect') {
+            const m = suspects[face.index];
+            drawPawn(ctx, 0, 38, m.hue, { scale: 2.3 });
+            name = m.name;
+        } else if (face.type === 'room') {
+            drawMiniPlan(ctx, face.index, CARD_W - 26);
+            name = ROOM_NAMES[face.index];
+        } else {
+            drawWeaponIcon(ctx, face.index, 0, -4, 2.1);
+            name = WEAPON_NAMES[face.index];
+        }
+        ctx.font = `bold 15px ${SERIF_FONT}`;
+        ctx.fillStyle = '#2b1e12';
+        ctx.fillText(fitText(ctx, name, CARD_W - 18), 0, CARD_H / 2 - 22);
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    // flip: 0 face down, 1 face up (the card turns edge-on half way).
+    function drawCard(x, y, face, flip, scale = 1, alpha = 1) {
+        const sx = Math.abs(Math.cos(flip * Math.PI)) * scale;
+        if (sx < 0.01 || alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha *= alpha;
+        ctx.translate(x, y);
+        ctx.scale(sx, scale);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        roundRect(ctx, -CARD_W / 2 + 4, -CARD_H / 2 + 6, CARD_W, CARD_H, 10);
+        ctx.fill();
+        if (flip < 0.5 || !face) drawCardBack();
+        else drawCardFace(face);
+        ctx.restore();
+    }
+
+    function drawStamp(x, y, text, color, pop) {
+        if (pop <= 0) return;
+        const s = lerp(2.2, 1, easeOut(pop));
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(-0.22);
+        ctx.scale(s, s);
+        ctx.globalAlpha *= pop;
+        ctx.font = `900 24px ${UI_FONT}`;
+        const w = ctx.measureText(text).width + 20;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        roundRect(ctx, -w / 2, -18, w, 36, 5);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 0, 1);
+        ctx.restore();
+    }
+
+    function drawCaption(x, y, text) {
+        ctx.save();
+        ctx.font = `bold 13px ${UI_FONT}`;
+        const w = ctx.measureText(text).width + 22;
+        ctx.fillStyle = 'rgba(8, 11, 17, 0.9)';
+        roundRect(ctx, x - w / 2, y - 12, w, 24, 12);
+        ctx.fill();
+        ctx.strokeStyle = '#ffb43b';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#f4e8c8';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, x, y + 0.5);
+        ctx.restore();
+    }
+
+    function drawShownCard(card, t) {
+        if (t < card.t0 || t >= card.t1) return;
+        const alpha = 1 - phase(t, card.t1 - 0.2, card.t1);
+        const pop = easeOut(phase(t, card.t0, card.t0 + 0.2));
+        drawCard(W / 2, 320, card.face, phase(t, card.t0 + 0.1, card.t0 + 0.5), 0.6 + 0.4 * pop, alpha);
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        const green = card.stamp === 'ALIBI';
+        drawStamp(W / 2 + 4, 330, card.stamp, green ? '#2f8f46' : '#c0262d', phase(t, card.stampAt, card.stampAt + 0.18));
+        drawCaption(W / 2, 430, `Shown by ${card.by}`);
+        ctx.restore();
+    }
+
+    function drawCctv(c, t) {
+        if (t < c.t0 || t >= c.t1) return;
+        const pop = easeOut(phase(t, c.t0, c.t0 + 0.25)) * (1 - phase(t, c.t1 - 0.2, c.t1));
+        const w = 380, h = 230;
+        ctx.save();
+        ctx.translate(W / 2, 330);
+        ctx.scale(pop, pop);
+        drawBox(ctx, -w / 2 - 10, -h / 2 - 10, w + 20, h + 20, '#1d2430', '#3a4658', 12);
+        ctx.fillStyle = '#0b1a13';
+        ctx.fillRect(-w / 2, -h / 2, w, h);
+        const mono = 'ui-monospace, Menlo, Consolas, monospace';
+        ctx.font = `bold 12px ${mono}`;
+        ctx.fillStyle = '#7dffa8';
+        ctx.textAlign = 'left';
+        const title = c.flavour === 'cctv' ? `CAM 0${c.room + 1} · ${ROOM_NAMES[c.room].toUpperCase()}` : `DOOR LOG · ${ROOM_NAMES[c.room].toUpperCase()}`;
+        ctx.fillText(title, -w / 2 + 12, -h / 2 + 20);
+        ctx.textAlign = 'right';
+        ctx.fillText(`03:07:${String(10 + (Math.floor(t * 4) % 50)).padStart(2, '0')}`, w / 2 - 12, -h / 2 + 20);
+        if (Math.floor(t * 2) % 2 === 0) {
+            ctx.fillStyle = '#ff3b3b';
+            ctx.beginPath();
+            ctx.arc(w / 2 - 92, -h / 2 + 16, 4, 0, TAU);
+            ctx.fill();
+        }
+        const who = c.who;
+        if (c.flavour === 'cctv') {
+            const cols = who.length, gap = Math.min(110, (w - 40) / cols);
+            who.forEach((i, k) => {
+                const x = (k - (cols - 1) / 2) * gap;
+                drawPawn(ctx, x, 40, suspects[i].hue, { scale: 1.9, sat: 30 });
+                ctx.font = `bold 12px ${mono}`;
+                ctx.fillStyle = '#7dffa8';
+                ctx.textAlign = 'center';
+                ctx.fillText(fitText(ctx, suspects[i].name.toUpperCase(), gap - 6), x, 66);
+            });
+        } else {
+            ctx.font = `bold 13px ${mono}`;
+            ctx.textAlign = 'left';
+            who.forEach((i, k) => {
+                const y = -h / 2 + 58 + k * 30;
+                ctx.fillStyle = '#7dffa8';
+                ctx.fillText(`02:${String(41 + k * 6).padStart(2, '0')}  #${1000 + ((i * 137) % 9000)}`, -w / 2 + 16, y);
+                ctx.fillText(fitText(ctx, suspects[i].name.toUpperCase(), 150), -w / 2 + 160, y);
+                ctx.fillStyle = '#ffb43b';
+                ctx.textAlign = 'right';
+                ctx.fillText('OUT', w / 2 - 16, y);
+                ctx.textAlign = 'left';
+            });
+        }
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+        for (let y = -h / 2; y < h / 2; y += 3) ctx.fillRect(-w / 2, y, w, 1);
+        drawStamp(0, 0, 'ALL CLEARED', '#2f8f46', phase(t, c.stampAt, c.stampAt + 0.18));
+        ctx.restore();
+    }
+
+    // --- Drawing: intro, twists and the accusation ---
+    function drawIntro(t) {
+        if (t >= 2.6) return;
+        const alarm = 1 - phase(t, 2.0, 2.6);
+        ctx.fillStyle = `rgba(255, 30, 30, ${(reduceMotion.matches ? 0.12 : 0.1 + 0.1 * Math.sin(t * 12)) * alarm})`;
+        ctx.fillRect(0, 0, W, H);
+        const pop = easeOut(phase(t, 0.15, 0.45)) * (1 - phase(t, 2.25, 2.55));
+        if (pop <= 0) return;
+        const w = 420, h = 170;
+        ctx.save();
+        ctx.translate(W / 2, 330);
+        ctx.scale(pop, pop);
+        drawBox(ctx, -w / 2, -h / 2, w, h, '#05080c', '#36d6c6', 10);
+        ctx.font = `bold 14px ${UI_FONT}`;
+        ctx.fillStyle = '#36d6c6';
+        ctx.textAlign = 'left';
+        ctx.fillText('PROD-01 · HEALTH', -w / 2 + 16, -h / 2 + 24);
+        const flat = t > 1.25;
+        ctx.textAlign = 'right';
+        ctx.fillStyle = flat ? '#ff3b3b' : '#7dffa8';
+        ctx.fillText(flat ? '0 req/s · DOWN' : '1,204 req/s', w / 2 - 16, -h / 2 + 24);
+        // The heartbeat draws across the screen and goes flat.
+        const cursor = phase(t, 0.3, 2.1);
+        ctx.strokeStyle = flat ? '#ff3b3b' : '#7dffa8';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let k = 0; k <= 100 * cursor; k++) {
+            const x = -w / 2 + 16 + k * ((w - 32) / 100);
+            const beat = k % 25, alive = k < 50;
+            const y = alive && beat >= 8 && beat < 14 ? [0, -38, 30, -12, 6, 0][beat - 8] : 0;
+            if (k) ctx.lineTo(x, 30 + y); else ctx.moveTo(x, 30 + y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Three face-down cards slide into the Incident Report.
+    function drawSealing(t) {
+        if (t < 2.3 || t >= 4.3) return;
+        for (let k = 0; k < 3; k++) {
+            const start = 2.9 + k * 0.4;
+            const f = easeInOut(phase(t, start, start + 0.55));
+            if (f >= 1) continue;
+            const x = lerp(W / 2 + (k - 1) * 150, FOLDER.x, f), y = lerp(250, FOLDER.y, f);
+            drawCard(x, y, null, 0, lerp(0.8, 0.15, f) * easeOut(phase(t, 2.3, 2.5)));
+        }
+    }
+
+    function drawTwist(tw, t, insp) {
+        if (!tw) return;
+        const k = envelope(t, tw.t0, tw.t1, 0.25);
+        if (tw.kind === 'heat') {
+            ctx.fillStyle = `rgba(255, 70, 0, ${k * (0.12 + 0.06 * Math.sin(t * 6))})`;
+            ctx.fillRect(0, 0, W, H);
+        } else if (tw.kind === 'surge') {
+            const f = phase(t, tw.t0, tw.t1);
+            ctx.fillStyle = `rgba(230, 245, 255, ${(1 - f) * 0.65})`;
+            ctx.fillRect(0, 0, W, H);
+            // Sparks are cosmetic, so Math.random is fine here.
+            ctx.strokeStyle = '#fff6b0';
+            ctx.lineWidth = 2;
+            for (let s = 0; s < 6; s++) {
+                const x = 140 + Math.random() * 180, y = 90 + Math.random() * 70;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30);
+                ctx.stroke();
+            }
+        } else if (tw.kind === 'blackout') {
+            // Lights flicker out, the Inspector carries on by torchlight, the generator brings them back.
+            const flicker = reduceMotion.matches || t > tw.t0 + 0.35 || Math.sin(t * 70) > -0.2 ? 1 : 0.3;
+            const dark = k * flicker;
+            const g = ctx.createRadialGradient(insp.x, insp.y - 18, 25, insp.x, insp.y - 18, 150);
+            g.addColorStop(0, 'rgba(2, 4, 10, 0)');
+            g.addColorStop(1, `rgba(2, 4, 10, ${0.9 * dark})`);
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.07 * dark})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    }
+
+    function drawSpotlight(game, t, at) {
+        const sp = game.spotlight;
+        if (!sp || t < sp.t0) return;
+        const r = lerp(760, 95, easeInOut(phase(t, sp.t0, sp.t1)));
+        const g = ctx.createRadialGradient(at.x, at.y - 16, r * 0.55, at.x, at.y - 16, r);
+        g.addColorStop(0, 'rgba(2, 4, 10, 0)');
+        g.addColorStop(1, 'rgba(2, 4, 10, 0.84)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+    }
+
+    // The Incident Report opens: who, where, with what.
+    function drawReport(game, t) {
+        const rep = game.report;
+        if (!rep || t < rep.t0) return;
+        const { plan } = game;
+        const faces = [{ type: 'suspect', index: plan.culprit }, { type: 'room', index: plan.room }, { type: 'weapon', index: plan.weapon }];
+        faces.forEach((face, k) => {
+            const f = easeInOut(phase(t, rep.t0 + k * 0.12, rep.t0 + k * 0.12 + 0.5));
+            const x = lerp(FOLDER.x, W / 2 + (k - 1) * 140, f), y = lerp(FOLDER.y, 200, f);
+            drawCard(x, y, face, phase(t, rep.flips[k], rep.flips[k] + 0.35), lerp(0.2, 0.86, f));
+        });
+        drawStamp(W / 2 - 140, 214, 'GUILTY', '#c0262d', phase(t, rep.flips[2] + 0.5, rep.flips[2] + 0.68));
+    }
+
+    function drawConfetti() {
+        confetti = confetti.filter(c => c.life > 0 && c.y < H + 40);
+        for (const c of confetti) {
+            c.vy += 0.3;
+            c.x += c.vx;
+            c.y += c.vy;
+            c.rot += c.vr;
+            c.life -= 0.005;
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(c.rot);
+            ctx.globalAlpha = Math.max(0, c.life);
+            if (c.note) {
+                ctx.fillStyle = '#fffaf0';
+                ctx.fillRect(-6, -8, 12, 16);
+                ctx.fillStyle = '#c0262d';
+                for (let k = 0; k < 3; k++) ctx.fillRect(-4, -5 + k * 4, 8, 1);
+            } else {
+                ctx.fillStyle = c.color;
+                ctx.fillRect(-4, -2, 8, 4);
+            }
+            ctx.restore();
+        }
+        // Press flashbulbs going off.
+        flashes = flashes.filter(f => f.life > 0);
+        for (const f of flashes) {
+            if (f.delay-- > 0) continue;
+            const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 120);
+            g.addColorStop(0, `rgba(255, 255, 255, ${0.8 * f.life})`);
+            g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(f.x - 120, f.y - 120, 240, 240);
+            f.life -= 0.08;
+        }
+    }
+
+    function drawHud(status, left, total, time) {
+        ctx.save();
+        ctx.textBaseline = 'middle';
+        ctx.font = `bold 11px ${UI_FONT}`;
+        if (Math.floor(time * 2) % 2 === 0) {
+            ctx.fillStyle = '#ff3b3b';
+            ctx.beginPath();
+            ctx.arc(18, 15, 4, 0, TAU);
+            ctx.fill();
+        }
+        ctx.fillStyle = '#ff6b6b';
+        ctx.textAlign = 'left';
+        ctx.fillText('INC-0307 · PROD-01 DOWN', 28, 15.5);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#36d6c6';
+        if (total) ctx.fillText(`NO ALIBI: ${left} / ${total}`, W - 16, 15.5);
+        if (speed > 1) {
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#ffb43b';
+            ctx.fillText(`▶▶ ${speed}×`, W / 2, 13);
+        }
+        ctx.font = `bold 17px ${UI_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#f4e8c8';
+        ctx.fillText(fitText(ctx, status, W - 60), W / 2, 37);
+        ctx.restore();
+    }
+
+    // --- Frame ---
+    const IDLE_WEAPONS = WEAPON_HOME.map((room, w) => ({ start: weaponSpot(room, WEAPON_HOME.slice(0, w).filter(r => r === room).length), moves: [] }));
+
+    function idleStatus() {
+        if (participants.length < 2) return 'Add at least two suspects to open the case.';
+        return 'Press Start Investigation (or Space) to open the case.';
+    }
+
+    function draw(time) {
+        sizeCanvas();
+        if (!boardLayer) boardLayer = buildBoard();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(boardLayer, 0, 0);
+        ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+        const game = run;
+        const t = game ? game.t : 0;
+        const twist = game ? game.twists.find(x => t >= x.t0 && t < x.t1) : null;
+        drawFans(time, twist && twist.kind === 'heat');
+        drawFolder(game && game.report ? phase(t, game.report.t0 - 0.3, game.report.t0) : 0);
+
+        const still = p => ({ x: p.x, y: p.y, lift: 0, scale: 1, moving: false, dir: 1 });
+        const pawns = suspects.map((_, i) => (game ? trackAt(game.pawnTracks[i], t) : still(START_SPOTS[i])));
+        const insp = game ? trackAt(game.inspTrack, t) : still(INSP_SPOTS[WAR]);
+        const weapons = (game ? game.weaponTracks : IDLE_WEAPONS).map(tr => trackAt(tr, t));
+        const cleared = i => game !== null && t >= game.clearedAt[i];
+        const named = game && t >= game.accuseAt + 1.4;
+
+        // Witness rings sit on the floor under the pawns.
+        if (game) {
+            for (const ring of game.rings) {
+                if (t < ring.t0 || t >= ring.t1) continue;
+                const p = pawns[ring.who];
+                ctx.strokeStyle = `rgba(255, 180, 59, ${0.6 + 0.4 * Math.sin(t * 10)})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.ellipse(p.x, p.y, 17, 7, 0, 0, TAU);
+                ctx.stroke();
+            }
+        }
+
+        // Back to front: anything further up the board is further away.
+        const items = [];
+        weapons.forEach((s, w) => items.push({ y: s.y - 20, draw: () => drawWeaponToken(s, w) }));
+        pawns.forEach((s, i) => items.push({ y: s.y, draw: () => drawPawn(ctx, s.x, s.y, suspects[i].hue,
+            { lift: s.lift, cleared: cleared(i), culprit: named && i === game.plan.culprit }) }));
+        items.push({ y: insp.y + 0.1, draw: () => drawInspector(insp) });
+        items.sort((a, b) => a.y - b.y);
+        for (const item of items) item.draw();
+        // Cleared suspects relaxing in the Break Room drop their name tags to keep it readable.
+        pawns.forEach((s, i) => {
+            if (!(cleared(i) && !s.moving)) drawTag(suspects[i], s, cleared(i) ? 0.75 : 1);
+        });
+
+        drawTwist(twist, t, insp);
+        drawLeds(time);
+        if (game) drawSpotlight(game, t, pawns[game.plan.culprit]);
+
+        if (game) {
+            for (const d of game.dice) {
+                if (t < d.t0 || t >= d.t1) continue;
+                const rolling = t < d.roll;
+                const pop = easeOut(phase(t, d.t0, d.t0 + 0.15)) * (1 - phase(t, d.t1 - 0.15, d.t1));
+                d.faces.forEach((face, k) => {
+                    const shown = rolling ? 1 + (Math.floor(t * 18 + k * 3) % 6) : face;
+                    drawDie(insp.x + (k ? 15 : -15), insp.y - 66, shown, rolling ? t * 9 + k : 0.1 * (k ? 1 : -1), pop);
+                });
+            }
+            for (const b of game.bubbles) {
+                if (t < b.t0 || t >= b.t1) continue;
+                const pop = easeOut(phase(t, b.t0, b.t0 + 0.15)) * (1 - phase(t, b.t1 - 0.12, b.t1));
+                const p = b.who === 'insp' ? insp : pawns[b.who];
+                drawBubble(p.x, p.y - p.lift - (b.who === 'insp' ? 46 : 52), b.text, pop, b.who === 'insp' ? '#c0262d' : '#ffb43b');
+            }
+            drawIntro(t);
+            drawSealing(t);
+            for (const card of game.cards) drawShownCard(card, t);
+            for (const c of game.cctv) drawCctv(c, t);
+            drawReport(game, t);
+        }
+        drawConfetti();
+
+        if (!suspects.length) {
+            ctx.font = `bold 18px ${UI_FONT}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#f4e8c8';
+            ctx.fillText('Add suspects to open the case', W / 2, ROOM_RECTS[WAR].y + ROOM_RECTS[WAR].h + 22);
+        }
+        const status = game ? statusAt(game, t) : idleStatus();
+        const left = suspects.filter((_, i) => !cleared(i)).length;
+        drawHud(status, left, suspects.length, time);
+        if (status !== lastStatus) {
+            lastStatus = status;
+            statusEl.textContent = status;
+        }
+    }
+
+    let lastNow = null;
+    function frame(now) {
+        const dt = lastNow === null ? 0 : Math.min(0.05, (now - lastNow) / 1000);
+        lastNow = now;
+        if (playing()) advanceRun(dt * speed);
+        draw(now / 1000);
+        requestAnimationFrame(frame);
+    }
+
+    // --- The newspaper mugshot ---
+    function drawMugshot(index) {
+        const m = mugshot.getContext('2d');
+        const w = mugshot.width, h = mugshot.height;
+        m.setTransform(1, 0, 0, 1, 0, 0);
+        m.fillStyle = '#c9cdd1';
+        m.fillRect(0, 0, w, h);
+        m.strokeStyle = '#8a9096';
+        m.fillStyle = '#5a6066';
+        m.font = `bold 13px ${UI_FONT}`;
+        m.textAlign = 'left';
+        for (let k = 0; k < 7; k++) {
+            const y = 40 + k * 42;
+            m.lineWidth = k % 2 ? 1 : 2;
+            m.beginPath();
+            m.moveTo(0, y);
+            m.lineTo(w, y);
+            m.stroke();
+            if (k % 2 === 0) m.fillText(`${7 - k / 2}'`, 6, y - 4);
+        }
+        drawPawn(m, w / 2, h - 20, suspects[index].hue, { scale: 8 });
+        m.fillStyle = 'rgba(30, 30, 34, 0.85)';
+        for (let x = 18; x < w; x += 46) m.fillRect(x, 0, 9, h);
+        m.fillRect(0, 0, w, 10);
+        m.fillStyle = '#111';
+        m.fillRect(w / 2 - 82, h - 112, 164, 66);
+        m.fillStyle = '#f4f4f4';
+        m.textAlign = 'center';
+        m.font = `bold 16px ${UI_FONT}`;
+        m.fillText('PROD-01 · INC-0307', w / 2, h - 88);
+        m.font = `bold 20px ${UI_FONT}`;
+        m.fillText(fitText(m, suspects[index].name.toUpperCase(), 150), w / 2, h - 60);
+    }
+
+    // --- Self-test view (?selftest) ---
+    function showSelfTest() {
+        document.getElementById('gameView').hidden = true;
+        document.getElementById('selftestPanel').hidden = false;
+        document.getElementById('backLink').href = location.pathname;
+        const out = document.getElementById('selftestResults');
+        const test = ClueCore.startSelfTest();
+        const tick = () => {
+            if (!test.step(400)) {
+                const { done, total } = test.progress();
+                out.textContent = `Planning cases… ${done.toLocaleString()} of ${total.toLocaleString()}`;
+                setTimeout(tick, 0);
+                return;
+            }
+            const result = test.result();
+            out.innerHTML = '';
+            const summary = document.createElement('div');
+            summary.className = `summary ${result.passed ? 'pass' : 'fail'}`;
+            summary.textContent = result.passed ? 'ALL CHECKS PASSED' : 'CHECK FAILED';
+            out.appendChild(summary);
+            const intro = document.createElement('p');
+            intro.textContent = `Planned ${result.plans.toLocaleString()} cases without playing them, using the same code as the real game. ` +
+                'Each check compares the results with what perfect fairness would give.';
+            out.appendChild(intro);
+            for (const c of result.checks) {
+                const row = document.createElement('div');
+                row.className = `check ${c.passed ? 'pass' : 'fail'}`;
+                const title = document.createElement('div');
+                title.className = 'title';
+                title.textContent = c.name;
+                const detail = document.createElement('div');
+                detail.className = 'detail';
+                detail.textContent = c.detail;
+                row.append(title, detail);
+                out.appendChild(row);
+            }
+        };
+        out.textContent = 'Planning cases…';
+        setTimeout(tick, 50);
+    }
+
+    // --- Start up ---
+    if (new URLSearchParams(location.search).has('selftest')) {
+        showSelfTest();
+    } else {
+        participants = loadNames();
+        resetBoard();
+        buildChips();
+        updateList();
+        requestAnimationFrame(frame);
+    }
+</script>
+</body>
+</html>

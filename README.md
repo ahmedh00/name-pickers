@@ -44,6 +44,7 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `mousetrap.html` | [Try it](https://ahmedh00.github.io/name-pickers/mousetrap.html) | Inspired by the Mouse Trap board game - mice race round the board, then the contraption drops the cage on whoever is on the cheese |
 | `claw-machine.html` | [Try it](https://ahmedh00.github.io/name-pickers/claw-machine.html) | Inspired by arcade claw machines - the prize that makes it down the chute wins |
 | `bail-out.html` | [Try it](https://ahmedh00.github.io/name-pickers/bail-out.html) | Inspired by 80s skate contests - downhill heats then a vert final, highest judges' score wins |
+| `cluedo.html` | [Try it](https://ahmedh00.github.io/name-pickers/cluedo.html) | Inspired by Cluedo - PROD-01 is down and the Inspector clears suspects round the data centre until one is left: whoever took down prod |
 
 
 ## Contributing
