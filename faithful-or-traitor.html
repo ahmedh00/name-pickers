@@ -1,0 +1,1066 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Faithful or Traitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cormorant+Garamond:ital,wght@0,500;1,500;1,600&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: a castle hall with the round table as the stage (left), the list of players beside it (right); stacks on phones. One candlelit dark look, by design. */
+:root{
+  color-scheme: dark;
+  --hall:#110f13;
+  --ink:#efe6d6;
+  --muted:#a89d8c;
+  --gold:#d6a64f;
+  --gold-hi:#f3d28a;
+  --blood:#a3162a;
+  --blood-hi:#e3374d;
+  --faith:#cdd9e6;
+  --panel:rgba(22,17,20,.9);
+  --line:rgba(214,166,79,.32);
+  --font-display:'Cinzel','Trajan Pro',Georgia,serif;
+  --font-voice:'Cormorant Garamond','Garamond',Georgia,serif;
+  --font-body:'Source Sans 3','Segoe UI',system-ui,sans-serif;
+}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--hall);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.5;overflow-x:hidden;
+  background-image:radial-gradient(ellipse at 50% 0,rgba(214,166,79,.12),transparent 60%)}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--gold-hi);outline-offset:3px}
+
+.app{box-sizing:border-box;max-width:1400px;margin:0 auto;padding-inline:clamp(16px,3vw,36px);padding-block:18px 32px;
+  display:grid;grid-template-columns:minmax(0,1fr) 330px;grid-template-rows:auto auto;gap:14px 26px}
+body.playing .app{grid-template-columns:minmax(0,1fr)}
+body.playing .cast{display:none}
+
+.masthead{grid-column:1/-1;display:flex;align-items:flex-end;justify-content:space-between;gap:12px 20px;flex-wrap:wrap}
+.masthead h1{font-family:var(--font-display);font-weight:900;font-size:clamp(2rem,5vw,3.5rem);line-height:1;margin:0;letter-spacing:.06em;
+  background:linear-gradient(180deg,var(--gold-hi),var(--gold) 55%,#8c6421);-webkit-background-clip:text;background-clip:text;color:transparent;
+  text-wrap:balance;filter:drop-shadow(0 2px 0 rgba(0,0,0,.6))}
+.masthead h1 .or{font-weight:500;font-size:.55em;letter-spacing:.2em;vertical-align:middle;color:var(--muted);-webkit-text-fill-color:var(--muted)}
+.masthead p{margin:.35rem 0 0;color:var(--muted);max-width:60ch}
+.sound-btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--ink);border-radius:999px;padding:.45rem .95rem;font-weight:600;white-space:nowrap}
+.sound-btn:hover{background:rgba(214,166,79,.14)}
+.sound-btn svg{width:18px;height:18px}
+.sound-btn[aria-pressed="false"] .waves{display:none}
+.sound-btn[aria-pressed="true"] .mute{display:none}
+
+/* Stage */
+.stage{grid-column:1;grid-row:2;min-width:0;display:flex;flex-direction:column;gap:10px}
+.narrator{display:flex;align-items:center;gap:14px;min-height:76px;box-sizing:border-box;padding:10px 16px;border:1px solid var(--line);border-radius:12px;
+  background:linear-gradient(90deg,rgba(0,0,0,.55),rgba(30,20,22,.75))}
+.narrator .face{flex:none;width:58px;height:58px;border-radius:50%;overflow:hidden;border:2px solid var(--gold);background:#2a1d1a}
+.narrator .face svg{display:block;width:100%;height:100%}
+.narrator .who{font-family:var(--font-display);font-size:.72rem;letter-spacing:.22em;color:var(--gold);text-transform:uppercase;display:block}
+.narrator .line{font-family:var(--font-voice);font-style:italic;font-weight:600;font-size:clamp(1.15rem,2.3vw,1.55rem);line-height:1.2;color:var(--ink);min-height:1.2em;display:block}
+.scene-wrap{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0b0a0d;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.scene-wrap.shake{animation:shake .5s}
+@keyframes shake{20%{transform:translate(-6px,2px)}40%{transform:translate(5px,-3px)}60%{transform:translate(-3px,-2px)}80%{transform:translate(2px,3px)}}
+#scene{display:block;width:100%;height:auto}
+.flash{position:absolute;inset:0;background:var(--blood-hi);opacity:0;pointer-events:none;mix-blend-mode:screen}
+
+/* Reveal card on the table */
+.card{position:absolute;left:50%;transform:translate(-50%,-50%);width:min(340px,70%);box-sizing:border-box;perspective:900px;pointer-events:none}
+.card-inner{position:relative;padding:14px 18px 16px;text-align:center;border-radius:10px;border:2px solid var(--gold);
+  background:linear-gradient(180deg,#221a14,#120d0b);box-shadow:0 0 0 4px rgba(0,0,0,.5),0 18px 40px rgba(0,0,0,.7)}
+.card.show .card-inner{animation:cardIn .45s cubic-bezier(.2,1.3,.4,1) both}
+.card.flip .card-inner{animation:flip .55s ease both}
+@keyframes cardIn{from{opacity:0;transform:translateY(20px) scale(.8)}}
+@keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.card .c-name{font-family:var(--font-display);font-weight:700;font-size:clamp(1rem,2.4vw,1.45rem);letter-spacing:.08em;color:var(--gold-hi);margin:0;overflow-wrap:anywhere}
+.card .c-line{font-family:var(--font-voice);font-style:italic;font-size:clamp(1.1rem,2.4vw,1.5rem);color:var(--ink);margin:.1rem 0 0}
+.card .c-verdict{font-family:var(--font-display);font-weight:900;font-size:clamp(1.5rem,4.2vw,2.6rem);letter-spacing:.12em;margin:.1rem 0 0;line-height:1.05}
+.card.faithful .card-inner{border-color:var(--faith);background:linear-gradient(180deg,#1b2430,#0e131a)}
+.card.faithful .c-verdict{color:var(--faith);text-shadow:0 0 18px rgba(205,217,230,.45)}
+.card.traitor .card-inner{border-color:var(--blood-hi);background:linear-gradient(180deg,#3a0b12,#140406);box-shadow:0 0 50px rgba(227,55,77,.55)}
+.card.traitor .c-verdict{color:var(--blood-hi);text-shadow:0 0 22px rgba(227,55,77,.8)}
+
+.stage-foot{display:flex;flex-direction:column;align-items:center;gap:10px;padding-block:4px}
+.status{color:var(--muted);text-align:center;margin:0;font-variant-numeric:tabular-nums}
+.timer{display:flex;align-items:center;gap:12px;width:min(560px,100%)}
+.bar{flex:1;height:6px;border-radius:3px;background:rgba(214,166,79,.18);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--blood-hi))}
+.clock{font-family:var(--font-display);font-weight:700;color:var(--gold-hi);font-variant-numeric:tabular-nums;min-width:3.2em;text-align:right}
+.btn-main{font-family:var(--font-display);font-weight:700;letter-spacing:.12em;font-size:1.15rem;text-transform:uppercase;color:#1b1206;border:none;border-radius:8px;
+  padding:.8rem 1.8rem;background:linear-gradient(180deg,var(--gold-hi),var(--gold) 60%,#a97a2c);box-shadow:0 0 0 1px #6d4c18 inset,0 8px 24px rgba(214,166,79,.3);transition:transform .15s,box-shadow .2s}
+.btn-main:hover{transform:translateY(-2px);box-shadow:0 0 0 1px #6d4c18 inset,0 10px 34px rgba(214,166,79,.5)}
+.btn-main:disabled{filter:grayscale(.9) brightness(.55);cursor:not-allowed;transform:none;box-shadow:none}
+.btn-quiet{border:1px solid rgba(168,157,140,.45);background:rgba(0,0,0,.35);color:var(--muted);border-radius:8px;padding:.55rem 1.1rem}
+.btn-quiet:hover{color:var(--ink);border-color:var(--muted)}
+
+/* Players panel */
+.cast{grid-column:2;grid-row:2;align-self:start;box-sizing:border-box;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;
+  display:flex;flex-direction:column;gap:18px;min-width:0;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.cast h2{font-family:var(--font-display);font-weight:700;font-size:1.3rem;letter-spacing:.1em;margin:0;color:var(--gold-hi)}
+.lbl{display:block;font-size:.76rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:0 0 6px}
+.add-row{display:flex;gap:8px}
+.add-row input{flex:1;min-width:0;background:rgba(0,0,0,.4);border:1px solid rgba(168,157,140,.4);border-radius:8px;color:var(--ink);padding:.6rem .8rem;font:inherit}
+.add-row input::placeholder{color:rgba(168,157,140,.75)}
+.add-btn{border:none;border-radius:8px;padding:0 1.05rem;background:var(--gold);color:#1b1206;font-weight:700}
+.add-btn:hover{background:var(--gold-hi)}
+.hint{font-size:.86rem;color:var(--muted);margin:.45rem 0 0}
+.hint.warn{color:var(--gold-hi)}
+.roster-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.link{background:none;border:none;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;font-size:.9rem}
+.link:hover{color:var(--blood-hi)}
+.roster{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px;max-height:300px;overflow:auto}
+.roster li{display:flex;align-items:center;gap:8px;padding:3px 4px 3px 4px;border-radius:8px;background:rgba(168,157,140,.08);border:1px solid rgba(168,157,140,.16)}
+.roster .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gbtn{flex:none;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(168,157,140,.35);background:rgba(0,0,0,.3);color:var(--ink);border-radius:6px;padding:2px 8px;font-size:.8rem}
+.gbtn:hover{border-color:var(--gold)}
+.gbtn b{font-weight:600}
+.xbtn{flex:none;background:none;border:none;color:var(--muted);width:28px;height:28px;border-radius:50%;font-size:1.15rem;line-height:1;padding:0}
+.xbtn:hover{color:var(--blood-hi);background:rgba(227,55,77,.14)}
+.roster-empty{color:var(--muted);font-size:.92rem;margin:0}
+.note{font-size:.88rem;color:var(--gold-hi);background:rgba(214,166,79,.1);border-radius:8px;padding:.5rem .7rem;margin:8px 0 0}
+.len-row{display:flex;align-items:center;gap:12px}
+.len-row input{flex:1;accent-color:var(--gold)}
+.len-row output{font-family:var(--font-display);font-weight:700;color:var(--gold-hi);min-width:5.6em;text-align:right;font-variant-numeric:tabular-nums}
+.fair{font-size:.86rem;color:var(--muted);border-top:1px solid rgba(168,157,140,.2);padding-top:14px;margin:0}
+.fair strong{color:var(--ink)}
+
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .cast{grid-column:1;grid-row:2}
+  .stage{grid-row:3}
+  body.playing .stage{grid-row:2}
+}
+
+/* SVG scene: players */
+.av .fx-s,.av .fx-u,.av .fx-r,.av .fx-t,.av .hood{display:none}
+.av[data-face="s"] .fx-n,.av[data-face="u"] .fx-n,.av[data-face="r"] .fx-n,.av[data-face="t"] .fx-n{display:none}
+.av[data-face="s"] .fx-s,.av[data-face="u"] .fx-u,.av[data-face="r"] .fx-r,.av[data-face="t"] .fx-t{display:inline}
+.av.traitor .hood{display:inline}
+.av.out .bob{opacity:.55;filter:grayscale(1)}
+.bob{transform-box:fill-box;transform-origin:50% 100%;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.av.standing .bob{transform:translateY(-14px) scale(1.08)}
+.av[data-face="s"] .jolt{animation:jolt .45s}
+.jolt{transform-box:fill-box;transform-origin:50% 100%}
+@keyframes jolt{30%{transform:translateY(-9px) rotate(-3deg)}65%{transform:translateY(-2px) rotate(2deg)}}
+.plaque rect{fill:#1c140f;stroke:var(--gold);stroke-width:1.2}
+.plaque text{font-family:var(--font-display);font-weight:700;fill:var(--gold-hi);font-size:15px;letter-spacing:.06em}
+.plaque .st{font-size:10px;letter-spacing:.2em;fill:var(--faith);display:none}
+.plaque.out rect{stroke:var(--faith);fill:#141a22}
+.plaque.out .st{display:inline}
+.plaque.traitor rect{stroke:var(--blood-hi);fill:#3a0b12}
+.plaque.traitor .st{display:inline;fill:var(--blood-hi)}
+.bubble{animation:pop 1.6s ease forwards;transform-box:fill-box;transform-origin:50% 100%}
+.bubble rect,.bubble path{fill:#f6efe2}
+.bubble text{font-family:var(--font-body);font-weight:700;font-size:15px;fill:#1b1206}
+@keyframes pop{0%{opacity:0;transform:scale(.4)}12%{opacity:1;transform:scale(1.08)}20%{transform:scale(1)}85%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+.beam{animation:beamIn .4s ease both}
+@keyframes beamIn{from{opacity:0}}
+.flame{transform-box:fill-box;transform-origin:50% 100%;animation:flick .16s infinite alternate}
+.flame:nth-of-type(2n){animation-duration:.21s}
+@keyframes flick{to{transform:scale(.88,1.1) skewX(3deg)}}
+.glow{animation:glow 2.4s infinite}
+@keyframes glow{0%,100%{opacity:.9}40%{opacity:.65}70%{opacity:.85}}
+
+/* Host */
+.leg,.arm{transform-box:fill-box;transform-origin:50% 4%}
+.walking .leg-l{animation:legs .5s infinite alternate ease-in-out}
+.walking .leg-r{animation:legs .5s infinite alternate-reverse ease-in-out}
+@keyframes legs{from{transform:rotate(15deg)}to{transform:rotate(-15deg)}}
+.walking .h-body{animation:hbob .25s infinite alternate ease-in-out}
+@keyframes hbob{to{transform:translateY(-3px)}}
+.h-mouth{transform-box:fill-box;transform-origin:50% 0}
+.talking .h-mouth{animation:talk .14s infinite alternate}
+@keyframes talk{to{transform:scaleY(2.4)}}
+.pointing .arm-r{transform:rotate(-112deg);transition:transform .3s}
+.arm-r{transition:transform .3s}
+
+/* Verdict */
+.verdict{position:fixed;inset:0;z-index:40;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:24px 16px;overflow:auto;
+  background:radial-gradient(ellipse at 50% 40%,rgba(110,8,22,.93),rgba(5,2,3,.97) 72%)}
+.v-card{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;max-width:min(860px,100%)}
+.v-card.slam{animation:slam .8s cubic-bezier(.2,1.3,.4,1) both}
+@keyframes slam{0%{transform:scale(2.6);opacity:0;filter:blur(10px)}55%{opacity:1;filter:none}100%{transform:scale(1)}}
+.v-portrait{width:min(220px,48vw);filter:drop-shadow(0 0 30px rgba(227,55,77,.6))}
+.v-portrait svg{display:block;width:100%;height:auto}
+.v-kicker{font-family:var(--font-display);font-weight:500;letter-spacing:.3em;text-transform:uppercase;color:var(--gold-hi);margin:0;font-size:clamp(.9rem,2vw,1.2rem)}
+.v-name{font-family:var(--font-display);font-weight:900;font-size:clamp(2.6rem,10vw,6.5rem);line-height:1;letter-spacing:.06em;margin:0;color:var(--blood-hi);
+  text-shadow:0 0 40px rgba(227,55,77,.6),0 4px 0 #3a0008;overflow-wrap:anywhere;text-wrap:balance}
+.v-quote{font-family:var(--font-voice);font-style:italic;font-size:clamp(1.15rem,2.6vw,1.6rem);color:var(--ink);margin:.2rem 0 0}
+.v-odds{color:var(--muted);margin:0}
+.v-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 14px;margin-top:12px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="masthead">
+    <div>
+      <h1>Faithful <span class="or">or</span> Traitor</h1>
+      <p>A round table name picker. The players reveal themselves one by one. Everyone is Faithful except the last one left, the Traitor, and that's the name picked.</p>
+    </div>
+    <button class="sound-btn" id="soundBtn" type="button" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="mute" d="M17 9l5 6M22 9l-5 6"/>
+      </svg>
+      <span id="soundLabel">Sound on</span>
+    </button>
+  </header>
+
+  <section class="stage" aria-label="The round table">
+    <div class="narrator">
+      <div class="face" aria-hidden="true">
+        <svg viewBox="-36 -258 72 72"><rect x="-36" y="-258" width="72" height="72" fill="#2a1d1a"/>
+          <path d="M-28-232Q-34-180-32-150H32Q34-180 28-232Q0-266-28-232Z" fill="#1d1513"/>
+          <rect x="-8" y="-196" width="16" height="10" fill="#e9c6af"/>
+          <ellipse cx="0" cy="-214" rx="21" ry="25" fill="#f1d3bf"/>
+          <ellipse cx="-8" cy="-206" rx="5.5" ry="3" fill="#2b1b22"/><ellipse cx="8" cy="-206" rx="5.5" ry="3" fill="#2b1b22"/>
+          <path d="M-6-194q6 3 12 0" stroke="#a5525a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <path d="M-25-219Q-26-247 0-248Q26-247 25-219L23-211H-23Z" fill="#1d1513"/></svg>
+      </div>
+      <div style="min-width:0">
+        <span class="who">The Host</span>
+        <span class="line" id="narr" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="scene-wrap" id="sceneWrap">
+      <svg id="scene" role="img" aria-label="Players seated around a round table in a castle hall"></svg>
+      <div class="card" id="card" hidden>
+        <div class="card-inner"><p class="c-name" id="cName"></p><p class="c-line" id="cLine"></p><p class="c-verdict" id="cVerdict"></p></div>
+      </div>
+      <div class="flash" id="flash"></div>
+    </div>
+    <div class="stage-foot">
+      <p class="status" id="status"></p>
+      <div class="timer" id="timer" hidden><div class="bar"><i id="barFill"></i></div><span class="clock" id="clock">0:45</span></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <button class="btn-main" id="beginBtn" type="button">Gather at the table</button>
+        <button class="btn-quiet" id="stopBtn" type="button" hidden>Stop the game</button>
+      </div>
+    </div>
+  </section>
+
+  <aside class="cast" aria-label="Players">
+    <h2>The Players</h2>
+    <form id="addForm" autocomplete="off">
+      <label class="lbl" for="nameInput">Add a player</label>
+      <div class="add-row"><input id="nameInput" type="text" placeholder="e.g. Morgan" enterkeyhint="done"><button class="add-btn" type="submit">Add</button></div>
+      <p class="hint" id="hint">Paste a whole list at once, separated by commas or new lines.</p>
+    </form>
+    <div>
+      <div class="roster-head"><span class="lbl" id="count">0 players</span><button class="link" id="clearBtn" type="button">Clear all</button></div>
+      <ul class="roster" id="roster" aria-labelledby="count"></ul>
+      <p class="note" id="exampleNote" hidden>These are example players. Clear them and add your own.</p>
+      <p class="hint">Each character is guessed from the first name. Tap the button beside a name to switch between a female and male character.</p>
+    </div>
+    <div>
+      <label class="lbl" for="lenInput">Game length</label>
+      <div class="len-row"><input type="range" id="lenInput" min="30" max="120" step="5"><output id="lenOut" for="lenInput"></output></div>
+    </div>
+    <p class="fair"><strong>A fair pick.</strong> Every player has the same chance of being the Traitor. The Traitor is drawn with your browser's cryptographic random generator when the game starts, and the reveal order is shuffled the same way. Names can only be added once, so nobody gets extra chances.</p>
+  </aside>
+</div>
+
+<div class="verdict" id="verdict" hidden role="dialog" aria-modal="true" aria-labelledby="vName">
+  <div class="v-card" id="vCard">
+    <div class="v-portrait" id="vPortrait" aria-hidden="true"></div>
+    <p class="v-kicker">The Traitor is</p>
+    <h2 class="v-name" id="vName"></h2>
+    <p class="v-quote" id="vQuote"></p>
+    <p class="v-odds" id="vOdds"></p>
+    <div class="v-actions">
+      <button class="btn-main" id="againBtn" type="button">Play again</button>
+      <button class="btn-quiet" id="banishBtn" type="button">Remove and play again</button>
+      <button class="btn-quiet" id="backBtn" type="button">Edit players</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ---------- Fair randomness ---------- */
+function randInt(n) {
+  if (n <= 1) return 0;
+  const c = window.crypto;
+  if (c && c.getRandomValues) {
+    const limit = Math.floor(4294967296 / n) * n, buf = new Uint32Array(1);
+    do { c.getRandomValues(buf); } while (buf[0] >= limit);
+    return buf[0] % n;
+  }
+  return Math.floor(Math.random() * n);
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ---------- Character guess from first name ---------- */
+const FEMALE = new Set(('mary patricia jennifer linda elizabeth barbara susan jessica sarah karen lisa nancy betty margaret sandra ashley kimberly emily donna michelle carol amanda melissa deborah stephanie rebecca sharon laura cynthia kathleen amy angela shirley anna brenda pamela emma nicole helen samantha katherine christine debra rachel carolyn janet catherine maria heather diane ruth julie olivia joyce virginia victoria kelly lauren christina joan evelyn judith megan andrea cheryl hannah jacqueline martha gloria teresa ann anne sara madison frances kathryn janice abigail alice judy sophia sophie grace denise amber doris marilyn danielle beverly isabella theresa diana natalie brittany charlotte marie kayla lori zoe zoey chloe ella mia amelia ava isla poppy lily freya millie ruby evie holly molly phoebe imogen harriet georgia eleanor florence matilda priya fatima aisha leah claire fiona gemma kirsty nicola siobhan niamh aoife maya layla nora hazel aria luna stella violet clara lucy ellie jade kate katie jenny jen beth liz kim sue meg tess tilly nadia yasmin zara ayesha mei yuki sakura ana sofia lucia elena camila valentina isabel carmen rosa ines chiara giulia francesca ingrid astrid freja saoirse caitlin bethany chelsea jodie tracy tracey wendy dawn gail joanne louise alison mandy paula vicky vanessa naomi esther miriam tamara ivy iris daisy rose penny pippa bella gabriella anya tanya olga irina svetlana keisha ebony destiny monique jasmine tiffany brooke paige rhian ffion seren cerys bronwen eilidh morag kirsten shona ailsa mhairi orla roisin una maeve deirdre gwen jane jill joy kay lynn lynne mel rita sally sandy stacey stacy sian tina toni trish val yvonne zainab amina hina sana anjali deepa divya kavya neha pooja riya shreya sunita lakshmi mina sienna esme edie elsie maisie margot ottilie willow summer autumn erin faye gillian heidi hilary jo joanna lesley lorraine marion maureen pauline sheila sylvia tara vivienne abbie abby becky becca carly courtney demi ellen emilia eve harper hayley kerry lara leanne lexi lola lydia lyla martina melanie nina olive rosie sasha scarlett serena skye tanisha tamsin una whitney yolanda yasmine').split(' '));
+const MALE = new Set(('james robert john michael david william richard joseph thomas charles christopher daniel matthew anthony mark donald steven stephen paul andrew joshua kenneth kevin brian george timothy ronald edward jason jeffrey ryan jacob gary nicholas eric jonathan larry justin scott brandon benjamin samuel gregory alexander frank patrick raymond jack dennis jerry tyler aaron jose adam nathan henry douglas zachary peter kyle ethan walter noah jeremy christian keith roger terry gerald harold sean austin carl arthur lawrence dylan jesse bryan billy joe bruce gabriel logan albert willie alan juan wayne elijah randy roy vincent ralph eugene russell bobby mason philip louis oliver harry leo oscar archie alfie freddie theo finley max lucas isaac toby sebastian luke callum connor liam aiden declan ciaran fergus hamish angus euan rory ross craig gavin graham iain ian neil colin stuart alistair duncan malcolm gordon kenji hiroshi takeshi mateo diego carlos luis miguel javier pablo marco luca giovanni matteo ahmed mohammed mohammad muhammad omar ali hassan hussein ibrahim yusuf tariq raj arjun rahul vikram amit sanjay dev wei jin chen hamza bilal imran kofi kwame tunde sipho ivan dmitri sergei nikolai hans lars sven erik anders pierre francois jacques dan dave mike rob bob tom tony steve chris matt nick ben jim jimmy tim phil pete fred ed eddie ted will bill greg jeff josh zach jake nate harvey reggie ricky danny kenny lenny barry trevor nigel clive derek dean lee wesley kieran owen evan rhys dafydd gareth huw idris tristan jasper felix hugo rufus miles edgar ezra caleb levi asher hunter carter wyatt grayson jaxon eli joel josh jamal darnell marcus martin simon andy al alfred bernard brendan cameron cian conor darren dominic ewan frazer fraser glen glenn grant howard hugh jay jon kai karl kane kelvin lewis lloyd marc mathew mitchell neville niall norman oisin otis patrick perry ralph ray reece reuben robbie ronan rowan ryan shane spencer stanley stewart terence tobias troy victor vince warren zack zain zayn yousef youssef idris amir arash farhad reza sami karim nabil ravi suresh ramesh krishna sunil ajay rohan aditya kunal nikhil sid siddharth').split(' '));
+const NEUTRAL = new Set('alex sam charlie jamie jordan taylor morgan riley casey robin kim chris jo jess frankie bobbie billie ali drew jesse pat'.split(' '));
+function fnv(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function guessGender(name) {
+  const first = name.toLowerCase().split(/[\s\-.]+/)[0].replace(/[^a-z']/g, '');
+  if (FEMALE.has(first)) return 'f';
+  if (MALE.has(first)) return 'm';
+  if (!NEUTRAL.has(first)) {
+    if (/(a|ette|elle|ine|ina|ah|ia|lyn|lynn|een|ie)$/.test(first) && !/(luca|joshua|ezra|nikita|archie|charlie|eddie|freddie|alfie|ronnie|stevie|jamie)$/.test(first)) return 'f';
+    if (/(o|us|er|on|an|el|im|ed|ck|rd|rt|ld|ng)$/.test(first)) return 'm';
+  }
+  return fnv(first) % 2 ? 'f' : 'm';
+}
+
+/* ---------- Saved state ---------- */
+const STORE = 'faithful-or-traitor-v1';
+const EXAMPLES = ['Harry', 'Priya', 'Tom', 'Sophie', 'Mateo', 'Grace', 'Kenji', 'Fatima', 'Liam', 'Zoe'];
+let state = { players: EXAMPLES.map(n => ({ name: n, g: guessGender(n) })), examples: true, duration: 45, sound: true };
+try { const s = JSON.parse(localStorage.getItem(STORE)); if (s && Array.isArray(s.players)) state = Object.assign(state, s); } catch (e) {}
+state.duration = Math.min(120, Math.max(30, +state.duration || 45));
+function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+
+/* ---------- Sound: synthesized score and effects ---------- */
+const Sound = (() => {
+  let ctx = null, master, musicBus, sfxBus, verbSend, noiseBuf, seq = null, drone = null, intensity = 0, on = state.sound;
+  const BPM = [70, 98, 116];
+  const SEMI = { C: 0, 'C#': 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+  const hz = n => { const m = /^([A-G][#b]?)(\d)$/.exec(n); return 440 * Math.pow(2, (SEMI[m[1]] + (+m[2] + 1) * 12 - 69) / 12); };
+  // B minor, the brooding progression: Bm  G  Em  F#
+  const ROOTS = ['B1', 'G1', 'E1', 'F#1'].map(hz);
+  const PAD = [['B2', 'D3', 'F#3', 'B3'], ['G2', 'B2', 'D3', 'G3'], ['E2', 'G2', 'B2', 'E3'], ['F#2', 'A#2', 'C#3', 'F#3']].map(c => c.map(hz));
+  const OST = [0, 0, 7, 0, 12, 0, 7, 0, 0, 0, 7, 0, 12, 0, 7, 10];
+  const BELL = [{ 0: 'F#5', 6: 'D5', 8: 'B4', 12: 'C#5' }, { 0: 'D5', 6: 'B4', 8: 'G4', 12: 'A4' }, { 0: 'B4', 6: 'G4', 8: 'E5', 12: 'D5' }, { 0: 'C#5', 6: 'A#4', 8: 'F#4', 14: 'C#5' }];
+
+  function init() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return true; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+    try { ctx = new AC(); } catch (e) { return false; }
+    master = ctx.createGain(); master.gain.value = on ? 0.85 : 0;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 5; comp.knee.value = 10;
+    master.connect(comp); comp.connect(ctx.destination);
+    const verb = ctx.createConvolver(), vb = ctx.createBuffer(2, ctx.sampleRate * 3, ctx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = vb.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.4); }
+    verb.buffer = vb; verbSend = ctx.createGain(); const vo = ctx.createGain(); vo.gain.value = 0.5;
+    verbSend.connect(verb); verb.connect(vo); vo.connect(master);
+    musicBus = ctx.createGain(); musicBus.gain.value = 0.5; musicBus.connect(master);
+    const mw = ctx.createGain(); mw.gain.value = 0.45; musicBus.connect(mw); mw.connect(verbSend);
+    sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(master);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    return true;
+  }
+  const now = () => ctx.currentTime + 0.02;
+  function amp(t, a, p, d) { const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(p, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); return g; }
+  function filt(type, f, Q = 1) { const x = ctx.createBiquadFilter(); x.type = type; x.frequency.value = f; x.Q.value = Q; return x; }
+  function out(node, bus, wet) { node.connect(bus || sfxBus); if (wet) { const s = ctx.createGain(); s.gain.value = wet; node.connect(s); s.connect(verbSend); } }
+  function noise(t, dur) { const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; s.start(t, Math.random() * 1.5); s.stop(t + dur); return s; }
+  function tone(type, f, t, a, d, p, bus, wet) { const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); const g = amp(t, a, p, d); o.connect(g); out(g, bus, wet); o.start(t); o.stop(t + a + d + 0.05); return o; }
+
+  /* Score */
+  function choir(freqs, t, dur, v, bus) {
+    const f1 = filt('bandpass', 760, 4), f2 = filt('bandpass', 1180, 5), lp = filt('lowpass', 2600), g = ctx.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + Math.min(0.7, dur * 0.4)); g.gain.setValueAtTime(v, t + dur * 0.8); g.gain.linearRampToValueAtTime(0, t + dur + 0.6);
+    f1.connect(lp); f2.connect(lp); lp.connect(g); out(g, bus || musicBus, bus ? 0.5 : 0);
+    freqs.forEach(f => [-7, 7].forEach(det => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+      const vib = ctx.createOscillator(), vg = ctx.createGain(); vib.frequency.value = rnd(4.6, 5.6); vg.gain.value = f * 0.006; vib.connect(vg); vg.connect(o.frequency);
+      o.connect(f1); o.connect(f2); o.start(t); vib.start(t); o.stop(t + dur + 0.7); vib.stop(t + dur + 0.7);
+    }));
+  }
+  function string(f, t, v) {
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+    const lp = filt('lowpass', 1500, 1.2), g = amp(t, 0.006, v, 0.13); o.connect(lp); lp.connect(g); g.connect(musicBus); o.start(t); o.stop(t + 0.2);
+  }
+  function taiko(t, v) {
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(115, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.25);
+    const g = amp(t, 0.004, v, 0.45); o.connect(g); out(g, musicBus); o.start(t); o.stop(t + 0.55);
+    const n = noise(t, 0.2), lp = filt('lowpass', 320), ng = amp(t, 0.002, v * 0.5, 0.15); n.connect(lp); lp.connect(ng); ng.connect(musicBus);
+  }
+  function tick(t, v) { tone('sine', 1750, t, 0.001, 0.03, v, musicBus); tone('triangle', 880, t, 0.001, 0.04, v * 0.6, musicBus); }
+  function bell(f, t, v) { tone('sine', f, t, 0.003, 2.2, v, musicBus); tone('sine', f * 3.01, t, 0.002, 0.5, v * 0.18, musicBus); tone('triangle', f * 2, t, 0.002, 0.9, v * 0.2, musicBus); }
+  function playStep(step, t) {
+    const bar = step >> 4, s = step & 15, sd = 60 / BPM[intensity] / 4;
+    if (s === 0) choir(PAD[bar], t, sd * 16, intensity === 0 ? 0.05 : 0.04);
+    const b = BELL[bar][s]; if (b) bell(hz(b), t, intensity === 0 ? 0.09 : 0.07);
+    if (intensity >= 1) {
+      string(ROOTS[bar] * 2 * Math.pow(2, OST[s] / 12), t, 0.06);
+      if (s % 2 === 0) string(ROOTS[bar] * Math.pow(2, OST[s] / 12), t, 0.04);
+      if (s === 0 || s === 8) taiko(t, 0.45);
+      if (bar === 3 && s >= 12) taiko(t, 0.18 + (s - 12) * 0.05);
+    }
+    if (intensity >= 2) {
+      string(ROOTS[bar] * 8 * Math.pow(2, OST[(s + 4) % 16] / 12), t, 0.03);
+      if (s % 4 === 0) { tick(t, 0.06); if (s === 4 || s === 12) taiko(t, 0.3); }
+    }
+  }
+  function startDrone(t) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07, t + 2.5);
+    const lp = filt('lowpass', 260, 3);
+    const oscs = [hz('B1'), hz('B1') * 1.004, hz('F#2')].map(f => { const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(lp); o.start(t); return o; });
+    lp.connect(g); g.connect(musicBus); drone = { oscs, lp };
+  }
+  function pump() {
+    if (!seq) return;
+    const t = ctx.currentTime;
+    if (seq.next < t - 0.25) seq.next = t + 0.05;
+    while (seq.next < t + 0.15) { playStep(seq.step, seq.next); seq.next += 60 / BPM[intensity] / 4; seq.step = (seq.step + 1) % 64; }
+  }
+  function startMusic() {
+    if (!ctx || seq) return;
+    const t = ctx.currentTime;
+    musicBus.gain.cancelScheduledValues(t); musicBus.gain.setValueAtTime(0.5, t);
+    startDrone(t); seq = { step: 0, next: t + 0.08, timer: setInterval(pump, 25) };
+  }
+  function stopMusic(fade = 0.8) {
+    if (!ctx || !seq) return;
+    clearInterval(seq.timer); seq = null;
+    const t = ctx.currentTime;
+    musicBus.gain.cancelScheduledValues(t); musicBus.gain.setValueAtTime(Math.max(0.0001, musicBus.gain.value), t); musicBus.gain.exponentialRampToValueAtTime(0.0001, t + fade);
+    if (drone) { drone.oscs.forEach(o => o.stop(t + fade + 0.05)); drone = null; }
+  }
+
+  /* Effects */
+  function boom(v = 0.7) {
+    const t = now();
+    const o = ctx.createOscillator(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.9);
+    const g = amp(t, 0.005, v, 1.3); o.connect(g); out(g, sfxBus, 0.4); o.start(t); o.stop(t + 1.4);
+    const n = noise(t, 0.5), lp = filt('lowpass', 400), ng = amp(t, 0.003, v * 0.5, 0.35); n.connect(lp); lp.connect(ng); out(ng, sfxBus, 0.3);
+  }
+  function whoosh() {
+    const t = now(), n = noise(t, 0.6), bp = filt('bandpass', 400, 1.4);
+    bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(3200, t + 0.35);
+    const g = amp(t, 0.12, 0.25, 0.35); n.connect(bp); bp.connect(g); out(g, sfxBus, 0.3);
+  }
+  function faithful() {
+    const t = now();
+    ['D5', 'F#5', 'A5', 'D6'].forEach((n, i) => { tone('sine', hz(n), t + i * 0.05, 0.004, 2, 0.11, sfxBus, 0.7); tone('triangle', hz(n) * 2, t + i * 0.05, 0.003, 0.6, 0.03, sfxBus, 0.7); });
+    choir([hz('D3'), hz('F#3'), hz('A3')], t, 1.4, 0.06, sfxBus);
+  }
+  function traitor() {
+    const t = now();
+    for (let i = 0; i < 16; i++) {
+      const st = t + i * 0.045, v = 0.08 + i * 0.03;
+      const o = ctx.createOscillator(); o.frequency.setValueAtTime(95, st); o.frequency.exponentialRampToValueAtTime(60, st + 0.12);
+      const g = amp(st, 0.003, v, 0.12); o.connect(g); g.connect(sfxBus); o.start(st); o.stop(st + 0.18);
+    }
+    const h = t + 0.75;
+    const sub = ctx.createOscillator(); sub.frequency.setValueAtTime(90, h); sub.frequency.exponentialRampToValueAtTime(28, h + 1.4);
+    const sg = amp(h, 0.005, 1, 2); sub.connect(sg); sg.connect(sfxBus); sub.start(h); sub.stop(h + 2.2);
+    const lp = filt('lowpass', 400, 2); lp.frequency.setValueAtTime(400, h); lp.frequency.exponentialRampToValueAtTime(2600, h + 0.12); lp.frequency.exponentialRampToValueAtTime(500, h + 3);
+    const bg = amp(h, 0.01, 0.55, 3.4); lp.connect(bg); out(bg, sfxBus, 0.6);
+    ['B1', 'F#2', 'B2', 'D3', 'F#3', 'B3'].forEach(n => [-9, 9].forEach(det => {
+      const o = ctx.createOscillator(), m = ctx.createGain(); o.type = 'sawtooth'; o.frequency.value = hz(n); o.detune.value = det; m.gain.value = 0.1;
+      o.connect(m); m.connect(lp); o.start(h); o.stop(h + 3.5);
+    }));
+    choir(['B3', 'D4', 'F#4', 'B4'].map(hz), h, 2.6, 0.14, sfxBus);
+    const n = noise(h, 3), hp = filt('highpass', 5000), ng = amp(h, 0.003, 0.3, 2.4); n.connect(hp); hp.connect(ng); out(ng, sfxBus, 0.5);
+  }
+  function gasp(people = 5) {
+    const t = now();
+    for (let i = 0; i < people; i++) {
+      const st = t + rnd(0, 0.16), n = noise(st, 0.5), bp = filt('bandpass', rnd(900, 1800), 1.3);
+      bp.frequency.setValueAtTime(bp.frequency.value * 0.8, st); bp.frequency.linearRampToValueAtTime(bp.frequency.value * 1.15, st + 0.12);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(rnd(0.08, 0.16), st + 0.09); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.32);
+      n.connect(bp); bp.connect(g); out(g, sfxBus, 0.25);
+    }
+    for (let i = 0; i < Math.min(4, people); i++) {
+      const st = t + 0.2 + rnd(0, 0.15), f = rnd(180, 300);
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 1.15, st); o.frequency.linearRampToValueAtTime(f * 0.85, st + 0.5);
+      const f1 = filt('bandpass', 380, 5), f2 = filt('bandpass', 880, 6), g = amp(st, 0.06, 0.16, 0.45);
+      o.connect(f1); o.connect(f2); f1.connect(g); f2.connect(g); out(g, sfxBus, 0.35); o.start(st); o.stop(st + 0.6);
+    }
+  }
+  function murmur(dur = 1.8) {
+    const t = now();
+    for (let i = 0; i < 5; i++) {
+      const n = noise(t, dur), bp = filt('bandpass', rnd(450, 1100), 3), g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      for (let k = 0.1; k < dur; k += rnd(0.08, 0.18)) g.gain.linearRampToValueAtTime(rnd(0, 0.05), t + k);
+      g.gain.linearRampToValueAtTime(0, t + dur);
+      n.connect(bp); bp.connect(g); g.connect(sfxBus);
+    }
+  }
+  function step() { const t = now(), n = noise(t, 0.05), hp = filt('highpass', 2400), g = amp(t, 0.001, 0.05, 0.03); n.connect(hp); hp.connect(g); g.connect(sfxBus); tone('sine', 260, t, 0.001, 0.03, 0.04, sfxBus); }
+  function heartbeat(v = 0.9) {
+    const t = now();
+    [0, 0.23].forEach((d, i) => {
+      const st = t + d, o = ctx.createOscillator(); o.frequency.setValueAtTime(90, st); o.frequency.exponentialRampToValueAtTime(38, st + 0.14);
+      const g = amp(st, 0.012, v * (i ? 0.7 : 1), 0.3); o.connect(g); g.connect(sfxBus); o.start(st); o.stop(st + 0.4);
+      tone('triangle', 120, st, 0.006, 0.12, v * 0.22, sfxBus);
+    });
+  }
+  function riser(dur) {
+    const t = now(), n = noise(t, dur + 0.05), bp = filt('bandpass', 250, 3);
+    bp.frequency.setValueAtTime(250, t); bp.frequency.exponentialRampToValueAtTime(4500, t + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.04);
+    n.connect(bp); bp.connect(g); out(g, sfxBus, 0.3);
+  }
+  const guard = fn => (...a) => { if (ctx) fn(...a); };
+  return {
+    init, startMusic, stopMusic, hz,
+    setIntensity(i) { intensity = i; if (ctx && drone) drone.lp.frequency.setTargetAtTime([260, 420, 620][i], ctx.currentTime, 0.5); },
+    setOn(v) { on = v; if (ctx) master.gain.setTargetAtTime(v ? 0.85 : 0, ctx.currentTime, 0.05); },
+    boom: guard(boom), whoosh: guard(whoosh), faithful: guard(faithful), traitor: guard(traitor), gasp: guard(gasp),
+    murmur: guard(murmur), step: guard(step), heartbeat: guard(heartbeat), riser: guard(riser)
+  };
+})();
+
+/* ---------- Characters ---------- */
+const SKINS = ['#f6d7c3', '#eec1a1', '#d9a17a', '#b97c55', '#8d5a3b', '#5e3a24'];
+const HAIRS = ['#1b1412', '#3b2416', '#6b4423', '#a0662c', '#d8b46a', '#b8b3ad', '#8c2f14'];
+const OUTFITS = [['#2f4a3a', '#1e3127'], ['#6b1f2a', '#4a141c'], ['#b88a3a', '#8a6427'], ['#2a3550', '#1b2338'], ['#8a7a63', '#64573f'], ['#4d4d55', '#333339'], ['#9c4b2b', '#6f331c'], ['#e7dfcf', '#bfb49e']];
+function look(p) {
+  const h = fnv(p.name.toLowerCase() + '#');
+  const styles = p.g === 'f' ? ['long', 'bob', 'bun', 'pony', 'curly', 'long'] : ['short', 'side', 'buzz', 'quiff', 'curly', 'bald'];
+  return { skin: h % 6, hair: (h >>> 3) % 7, style: styles[(h >>> 6) % 6], beard: p.g === 'm' && (h >>> 9) % 3 === 0, glasses: (h >>> 11) % 5 === 0, outfit: (h >>> 13) % 8, neck: (h >>> 16) % 3 };
+}
+function avatar(p, chair) {
+  const L = look(p), skin = SKINS[L.skin], hair = HAIRS[L.hair], [main, trim] = OUTFITS[L.outfit], dark = '#1d1418';
+  let s = '';
+  if (chair) s += `<path d="M-58 0V-150Q-58-194 0-200Q58-194 58-150V0Z" fill="url(#chairG)"/><path d="M-46-8V-148Q-46-182 0-187Q46-182 46-148V-8Z" fill="url(#tartan)" opacity=".45"/><circle cx="-40" cy="-160" r="3" fill="#d6a64f"/><circle cx="40" cy="-160" r="3" fill="#d6a64f"/><circle cx="0" cy="-190" r="3.5" fill="#d6a64f"/>`;
+  s += '<g class="bob"><g class="jolt">';
+  // hair behind the head
+  if (L.style === 'long') s += `<path d="M-31-112Q-38-60-42-38H42Q38-60 31-112Q0-152-31-112Z" fill="${hair}"/>`;
+  if (L.style === 'bob') s += `<path d="M-33-80Q-38-142 0-142Q38-142 33-80Z" fill="${hair}"/>`;
+  if (L.style === 'pony') s += `<path d="M18-124Q50-112 40-56Q36-80 22-98Z" fill="${hair}"/>`;
+  if (L.style === 'bun') s += `<circle cx="0" cy="-140" r="13" fill="${hair}"/>`;
+  if (L.style === 'curly' && p.g === 'f') s += [[-30, -118], [-34, -96], [-32, -74], [30, -118], [34, -96], [32, -74]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="13" fill="${hair}"/>`).join('');
+  // body
+  s += `<path d="M-52 0V-26Q-50-56-16-64H16Q50-56 52-26V0Z" fill="${main}"/><path d="M-32-6V-40M-16-4V-48M0-4V-50M16-4V-48M32-6V-40" stroke="${trim}" stroke-width="2" opacity=".55"/>`;
+  s += `<rect x="-9" y="-82" width="18" height="20" fill="${skin}"/><rect x="-9" y="-82" width="18" height="20" fill="rgba(0,0,0,.15)"/>`;
+  if (L.neck === 0) s += `<rect x="-15" y="-74" width="30" height="14" rx="6" fill="${trim}"/>`;
+  else if (L.neck === 1) s += `<path d="M-16-64L0-50L16-64" stroke="${trim}" stroke-width="4" fill="none"/>`;
+  else s += `<path d="M-14-66L-2-54L-6-68ZM14-66L2-54L6-68Z" fill="#f1ece2"/>`;
+  // head
+  s += `<circle cx="-25" cy="-102" r="6" fill="${skin}"/><circle cx="25" cy="-102" r="6" fill="${skin}"/><ellipse cx="0" cy="-104" rx="25" ry="29" fill="${skin}"/>`;
+  s += `<ellipse cx="-14" cy="-92" rx="5" ry="3" fill="#e0607a" opacity=".18"/><ellipse cx="14" cy="-92" rx="5" ry="3" fill="#e0607a" opacity=".18"/>`;
+  // hair in front
+  const front = {
+    short: 'M-26-108Q-28-139 0-140Q28-139 26-108Q22-125 6-125Q-12-127-26-108Z',
+    side: 'M-27-104Q-30-141 2-141Q30-139 27-106Q24-119 10-123Q-4-129-27-104Z',
+    buzz: 'M-25-108Q-26-135 0-136Q26-135 25-108Q20-127 0-128Q-20-127-25-108Z',
+    quiff: 'M-26-106Q-30-137-4-143Q10-154 24-141Q30-131 26-106Q22-125 6-127Q-12-125-26-106Z',
+    long: 'M-27-96Q-32-141 0-139Q32-141 27-96Q24-121 10-125Q-6-117-27-96Z',
+    bob: 'M-27-110Q-25-136 0-136Q25-136 27-110Q12-119 0-118Q-12-119-27-110Z',
+    bun: 'M-26-106Q-28-136 0-137Q28-136 26-106Q20-124 0-125Q-20-124-26-106Z',
+    pony: 'M-26-106Q-28-136 0-137Q28-136 26-106Q20-124 0-125Q-20-124-26-106Z'
+  }[L.style];
+  if (front) s += `<path d="${front}" fill="${hair}"/>`;
+  if (L.style === 'curly') s += [[-20, -128], [-6, -136], [8, -136], [21, -128], [-27, -114], [27, -114]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="10" fill="${hair}"/>`).join('');
+  if (L.style === 'bald') s += `<ellipse cx="-8" cy="-124" rx="8" ry="4" fill="#fff" opacity=".18"/>`;
+  if (L.beard) s += `<path d="M-25-106Q-25-74 0-69Q25-74 25-106Q19-86 0-84Q-19-86-25-106Z" fill="${hair}"/>`;
+  // Traitor's hood
+  s += `<path class="hood" fill-rule="evenodd" d="M-52 0V-58Q-58-162 0-165Q58-162 52-58V0ZM-23-104a23 30 0 1 0 46 0a23 30 0 1 0-46 0Z" fill="#0c0a0d"/><ellipse class="hood" cx="0" cy="-104" rx="24" ry="31" fill="none" stroke="#8e1020" stroke-width="3"/>`;
+  // faces
+  const brow = `stroke="${hair === '#b8b3ad' || hair === '#d8b46a' ? '#7a6248' : hair}" stroke-width="2.6" fill="none" stroke-linecap="round"`;
+  s += `<g class="fx-n"><ellipse cx="-9" cy="-104" rx="2.7" ry="3.4" fill="${dark}"/><ellipse cx="9" cy="-104" rx="2.7" ry="3.4" fill="${dark}"/><path d="M-14-113q5-3 10 0M4-113q5-3 10 0" ${brow}/><path d="M-7-90q7 5 14 0" stroke="#7a3b3b" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>`;
+  s += `<g class="fx-s"><circle cx="-9" cy="-104" r="5.4" fill="#fff"/><circle cx="9" cy="-104" r="5.4" fill="#fff"/><circle cx="-9" cy="-104" r="2.5" fill="${dark}"/><circle cx="9" cy="-104" r="2.5" fill="${dark}"/><path d="M-15-117q6-6 12-1M3-118q6-5 12 1" ${brow}/><ellipse cx="0" cy="-87" rx="5.5" ry="7.5" fill="#4a1414"/><ellipse cx="-27" cy="-88" rx="8" ry="11" fill="${skin}" stroke="rgba(0,0,0,.2)"/><ellipse cx="27" cy="-88" rx="8" ry="11" fill="${skin}" stroke="rgba(0,0,0,.2)"/></g>`;
+  s += `<g class="fx-u"><path d="M-14-103h9M4-103h9" stroke="${dark}" stroke-width="1.6"/><circle cx="-6.5" cy="-101.5" r="2.2" fill="${dark}"/><circle cx="11" cy="-101.5" r="2.2" fill="${dark}"/><path d="M-14-110l10 1.5M4-114q5-4 10-1" ${brow}/><path d="M-6-89h11" stroke="#7a3b3b" stroke-width="2.2" stroke-linecap="round"/></g>`;
+  s += `<g class="fx-r"><path d="M-12-103q3-4 6 0M6-103q3-4 6 0" stroke="${dark}" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M-14-114q5-4 10-1M4-115q5-3 10 1" ${brow}/><path d="M-9-91q9 9 18 0Z" fill="#4a1414"/></g>`;
+  s += `<g class="fx-t"><path d="M-13-102q4-3 8 0M5-102q4-3 8 0" stroke="${dark}" stroke-width="3" fill="none"/><path d="M-15-108l10 3M5-105l10-3" ${brow}/><path d="M-7-90q9 3 14-4" stroke="#5a1a1a" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>`;
+  if (L.glasses) s += `<g fill="none" stroke="#2a2226" stroke-width="2"><circle cx="-10" cy="-104" r="7.5"/><circle cx="10" cy="-104" r="7.5"/><path d="M-2.5-104h5"/></g>`;
+  s += '</g></g>';
+  return s;
+}
+const HOST = `<g class="host-body">
+  <ellipse cx="0" cy="0" rx="34" ry="8" fill="#000" opacity=".4"/>
+  <g class="leg leg-l"><rect x="-15" y="-70" width="12" height="66" rx="4" fill="#17141b"/><rect x="-18" y="-10" width="16" height="10" rx="4" fill="#0b0a0d"/></g>
+  <g class="leg leg-r"><rect x="3" y="-70" width="12" height="66" rx="4" fill="#17141b"/><rect x="2" y="-10" width="16" height="10" rx="4" fill="#0b0a0d"/></g>
+  <path d="M-30-182Q-44-120-54-46Q0-34 54-46Q44-120 30-182Z" fill="url(#capeG)"/>
+  <path d="M-30-182Q-44-120-54-46L-44-48Q-36-120-22-176Z" fill="#7a5216" opacity=".7"/>
+  <path d="M-14-180L0-140L14-180Z" fill="#efe6d6"/>
+  <path d="M-16-182Q0-166 16-182L12-174Q0-160-12-174Z" fill="#d9cbb1"/>
+  <circle cx="0" cy="-130" r="3" fill="#f3d28a"/><circle cx="0" cy="-112" r="3" fill="#f3d28a"/>
+  <g class="arm arm-l"><path d="M-30-180Q-42-150-40-112L-30-112Q-30-146-22-172Z" fill="#b5822b"/><circle cx="-35" cy="-108" r="6" fill="#f1d3bf"/></g>
+  <g class="arm arm-r"><path d="M30-180Q42-150 40-112L30-112Q30-146 22-172Z" fill="#b5822b"/><circle cx="35" cy="-108" r="6" fill="#f1d3bf"/></g>
+  <path d="M-28-232Q-34-180-32-158H32Q34-180 28-232Q0-266-28-232Z" fill="#1d1513"/>
+  <rect x="-8" y="-196" width="16" height="16" fill="#e9c6af"/>
+  <ellipse cx="0" cy="-214" rx="21" ry="25" fill="#f1d3bf"/>
+  <ellipse cx="-8" cy="-206" rx="5.6" ry="3" fill="#2b1b22"/><ellipse cx="8" cy="-206" rx="5.6" ry="3" fill="#2b1b22"/>
+  <path d="M-14-209l-3-2M14-209l3-2" stroke="#2b1b22" stroke-width="1.6"/>
+  <ellipse class="h-mouth" cx="0" cy="-194" rx="5" ry="1.4" fill="#a5525a"/>
+  <path d="M-25-219Q-26-247 0-248Q26-247 25-219L23-211H-23Z" fill="#1d1513"/>
+</g>`;
+
+/* ---------- Scene ---------- */
+const svg = $('#scene'), sceneWrap = $('#sceneWrap');
+let Lay = null, seats = [], hostEl = null, hostLayer = '';
+const host = { th: Math.PI / 2 + 0.7, target: Math.PI / 2 + 0.7, x: 0, y: 0, k: 1, dir: 1, walking: false, dist: 0, wander: 0 };
+
+function layout() {
+  const portrait = sceneWrap.clientWidth < 640;
+  const L = portrait ? { W: 800, H: 1040, cx: 400, cy: 640, rx: 300, ry: 196, floor: 470, portrait } : { W: 1200, H: 760, cx: 600, cy: 470, rx: 340, ry: 148, floor: 360, portrait };
+  L.srx = L.rx + 34; L.sry = L.ry + 26; L.hrx = L.srx + 62; L.hry = L.sry + 44;
+  return L;
+}
+function decor(L) {
+  const { W, H, cx, cy, rx, ry, floor } = L;
+  let s = `<defs>
+    <pattern id="stone" width="120" height="60" patternUnits="userSpaceOnUse"><rect width="120" height="60" fill="#2a2630"/><rect x="2" y="2" width="56" height="26" fill="#2f2a35"/><rect x="62" y="32" width="56" height="26" fill="#25212b"/><path d="M0 0H120M0 30H120M0 0V30M60 0V30M30 30V60M90 30V60" stroke="#17141b" stroke-width="3"/></pattern>
+    <pattern id="tartan" width="48" height="48" patternUnits="userSpaceOnUse"><rect width="48" height="48" fill="#5a1220"/><rect y="16" width="48" height="12" fill="#0f2a1e" opacity=".8"/><rect x="16" width="12" height="48" fill="#0f2a1e" opacity=".8"/><rect y="35" width="48" height="2.5" fill="#d6a64f" opacity=".55"/><rect x="35" width="2.5" height="48" fill="#d6a64f" opacity=".55"/><rect y="6" width="48" height="2" fill="#000" opacity=".35"/><rect x="6" width="2" height="48" fill="#000" opacity=".35"/></pattern>
+    <pattern id="lead" width="22" height="30" patternUnits="userSpaceOnUse"><path d="M0 15L11 0L22 15L11 30Z" fill="none" stroke="#141118" stroke-width="2"/></pattern>
+    <linearGradient id="win" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a5578"/><stop offset="1" stop-color="#16233a"/></linearGradient>
+    <linearGradient id="floorG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f150f"/><stop offset="1" stop-color="#0d0907"/></linearGradient>
+    <radialGradient id="woodG" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#6b4127"/><stop offset=".7" stop-color="#4a2c19"/><stop offset="1" stop-color="#2e1a0e"/></radialGradient>
+    <linearGradient id="chairG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a2c19"/><stop offset="1" stop-color="#22140b"/></linearGradient>
+    <linearGradient id="capeG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9a446"/><stop offset="1" stop-color="#9c6b1f"/></linearGradient>
+    <radialGradient id="candleGlow"><stop offset="0" stop-color="#ffcf7a" stop-opacity=".55"/><stop offset="1" stop-color="#ffcf7a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe2a0" stop-opacity="0"/><stop offset=".5" stop-color="#ffe2a0" stop-opacity=".14"/><stop offset="1" stop-color="#ffe2a0" stop-opacity=".32"/></linearGradient>
+    <radialGradient id="vig" cx="50%" cy="55%" r="70%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".75"/></radialGradient>
+  </defs>`;
+  s += `<rect width="${W}" height="${floor}" fill="url(#stone)"/><rect width="${W}" height="${floor}" fill="#000" opacity=".25"/>`;
+  s += `<rect y="${floor}" width="${W}" height="${H - floor}" fill="url(#floorG)"/>`;
+  for (let i = -6; i <= 6; i++) s += `<path d="M${cx + i * 40} ${floor}L${cx + i * 190} ${H}" stroke="#000" stroke-opacity=".35" stroke-width="2"/>`;
+  s += `<rect y="${floor - 14}" width="${W}" height="14" fill="#1a1519"/>`;
+  // gothic windows
+  const winXs = L.portrait ? [150, 650] : [170, 1030], ww = L.portrait ? 110 : 120, wy = L.portrait ? 110 : 70, wh = L.portrait ? 290 : 250;
+  winXs.forEach((x, i) => {
+    const d = `M${x - ww / 2} ${wy + wh}V${wy + ww * 0.55}Q${x - ww / 2} ${wy} ${x} ${wy - ww * 0.18}Q${x + ww / 2} ${wy} ${x + ww / 2} ${wy + ww * 0.55}V${wy + wh}Z`;
+    s += `<clipPath id="wc${i}"><path d="${d}"/></clipPath><path d="${d}" fill="url(#win)" stroke="#3b3542" stroke-width="12"/>`;
+    s += `<g clip-path="url(#wc${i})"><rect x="${x - ww / 2}" y="${wy + 40}" width="${ww / 3}" height="40" fill="#8e1020" opacity=".35"/><rect x="${x + ww / 6}" y="${wy + 120}" width="${ww / 3}" height="40" fill="#d6a64f" opacity=".3"/><rect x="${x - ww / 6}" y="${wy + 180}" width="${ww / 3}" height="30" fill="#1f5a3a" opacity=".35"/><rect x="${x - ww}" y="${wy - 40}" width="${ww * 2}" height="${wh + 60}" fill="url(#lead)"/><path d="M${x} ${wy - 30}V${wy + wh}M${x - ww / 2} ${wy + wh * 0.55}H${x + ww / 2}" stroke="#1d1a22" stroke-width="5"/></g>`;
+    s += `<rect x="${x - ww / 2 - 10}" y="${wy + wh}" width="${ww + 20}" height="12" fill="#3b3542"/>`;
+  });
+  // tartan banners
+  const banXs = L.portrait ? [400] : [420, 780], by = L.portrait ? 60 : 40;
+  banXs.forEach(x => {
+    s += `<rect x="${x - 56}" y="${by - 6}" width="112" height="8" rx="4" fill="#8c6421"/><path d="M${x - 44} ${by}H${x + 44}V${by + 190}L${x} ${by + 160}L${x - 44} ${by + 190}Z" fill="url(#tartan)" stroke="#d6a64f" stroke-width="3"/>`;
+    s += `<circle cx="${x}" cy="${by + 80}" r="22" fill="#140e10" stroke="#d6a64f" stroke-width="3"/><path d="M${x - 9} ${by + 92}L${x} ${by + 66}L${x + 9} ${by + 92}M${x - 12} ${by + 80}H${x + 12}" stroke="#d6a64f" stroke-width="3" fill="none"/>`;
+  });
+  // wall sconces
+  const scXs = L.portrait ? [40, 760, 280, 520] : [60, 1140, 300, 900];
+  scXs.forEach(x => {
+    const y = L.portrait ? 360 : 260;
+    s += `<circle class="glow" cx="${x}" cy="${y - 20}" r="70" fill="url(#candleGlow)"/><path d="M${x - 14} ${y + 14}Q${x} ${y + 26} ${x + 14} ${y + 14}L${x + 4} ${y}H${x - 4}Z" fill="#6d5021"/><rect x="${x - 5}" y="${y - 22}" width="10" height="24" fill="#efe6d6"/><path class="flame" d="M${x} ${y - 40}Q${x + 7} ${y - 28} ${x} ${y - 22}Q${x - 7} ${y - 28} ${x} ${y - 40}Z" fill="#ffcf6a"/>`;
+  });
+  // iron chandelier
+  const chY = L.portrait ? 200 : 140;
+  s += `<path d="M${cx} 0V${chY - 22}" stroke="#141118" stroke-width="4"/><circle class="glow" cx="${cx}" cy="${chY - 20}" r="160" fill="url(#candleGlow)" opacity=".7"/>`;
+  s += `<ellipse cx="${cx}" cy="${chY}" rx="130" ry="20" fill="none" stroke="#141118" stroke-width="7"/>`;
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2, x = cx + Math.cos(a) * 130, y = chY + Math.sin(a) * 20;
+    s += `<rect x="${x - 4}" y="${y - 22}" width="8" height="20" fill="#efe6d6"/><path class="flame" d="M${x} ${y - 38}Q${x + 6} ${y - 28} ${x} ${y - 22}Q${x - 6} ${y - 28} ${x} ${y - 38}Z" fill="#ffcf6a"/>`;
+  }
+  // rug and table
+  s += `<ellipse cx="${cx}" cy="${cy + 20}" rx="${rx + 150}" ry="${ry + 80}" fill="url(#tartan)" opacity=".75"/><ellipse cx="${cx}" cy="${cy + 20}" rx="${rx + 150}" ry="${ry + 80}" fill="none" stroke="#d6a64f" stroke-width="3" opacity=".6"/>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#vig)"/>`;
+  s += `<g id="beams"></g><g id="hostBack"></g><g id="back"></g>`;
+  s += `<ellipse cx="${cx}" cy="${cy + 40}" rx="${rx + 10}" ry="${ry + 12}" fill="#000" opacity=".5"/>`;
+  s += `<path d="M${cx - rx} ${cy}A${rx} ${ry} 0 0 0 ${cx + rx} ${cy}V${cy + 28}A${rx} ${ry} 0 0 1 ${cx - rx} ${cy + 28}Z" fill="#2a170d"/>`;
+  s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#woodG)"/>`;
+  s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx * 0.86}" ry="${ry * 0.86}" fill="none" stroke="#d6a64f" stroke-width="2" opacity=".55"/>`;
+  s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx * 0.5}" ry="${ry * 0.5}" fill="#2a170d" opacity=".6"/>`;
+  s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx * 0.5}" ry="${ry * 0.5}" fill="none" stroke="#d6a64f" stroke-width="1.5" opacity=".5"/>`;
+  s += `<circle class="glow" cx="${cx}" cy="${cy - 30}" r="${ry * 0.9}" fill="url(#candleGlow)"/>`;
+  [[-34, 6, 44], [-14, -10, 58], [8, 4, 70], [28, -8, 50], [44, 8, 38], [-50, -4, 30]].forEach(([dx, dy, h]) => {
+    const x = cx + dx, y = cy + dy;
+    s += `<rect x="${x - 5}" y="${y - h}" width="10" height="${h}" fill="#efe6d6"/><rect x="${x - 5}" y="${y - h}" width="10" height="${h}" fill="#000" opacity=".12"/><path class="flame" d="M${x} ${y - h - 18}Q${x + 7} ${y - h - 7} ${x} ${y - h}Q${x - 7} ${y - h - 7} ${x} ${y - h - 18}Z" fill="#ffcf6a"/>`;
+  });
+  s += `<g id="front"></g><g id="hostFront"></g><g id="labels"></g><g id="bubbles"></g>`;
+  return s;
+}
+function seatList() { return game ? game.seats : state.players.map((p, i) => ({ ...p, i, out: false, face: 'n', standing: false, traitor: false })); }
+
+function buildScene() {
+  Lay = layout();
+  svg.setAttribute('viewBox', `0 0 ${Lay.W} ${Lay.H}`);
+  svg.innerHTML = decor(Lay);
+  seats = seatList();
+  const N = seats.length, L = Lay;
+  const per = Math.PI * (3 * (L.srx + L.sry) - Math.sqrt((3 * L.srx + L.sry) * (L.srx + 3 * L.sry)));
+  const base = N ? Math.min(1, (1.3 * per) / (N * 120)) : 1;
+  seats.forEach((st, i) => {
+    st.th = Math.PI / 2 + (i + 0.5) * (Math.PI * 2) / N;
+    st.x = L.cx + L.srx * Math.cos(st.th); st.y = L.cy + L.sry * Math.sin(st.th);
+    st.k = base * (0.8 + 0.28 * (st.y - (L.cy - L.sry)) / (2 * L.sry));
+    st.front = st.y > L.cy + 2;
+  });
+  const ordered = seats.slice().sort((a, b) => a.y - b.y);
+  ordered.forEach(st => {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('transform', `translate(${st.x.toFixed(1)} ${st.y.toFixed(1)}) scale(${st.k.toFixed(3)})`);
+    g.innerHTML = `<g class="av">${avatar(st, !st.front)}</g>`;
+    $(st.front ? '#front' : '#back').append(g);
+    st.av = g.firstChild;
+    const pl = document.createElementNS(NS, 'g');
+    const pk = Math.max(0.8, st.k);
+    pl.setAttribute('class', 'plaque');
+    pl.setAttribute('transform', `translate(${st.x.toFixed(1)} ${(st.y + 8 * st.k).toFixed(1)}) scale(${pk.toFixed(3)})`);
+    pl.innerHTML = `<rect x="-40" y="0" width="80" height="24" rx="4"/><text x="0" y="17" text-anchor="middle">${esc(st.name)}</text><text class="st" x="0" y="36" text-anchor="middle"></text>`;
+    $('#labels').append(pl);
+    st.pl = pl;
+  });
+  // size plaques to their names
+  seats.forEach(st => {
+    const t = st.pl.querySelector('text'); let w = 0;
+    try { w = t.getComputedTextLength(); } catch (e) {}
+    if (!w) w = st.name.length * 10;
+    const r = st.pl.querySelector('rect'); r.setAttribute('x', -(w / 2 + 10)); r.setAttribute('width', w + 20);
+    applySeat(st);
+  });
+  // host
+  hostEl = document.createElementNS(NS, 'g');
+  hostEl.innerHTML = `<g class="host">${HOST}</g>`;
+  hostLayer = '';
+  placeHost(true);
+  renderBeams();
+}
+function applySeat(st) {
+  st.av.dataset.face = st.face;
+  st.av.classList.toggle('out', st.out);
+  st.av.classList.toggle('standing', st.standing);
+  st.av.classList.toggle('traitor', st.traitor);
+  st.pl.classList.toggle('out', st.out);
+  st.pl.classList.toggle('traitor', st.traitor);
+  const stx = st.pl.querySelector('.st'); stx.textContent = st.traitor ? 'TRAITOR' : st.out ? 'FAITHFUL' : '';
+  const r = st.pl.querySelector('rect'); r.setAttribute('height', st.out || st.traitor ? 44 : 24);
+}
+function setFace(st, f) { st.face = f; st.av.dataset.face = f; }
+function renderBeams() {
+  const g = $('#beams'); if (!g) return;
+  g.innerHTML = seats.filter(s => s.standing).map(s => {
+    const w = 80 * s.k, top = s.x + (Lay.cx - s.x) * 0.3;
+    return `<polygon class="beam" points="${top - 20},0 ${top + 20},0 ${s.x + w},${s.y} ${s.x - w},${s.y}" fill="url(#beam)"/><ellipse class="beam" cx="${s.x}" cy="${s.y}" rx="${w}" ry="${18 * s.k}" fill="#ffe2a0" opacity=".18"/>`;
+  }).join('');
+}
+function bubble(st, text) {
+  const g = document.createElementNS(NS, 'g');
+  const k = Math.max(0.85, st.k), w = Math.max(50, text.length * 8.6 + 22);
+  const y = st.y - (st.front ? 160 : 210) * st.k - 6;
+  g.setAttribute('transform', `translate(${st.x.toFixed(1)} ${y.toFixed(1)}) scale(${k.toFixed(3)})`);
+  g.innerHTML = `<g class="bubble"><rect x="${-w / 2}" y="-30" width="${w}" height="28" rx="14"/><path d="M-6-3L0 8L6-3Z"/><text x="0" y="-11" text-anchor="middle">${esc(text)}</text></g>`;
+  $('#bubbles').append(g);
+  setTimeout(() => g.remove(), 1700);
+}
+
+function hostPos(th) { return { x: Lay.cx + Lay.hrx * Math.cos(th), y: Lay.cy + Lay.hry * Math.sin(th) }; }
+function placeHost(force) {
+  const p = hostPos(host.th);
+  host.x = p.x; host.y = p.y;
+  host.k = (0.72 + 0.32 * (p.y - (Lay.cy - Lay.hry)) / (2 * Lay.hry)) * (Lay.portrait ? 1.05 : 1);
+  const layer = p.y < Lay.cy ? 'hostBack' : 'hostFront';
+  if (force || layer !== hostLayer) { $('#' + layer).append(hostEl); hostLayer = layer; }
+  hostEl.setAttribute('transform', `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)}) scale(${(host.k * host.dir).toFixed(3)} ${host.k.toFixed(3)})`);
+}
+const angDiff = (a, b) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return d; };
+function hostToSeat(st, side = 1) { host.target = st.th + 0.3 * side; }
+function updateHost(dt) {
+  const d = angDiff(host.th, host.target), speed = 1.0 * dt;
+  const before = hostPos(host.th).x;
+  if (Math.abs(d) > 0.01) { host.th += Math.sign(d) * Math.min(Math.abs(d), speed); host.walking = true; }
+  else host.walking = false;
+  const after = hostPos(host.th).x;
+  if (host.walking) {
+    if (Math.abs(after - before) > 0.05) host.dir = after > before ? 1 : -1;
+    host.dist += Math.abs(after - before) + 0.3;
+    if (host.dist > 46) { host.dist = 0; if (game) Sound.step(); }
+  } else host.dir = host.x < Lay.cx ? 1 : -1;
+  const hg = hostEl.firstChild;
+  hg.classList.toggle('walking', host.walking && !reduceMotion);
+  placeHost(false);
+}
+
+/* ---------- Narration ---------- */
+const narrEl = $('#narr');
+let typeTimer = 0, talkTimer = 0;
+function say(text) {
+  clearInterval(typeTimer); clearTimeout(talkTimer);
+  narrEl.setAttribute('aria-label', text);
+  if (reduceMotion) { narrEl.textContent = text; }
+  else {
+    let i = 0; narrEl.textContent = '';
+    typeTimer = setInterval(() => { i += 2; narrEl.textContent = text.slice(0, i); if (i >= text.length) clearInterval(typeTimer); }, 28);
+  }
+  const hg = hostEl && hostEl.firstChild;
+  if (hg) { hg.classList.add('talking'); talkTimer = setTimeout(() => hg.classList.remove('talking'), Math.min(2600, 40 * text.length)); }
+}
+function hostPoint(ms = 1500) { const hg = hostEl.firstChild; hg.classList.add('pointing'); setTimeout(() => hostEl.firstChild.classList.remove('pointing'), ms); }
+
+/* ---------- UI: players panel ---------- */
+const roster = $('#roster'), hint = $('#hint'), nameInput = $('#nameInput'), statusEl = $('#status'), beginBtn = $('#beginBtn'), stopBtn = $('#stopBtn');
+const HINT = hint.textContent;
+function renderRoster() {
+  roster.innerHTML = '';
+  const n = state.players.length;
+  state.players.forEach((p, i) => {
+    const li = document.createElement('li');
+    const gb = document.createElement('button'); gb.type = 'button'; gb.className = 'gbtn'; gb.dataset.g = i;
+    gb.innerHTML = p.g === 'f' ? '<b>F</b> female' : '<b>M</b> male';
+    gb.setAttribute('aria-label', `${p.name}: ${p.g === 'f' ? 'female' : 'male'} character. Switch to ${p.g === 'f' ? 'male' : 'female'}`);
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.name; nm.title = p.name;
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'xbtn'; x.dataset.x = i; x.textContent = '×'; x.setAttribute('aria-label', 'Remove ' + p.name);
+    li.append(nm, gb, x); roster.append(li);
+  });
+  if (!n) { const li = document.createElement('li'); li.className = 'roster-empty'; li.style.cssText = 'background:none;border:none'; li.textContent = 'No players yet.'; roster.append(li); }
+  $('#count').textContent = n === 1 ? '1 player' : `${n} players`;
+  $('#exampleNote').hidden = !state.examples || !n;
+  $('#clearBtn').hidden = !n;
+  idleText();
+}
+function idleText() {
+  const n = state.players.length;
+  statusEl.textContent = n >= 2 ? `${n} players · each has a 1 in ${n} chance of being the Traitor (${(100 / n).toFixed(1)}%)` : 'Add at least two players to begin';
+  beginBtn.disabled = n < 2;
+  say(n >= 2 ? `Good evening, my darlings. ${n} players sit at the round table, and one of them is a Traitor.` : n === 1 ? 'One player? You need at least two for a round table, darling.' : 'The round table is empty. Add some players.');
+}
+function refresh() { save(); renderRoster(); buildScene(); }
+function addNames(raw) {
+  const parts = raw.split(/[\n,;\t]+/).map(s => s.trim().replace(/\s+/g, ' ').slice(0, 24)).filter(Boolean);
+  if (!parts.length) return;
+  const have = new Set(state.players.map(p => p.name.toLowerCase()));
+  const dupes = []; let added = 0, full = false;
+  for (const nm of parts) {
+    if (have.has(nm.toLowerCase())) { dupes.push(nm); continue; }
+    if (state.players.length >= 24) { full = true; break; }
+    state.players.push({ name: nm, g: guessGender(nm) }); have.add(nm.toLowerCase()); added++;
+  }
+  hint.classList.toggle('warn', dupes.length > 0 || full);
+  hint.textContent = full ? 'The round table seats 24 players at most.' : dupes.length ? `${dupes.slice(0, 3).join(', ')}${dupes.length > 3 ? '…' : ''} ${dupes.length > 1 ? 'are' : 'is'} already at the table.` : HINT;
+  if (added) { refresh(); Sound.boom(0.25); }
+}
+$('#addForm').addEventListener('submit', e => { e.preventDefault(); addNames(nameInput.value); nameInput.value = ''; nameInput.focus(); });
+nameInput.addEventListener('paste', e => { const t = (e.clipboardData || window.clipboardData).getData('text'); if (/[\n,;\t]/.test(t)) { e.preventDefault(); addNames(t); } });
+roster.addEventListener('click', e => {
+  const g = e.target.closest('[data-g]'), x = e.target.closest('[data-x]');
+  if (g) { const p = state.players[+g.dataset.g]; p.g = p.g === 'f' ? 'm' : 'f'; refresh(); roster.querySelector(`[data-g="${g.dataset.g}"]`)?.focus(); }
+  if (x) { state.players.splice(+x.dataset.x, 1); state.examples = false; hint.classList.remove('warn'); hint.textContent = HINT; refresh(); }
+});
+$('#clearBtn').addEventListener('click', () => { state.players = []; state.examples = false; refresh(); nameInput.focus(); });
+const lenInput = $('#lenInput'), lenOut = $('#lenOut');
+const fmtLen = s => s < 60 ? `${s} seconds` : `${Math.floor(s / 60)} min${s % 60 ? ' ' + (s % 60) + ' sec' : ''}`;
+lenInput.value = state.duration; lenOut.textContent = fmtLen(state.duration);
+lenInput.addEventListener('input', () => { state.duration = +lenInput.value; lenOut.textContent = fmtLen(state.duration); save(); });
+
+const soundBtn = $('#soundBtn');
+function paintSound() { soundBtn.setAttribute('aria-pressed', String(state.sound)); $('#soundLabel').textContent = state.sound ? 'Sound on' : 'Sound off'; }
+soundBtn.addEventListener('click', () => { state.sound = !state.sound; save(); paintSound(); Sound.setOn(state.sound); if (state.sound && Sound.init() && !game) Sound.startMusic(); });
+paintSound();
+function firstGesture() {
+  document.removeEventListener('pointerdown', firstGesture); document.removeEventListener('keydown', firstGesture);
+  if (Sound.init() && !game) Sound.startMusic();
+}
+document.addEventListener('pointerdown', firstGesture); document.addEventListener('keydown', firstGesture);
+
+/* ---------- Reveal card ---------- */
+const card = $('#card'), cName = $('#cName'), cLine = $('#cLine'), cVerdict = $('#cVerdict'), flashEl = $('#flash');
+function showCard(names, mode) {
+  card.style.top = (Lay.cy / Lay.H * 100 - (Lay.portrait ? 4 : 6)) + '%';
+  card.hidden = false;
+  card.classList.remove('show', 'flip', 'faithful', 'traitor'); void card.offsetWidth;
+  cName.textContent = names.length > 4 ? `${names.length} players` : listNames(names);
+  if (mode === 'iam') { cLine.textContent = names.length > 1 ? 'We are…' : 'I am…'; cVerdict.textContent = ''; card.classList.add('show'); }
+  else {
+    cLine.textContent = mode === 'traitor' ? 'is a' : names.length > 1 ? 'are all' : 'I am a';
+    cVerdict.textContent = mode === 'traitor' ? 'TRAITOR' : 'FAITHFUL';
+    card.classList.add('flip', mode);
+  }
+}
+function hideCard() { card.hidden = true; }
+function listNames(a) { return a.length === 1 ? a[0] : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+function flash(a, color) {
+  flashEl.style.background = color || 'var(--blood-hi)';
+  flashEl.animate([{ opacity: 0 }, { opacity: reduceMotion ? a * 0.3 : a }, { opacity: 0 }], { duration: 700, easing: 'ease-out' });
+}
+function shake() { if (reduceMotion) return; sceneWrap.classList.remove('shake'); void sceneWrap.offsetWidth; sceneWrap.classList.add('shake'); }
+
+/* ---------- The game ---------- */
+const STAND = [n => `${n}, please stand up.`, n => `${n}. Your turn, darling.`, n => `${n}… are you Faithful, or are you a Traitor?`, n => `${n}, the table is waiting.`, n => `Let's hear it, ${n}.`];
+const AFTER_F = [n => `${n} is Faithful. Oh, darling.`, () => 'Faithful. The table breathes again.', () => 'Another Faithful. So who is it?', n => `${n} was telling the truth all along.`, () => 'Faithful! The Traitor is still among you.'];
+const CHAT = ['Look around the table. Who can you trust?', 'Somebody here has been lying to your faces.', 'I can feel the suspicion from here, darlings.', 'Keep your friends close… and your Traitor closer.', 'The candles are burning low. Choose your words carefully.', 'Whisper all you like. The truth always comes out at this table.'];
+const R_FAITH = ['Phew!', 'Gasp!', 'No way!', 'So who is it?', 'Not them!', 'Hmm…', 'Knew it!', 'Oh my…'];
+const R_TRAITOR = ['I KNEW it!', 'Traitor!', 'No way!', 'Liar!', 'Snake!', 'Gasp!', 'Never!', 'Unbelievable!'];
+let game = null, idleTimer = 0;
+
+function alive() { return game.seats.filter(s => !s.out && !s.traitor); }
+function react(kind, exclude) {
+  const pool = alive().filter(s => !exclude.includes(s));
+  pool.forEach(s => setFace(s, kind === 'traitor' ? (Math.random() < 0.8 ? 's' : 'u') : pick(['s', 's', 'r', 'u', 'n'])));
+  shuffle(pool.slice()).slice(0, kind === 'traitor' ? 5 : Math.min(3, Math.ceil(pool.length / 3))).forEach((s, i) => setTimeout(() => game && bubble(s, pick(kind === 'traitor' ? R_TRAITOR : R_FAITH)), i * 180));
+  Sound.gasp(Math.min(8, 2 + pool.length));
+}
+function calm() { if (!game) return; alive().forEach(s => { if (!s.standing) setFace(s, 'n'); }); }
+function stand(list, v) { list.forEach(s => { s.standing = v; applySeat(s); }); renderBeams(); }
+function markOut(list) { list.forEach(s => { s.out = true; s.standing = false; s.face = 'r'; applySeat(s); }); renderBeams(); updateStatus(); }
+function updateStatus() { if (game) statusEl.textContent = `${game.seats.filter(s => !s.out).length} of ${game.N} players still unrevealed`; }
+
+function begin() {
+  if (game || state.players.length < 2) return;
+  clearTimeout(idleTimer);
+  Sound.init(); Sound.setIntensity(1); Sound.startMusic();
+  const N = state.players.length, D = state.duration * 1000;
+  // The Traitor is decided here, once, uniformly at random. Everything after is staging.
+  const traitorIdx = randInt(N);
+  const faithful = shuffle([...Array(N).keys()].filter(i => i !== traitorIdx));
+  game = { seats: state.players.map((p, i) => ({ ...p, i, out: false, face: 'n', standing: false, traitor: false })), N, D, traitorIdx, events: [], ei: 0, t0: performance.now(), done: false };
+  body.classList.add('playing');
+  beginBtn.hidden = true; stopBtn.hidden = false; $('#timer').hidden = false;
+  buildScene();
+  const S = i => game.seats[i];
+  const at = (t, fn) => game.events.push({ t, fn });
+  const lastF = faithful[faithful.length - 1], early = faithful.slice(0, -1);
+  const INTRO = 6000, STAND_OFF = D - 9000, span = STAND_OFF - INTRO;
+
+  // Opening
+  at(0, () => { say('Good evening, my darlings. Welcome to the round table.'); Sound.boom(0.6); host.target = host.th + 1.6; });
+  at(2700, () => { say('One of you is a Traitor. Everyone else is Faithful.'); game.seats.forEach(s => setFace(s, 'u')); Sound.murmur(1.6); });
+  at(5000, () => { say('One by one, you will reveal who you really are.'); calm(); hostPoint(1200); });
+
+  // Middle: reveals, with suspicious table talk filling any spare time
+  const segs = [];
+  if (early.length * 1800 > span) {
+    const steps = Math.max(1, Math.floor(span / 2000));
+    for (let s = 0; s < steps; s++) segs.push({ type: 'reveal', ids: early.slice(Math.floor(s * early.length / steps), Math.floor((s + 1) * early.length / steps)), want: 2000 });
+  } else {
+    const R = early.length, C = Math.max(0, Math.floor((span - R * 3400) / 4400)), total = R + C;
+    let r = 0, c = 0;
+    for (let k = 0; k < total; k++) {
+      if (c < C && (r >= R || (c + 1) * (total + 1) / (C + 1) <= k + 1)) { segs.push({ type: 'chat', want: 4400 }); c++; }
+      else { segs.push({ type: 'reveal', ids: [early[r++]], want: 3400 }); }
+    }
+  }
+  const wantTotal = segs.reduce((a, s) => a + s.want, 0) || 1;
+  let t = INTRO;
+  segs.forEach(seg => { const dur = span * seg.want / wantTotal; seg.type === 'reveal' ? planReveal(at, seg.ids.map(S), t, dur) : planChat(at, t, dur); t += dur; });
+
+  // The final two
+  const pair = shuffle([S(lastF), S(traitorIdx)]);
+  at(STAND_OFF, () => {
+    Sound.setIntensity(2); Sound.boom(0.8); body.classList.add('final');
+    say(N === 2 ? 'Two players. One Faithful. One Traitor.' : 'Just two of you left. One Faithful. One Traitor.');
+    stand(pair, true); alive().filter(s => !s.standing).forEach(s => setFace(s, 'u'));
+    host.target = (pair[0].th + angDiff(pair[0].th, pair[1].th) / 2) + Math.PI;
+    updateStatus();
+  });
+  at(STAND_OFF + 2800, () => { say(`${pair[0].name}. ${pair[1].name}. Look at each other.`); pair.forEach((s, i) => { setFace(s, 'u'); setTimeout(() => game && bubble(s, "It's not me!"), i * 600); }); });
+  at(STAND_OFF + 5200, () => {
+    Sound.stopMusic(1.2); Sound.riser(3.6);
+    say(`${S(lastF).name}, please reveal yourself.`); hostToSeat(S(lastF)); showCard([S(lastF).name], 'iam'); setFace(S(lastF), 'n');
+  });
+  for (let hb = STAND_OFF + 5400; hb < D - 200; hb += 800) at(hb, () => Sound.heartbeat(0.9));
+  // At the full length: the last Faithful flips, which unmasks the Traitor
+  at(D, () => {
+    showCard([S(lastF).name], 'faithful'); Sound.faithful(); flash(0.25, 'var(--faith)');
+    S(lastF).standing = false; markOut([S(lastF)]);
+    say('Faithful. Which means…');
+    alive().forEach(s => setFace(s, 's')); Sound.gasp(8);
+  });
+  at(D + 1500, () => {
+    const tr = S(traitorIdx);
+    tr.traitor = true; tr.face = 't'; tr.standing = true; applySeat(tr); renderBeams();
+    showCard([tr.name], 'traitor'); Sound.traitor(); flash(0.6); shake(); hostToSeat(tr, -1); hostPoint(2500);
+    say(`${tr.name}… you are the Traitor!`);
+    react('traitor', [tr]);
+    statusEl.textContent = `${tr.name} is the Traitor`;
+    $('#timer').hidden = true; stopBtn.hidden = true;
+  });
+  at(D + 4300, () => showVerdict());
+  game.events.sort((a, b) => a.t - b.t);
+  statusEl.textContent = `${N} of ${N} players still unrevealed`;
+  sceneWrap.scrollIntoView({ block: 'center', behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+function planReveal(at, list, t, dur) {
+  const names = list.map(s => s.name), single = list.length === 1, slow = single && dur >= 2600;
+  at(t, () => {
+    say(single ? pick(STAND)(names[0]) : `${listNames(names.length > 4 ? [...names.slice(0, 3), `${names.length - 3} more`] : names)}, reveal yourselves.`);
+    stand(list, true); hostToSeat(list[0]); Sound.boom(0.4);
+    alive().filter(s => !s.standing && Math.random() < 0.5).forEach(s => setFace(s, 'u'));
+  });
+  if (slow) at(t + dur * 0.3, () => { showCard(names, 'iam'); Sound.riser(dur * 0.26 / 1000); });
+  at(t + dur * (slow ? 0.56 : 0.35), () => {
+    showCard(names, 'faithful'); Sound.whoosh(); Sound.faithful(); markOut(list);
+    react('faithful', list);
+    if (dur >= 3000 && single) setTimeout(() => game && say(pick(AFTER_F)(names[0])), 350);
+  });
+  at(t + dur * 0.93, () => { hideCard(); calm(); });
+}
+function planChat(at, t, dur) {
+  at(t, () => {
+    say(pick(CHAT)); Sound.murmur(Math.min(2.4, dur / 1000 * 0.6));
+    host.target = host.th + rnd(0.8, 1.6) * (Math.random() < 0.5 ? -1 : 1);
+    alive().forEach(s => setFace(s, Math.random() < 0.6 ? 'u' : 'n'));
+  });
+  at(t + dur * 0.35, () => {
+    const a = shuffle(alive().slice());
+    if (a.length >= 2) { bubble(a[0], `It's ${a[1].name}!`); setFace(a[1], 's'); }
+    if (a.length >= 3) setTimeout(() => game && bubble(a[2], pick(['Trust me!', 'Not me!', `I trust ${a[0].name}`, 'Hmm…'])), 500);
+  });
+  at(t + dur * 0.9, calm);
+}
+
+function showVerdict() {
+  const g = game, tr = g.seats[g.traitorIdx];
+  g.done = true;
+  $('#vPortrait').innerHTML = `<svg viewBox="-70 -175 140 180"><g class="av traitor" data-face="t">${avatar(tr, false)}</g></svg>`;
+  $('#vName').textContent = tr.name;
+  $('#vQuote').textContent = pick(['“I had you all fooled.”', '“It was me all along, darlings.”', '“Nothing personal. It’s just the game.”', '“I’d do it all again.”']);
+  $('#vOdds').textContent = `Picked fairly from ${g.N} players. Every player had a 1 in ${g.N} chance.`;
+  const bb = $('#banishBtn'); bb.textContent = `Remove ${tr.name} and play again`; bb.hidden = g.N < 3;
+  const v = $('#verdict'), vc = $('#vCard');
+  v.hidden = false; vc.classList.remove('slam'); void vc.offsetWidth; vc.classList.add('slam');
+  Sound.boom(0.9);
+  setTimeout(() => $('#againBtn').focus({ preventScroll: true }), 60);
+  idleTimer = setTimeout(() => { if (game === g || !game) { Sound.setIntensity(0); Sound.startMusic(); } }, 4000);
+}
+function reset() {
+  game = null;
+  body.classList.remove('playing', 'final');
+  $('#verdict').hidden = true; hideCard();
+  beginBtn.hidden = false; stopBtn.hidden = true; $('#timer').hidden = true;
+  buildScene(); idleText();
+}
+const body = document.body;
+beginBtn.addEventListener('click', begin);
+stopBtn.addEventListener('click', () => { Sound.stopMusic(0.4); reset(); Sound.setIntensity(0); setTimeout(() => !game && Sound.startMusic(), 500); });
+$('#againBtn').addEventListener('click', () => { Sound.stopMusic(0.2); reset(); setTimeout(begin, 250); });
+$('#banishBtn').addEventListener('click', () => {
+  const name = game && game.seats[game.traitorIdx].name;
+  state.players = state.players.filter(p => p.name !== name); save();
+  Sound.stopMusic(0.2); reset(); renderRoster();
+  if (state.players.length >= 2) setTimeout(begin, 250);
+});
+$('#backBtn').addEventListener('click', () => { clearTimeout(idleTimer); reset(); Sound.setIntensity(0); Sound.startMusic(); nameInput.focus({ preventScroll: true }); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#verdict').hidden) $('#backBtn').click(); });
+
+/* ---------- Main loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const g = game;
+  if (g && !g.done) {
+    const el = now - g.t0;
+    while (game === g && g.ei < g.events.length && g.events[g.ei].t <= el) g.events[g.ei++].fn();
+    if (game === g && el <= g.D) {
+      $('#barFill').style.width = (Math.min(1, el / g.D) * 100) + '%';
+      const left = Math.max(0, Math.ceil((g.D - el) / 1000));
+      $('#clock').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    }
+  } else if (!g) {
+    // between games the host strolls around the table
+    host.wander -= dt;
+    if (host.wander <= 0) { host.target = host.th + rnd(0.4, 1.2); host.wander = rnd(4, 7); }
+  }
+  if (hostEl) updateHost(dt);
+  requestAnimationFrame(frame);
+}
+
+let resizeT = 0, lastPortrait = null;
+addEventListener('resize', () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { const p = sceneWrap.clientWidth < 640; if (p !== lastPortrait) { lastPortrait = p; buildScene(); } }, 150);
+});
+renderRoster();
+buildScene();
+lastPortrait = Lay.portrait;
+idleText();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
