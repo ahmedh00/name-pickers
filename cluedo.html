@@ -101,13 +101,75 @@
             aspect-ratio: 10 / 7;
             box-sizing: border-box;
         }
-        .game-area:fullscreen {
-            background: var(--bg-color);
+        .stage { position: relative; }
+
+        /* Controls docked under the board, so Start is always in reach. */
+        .control-bar {
             display: flex;
-            align-items: center;
+            flex-wrap: wrap;
             justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
         }
-        .game-area:fullscreen #gameCanvas { width: min(100vw, calc(100vh * 10 / 7)); border-radius: 0; border-width: 0; }
+        .control-bar button {
+            width: auto;
+            margin: 0;
+            padding: 8px 14px;
+            font-size: 13px;
+        }
+        .control-bar button.primary { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); font-size: 15px; padding: 9px 22px; }
+        .control-bar button.primary:hover:not(:disabled) { background: #d8393f; }
+        .control-bar button[aria-pressed="true"] { background: #5a6b85; }
+        .nb-toggle { display: none; }
+
+        /* Theatre mode (and fullscreen): the board takes the screen, the notebook slides out. */
+        body.theatre .container, #gameView:fullscreen { display: block; max-width: none; }
+        #gameView:fullscreen {
+            background: var(--bg-color);
+            padding: 12px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        body.theatre .sidebar, #gameView:fullscreen .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 30;
+            width: 310px;
+            max-width: 86vw;
+            overflow-y: auto;
+            border-radius: 0 14px 14px 0;
+            transform: translateX(-110%);
+            transition: transform 0.25s ease;
+        }
+        body.theatre #gameView.drawer-open .sidebar, #gameView:fullscreen.drawer-open .sidebar { transform: none; }
+        body.theatre .nb-toggle, #gameView:fullscreen .nb-toggle { display: inline-block; }
+        body.theatre #gameCanvas { width: min(100%, calc((100vh - 190px) * 10 / 7)); margin: 0 auto; }
+        #gameView:fullscreen #gameCanvas { width: min(100%, calc((100vh - 90px) * 10 / 7)); margin: 0 auto; }
+        body.theatre h1, body.theatre .tagline { display: none; }
+
+        .case-log {
+            margin: 0 0 4px;
+            padding: 0;
+            list-style: none;
+            max-height: 220px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+        .case-log li {
+            padding: 4px 6px;
+            margin-bottom: 3px;
+            background: rgba(255, 255, 255, 0.6);
+            border-left: 3px solid var(--paper-edge);
+            border-radius: 4px;
+        }
+        .case-log li.good { border-left-color: var(--alibi-green); }
+        .case-log li.bad { border-left-color: var(--clue-red); }
+        .case-log li.key { border-left-color: var(--amber); font-weight: bold; }
+        .case-log li.empty { color: var(--ink-soft); font-style: italic; background: none; }
+        .case-log .when { color: var(--ink-soft); font-size: 10.5px; margin-right: 4px; }
         input[type="text"] {
             width: 100%;
             box-sizing: border-box;
@@ -145,17 +207,6 @@
         #startBtn { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); font-size: 16px; }
         #startBtn:hover:not(:disabled) { background: #d8393f; }
         #startBtn:active:not(:disabled) { box-shadow: 0 1px 0 var(--clue-red-dark); }
-        .tool-row { display: flex; gap: 6px; }
-        .tool-row button {
-            background: transparent;
-            color: var(--ink);
-            border: 2px solid var(--paper-edge);
-            box-shadow: none;
-            font-size: 11px;
-            padding: 7px 4px;
-            letter-spacing: 0;
-        }
-        .tool-row button:hover:not(:disabled) { background: var(--paper-dark); }
         #nameError {
             min-height: 1.2em;
             margin: -2px 0 6px;
@@ -316,20 +367,27 @@
         .paper-actions { display: flex; gap: 8px; margin-top: 12px; }
         .paper-actions button { margin: 0; font-size: 13px; padding: 8px; }
         #playAgainBtn { background: var(--clue-red); box-shadow: 0 4px 0 var(--clue-red-dark); }
-        #resumeBtn {
+        .resume-row {
             position: absolute;
             left: 50%;
-            bottom: 9%;
+            bottom: 7%;
             transform: translateX(-50%);
-            width: auto;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .resume-row button { width: auto; margin: 0; }
+        #resumeBtn {
             padding: 12px 34px;
             font-size: 18px;
             background: var(--clue-red);
             box-shadow: 0 5px 0 var(--clue-red-dark), 0 10px 30px rgba(0, 0, 0, 0.5);
             animation: resumePulse 1.2s ease-in-out infinite;
+            white-space: nowrap;
         }
         #resumeBtn:hover { background: #d8393f; }
-        @keyframes resumePulse { 50% { transform: translateX(-50%) scale(1.06); } }
+        #holdBtn { padding: 10px 18px; font-size: 14px; background: #2b3342; }
+        @keyframes resumePulse { 50% { transform: scale(1.06); } }
         #copyMsg { min-height: 1.1em; font-size: 12px; text-align: center; margin-top: 4px; font-family: 'Trebuchet MS', sans-serif; }
 
         /* Read out by screen readers; shown as text under the board on small screens. */
@@ -357,6 +415,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             .paper, #resumeBtn { animation: none; }
+            body.theatre .sidebar, #gameView:fullscreen .sidebar { transition: none; }
         }
         @media (max-width: 820px) {
             body { padding: 12px; }
@@ -374,8 +433,10 @@
             .subhead { font-size: 12px; margin: 0; }
             .story { display: none; }
             .paper-actions { margin-top: 5px; gap: 4px; }
-            /* The status text sits under the board here, so anchor to the board's own height. */
-            #resumeBtn { padding: 6px 18px; font-size: 13px; bottom: auto; top: calc((100vw - 24px) * 0.56); }
+            #resumeBtn { padding: 6px 18px; font-size: 13px; }
+            #holdBtn { padding: 5px 12px; font-size: 12px; }
+            .resume-row { bottom: 4%; }
+            .control-bar button { padding: 6px 10px; font-size: 12px; }
             .paper-actions button { font-size: 10px; padding: 4px; box-shadow: none; }
             #copyMsg { font-size: 10px; min-height: 0; }
             #status {
@@ -404,29 +465,24 @@
             <ul class="chips" id="roomList"></ul>
             <div class="nb-label">Equipment</div>
             <ul class="chips" id="weaponList"></ul>
+            <div class="nb-label">Case log</div>
+            <ol id="caseLog" class="case-log" aria-live="polite"><li class="empty">Nothing yet. Start an investigation.</li></ol>
             <hr>
-            <button id="startBtn" disabled>Start Investigation</button>
-            <button id="skipBtn" hidden>Skip to verdict</button>
-            <div class="tool-row">
-                <button id="pauseBtn" aria-pressed="true">Pause on clues: on</button>
-            </div>
-            <div class="tool-row">
-                <button id="speedBtn" aria-label="Playback speed">Speed 1×</button>
-                <button id="muteBtn" aria-pressed="false">Sound: on</button>
-                <button id="fullBtn">Fullscreen</button>
-            </div>
             <p class="fair-note">
                 The culprit is drawn with your browser's secure random generator before the Inspector takes a step,
                 so every name has exactly the same chance. Fake-outs and witnesses are drawn just as evenly, so nothing
                 on screen gives the culprit away. <a href="?selftest">Run the fairness self-test</a>
             </p>
-            <p class="keys"><kbd>Space</kbd> start / resume · <kbd>S</kbd> skip · <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd> speed · <kbd>M</kbd> mute · <kbd>F</kbd> fullscreen</p>
+            <p class="keys"><kbd>Space</kbd> start / resume · <kbd>H</kbd> hold · <kbd>S</kbd> skip · <kbd>1</kbd><kbd>2</kbd><kbd>4</kbd> speed · <kbd>M</kbd> mute · <kbd>T</kbd> theatre · <kbd>N</kbd> notebook · <kbd>F</kbd> fullscreen</p>
         </div>
 
         <div class="game-area" id="gameArea">
+            <div class="stage">
             <canvas id="gameCanvas" width="1000" height="700" aria-label="Data centre floor plan"></canvas>
-            <div id="status" aria-live="polite"></div>
-            <button id="resumeBtn" hidden>▶ Resume</button>
+            <div class="resume-row" id="resumeRow" hidden>
+                <button id="resumeBtn">▶ Resume</button>
+                <button id="holdBtn" hidden>Hold</button>
+            </div>
             <div id="verdictOverlay" hidden aria-live="polite">
                 <article class="paper">
                     <div class="masthead">The Daily Standup</div>
@@ -447,6 +503,18 @@
                     <div id="copyMsg" aria-live="polite"></div>
                 </article>
             </div>
+            </div>
+            <div class="control-bar">
+                <button id="startBtn" class="primary" disabled>▶ Start Investigation</button>
+                <button id="skipBtn" hidden>Skip to verdict</button>
+                <button id="pauseBtn" title="Pause after each clue: on, auto-continue, or off">Pauses: on</button>
+                <button id="speedBtn" aria-label="Playback speed">Speed 1×</button>
+                <button id="muteBtn" aria-pressed="false">Sound: on</button>
+                <button id="notebookBtn" class="nb-toggle" aria-expanded="false">📓 Notebook</button>
+                <button id="theatreBtn" aria-pressed="false">Theatre</button>
+                <button id="fullBtn">Fullscreen</button>
+            </div>
+            <div id="status" aria-live="polite"></div>
         </div>
     </div>
 
@@ -838,7 +906,12 @@
     const fullBtn = document.getElementById('fullBtn');
     const pauseBtn = document.getElementById('pauseBtn');
     const resumeBtn = document.getElementById('resumeBtn');
-    const gameArea = document.getElementById('gameArea');
+    const resumeRow = document.getElementById('resumeRow');
+    const holdBtn = document.getElementById('holdBtn');
+    const notebookBtn = document.getElementById('notebookBtn');
+    const theatreBtn = document.getElementById('theatreBtn');
+    const caseLog = document.getElementById('caseLog');
+    const gameView = document.getElementById('gameView');
     const statusEl = document.getElementById('status');
     const verdictOverlay = document.getElementById('verdictOverlay');
     const headlineEl = document.getElementById('headline');
@@ -1021,7 +1094,9 @@
     let confetti = [];
     let flashes = [];
     let speed = 1;
-    let pauseOnClues = true; // stop after each reveal until someone presses Resume
+    // After each reveal: 'on' waits for Resume, 'auto' carries on after a countdown, 'off' never stops.
+    let pauseMode = 'on';
+    const AUTO_CONTINUE = 5;
     let lastStatus = '';
     let notebook = null;
     const playing = () => run !== null && !run.done;
@@ -1294,13 +1369,17 @@
         if (document.fullscreenElement || document.webkitFullscreenElement) {
             (document.exitFullscreen || document.webkitExitFullscreen).call(document);
         } else {
-            const request = gameArea.requestFullscreen || gameArea.webkitRequestFullscreen;
-            if (request) request.call(gameArea);
+            const request = gameView.requestFullscreen || gameView.webkitRequestFullscreen;
+            if (request) request.call(gameView);
         }
     }
     fullBtn.addEventListener('click', toggleFullscreen);
     const fullscreenChanged = () => {
-        fullBtn.textContent = document.fullscreenElement || document.webkitFullscreenElement ? 'Exit full' : 'Fullscreen';
+        const full = document.fullscreenElement || document.webkitFullscreenElement;
+        fullBtn.textContent = full ? 'Exit fullscreen' : 'Fullscreen';
+        setDrawer(false);
+        if (full && leaveFullscreenWhenReady && !story) leaveFullscreen();
+        else if (!full) leaveFullscreenWhenReady = false;
     };
     document.addEventListener('fullscreenchange', fullscreenChanged);
     document.addEventListener('webkitfullscreenchange', fullscreenChanged);
@@ -1333,7 +1412,7 @@
 
     // --- The detective's notebook (sidebar) ---
     let nameItems = [], roomChips = [], weaponChips = [];
-    const freshNotebook = () => ({ cleared: new Set(), questioned: new Set(), rooms: new Set(), weapons: new Set(), culprit: -1, room: -1, weapon: -1 });
+    const freshNotebook = () => ({ cleared: new Set(), questioned: new Set(), rooms: new Set(), weapons: new Set(), culprit: -1, room: -1, weapon: -1, log: [] });
 
     function buildChips() {
         const chips = (list, names) => names.map(name => {
@@ -1364,6 +1443,30 @@
             li.classList.toggle('crossed', notebook.weapons.has(i));
             li.classList.toggle('answer', notebook.weapon === i);
         });
+        renderLog();
+    }
+
+    // The case log: one line per lead, written as each result lands.
+    function renderLog() {
+        if (caseLog.childElementCount === notebook.log.length && notebook.log.length) return;
+        caseLog.innerHTML = '';
+        if (!notebook.log.length) {
+            const li = document.createElement('li');
+            li.className = 'empty';
+            li.textContent = 'Nothing yet. Start an investigation.';
+            caseLog.appendChild(li);
+            return;
+        }
+        for (const entry of notebook.log) {
+            const li = document.createElement('li');
+            li.className = entry.tone;
+            const when = document.createElement('span');
+            when.className = 'when';
+            when.textContent = entry.when;
+            li.append(when, `${entry.icon} ${entry.text}`);
+            caseLog.appendChild(li);
+        }
+        caseLog.scrollTop = caseLog.scrollHeight;
     }
 
     function applyMark(mark) {
@@ -1374,6 +1477,7 @@
             case 'culprit': notebook.culprit = mark.who; break;
             case 'room': notebook.room = mark.index; break;
             case 'weapon': notebook.weapon = mark.index; break;
+            case 'log': notebook.log.push(mark.entry); break;
         }
         renderNotebook();
     }
@@ -1408,6 +1512,7 @@
         nameInput.disabled = busy;
         addBtn.disabled = busy;
         startBtn.disabled = busy || participants.length < 2;
+        startBtn.textContent = run && run.done ? '▶ New case' : '▶ Start Investigation';
         skipBtn.hidden = !busy;
         skipBtn.textContent = story ? 'Skip intro' : 'Skip to verdict';
     }
@@ -1590,7 +1695,7 @@
             end: sched.end, accuseAt: sched.accusation, namedAt: sched.accusation + 0.3,
             musicFrom: TIMING.intro - 0.5, musicTo: sched.showdown,
             events: [], statuses: [], camKeys: [], dice: [], bubbles: [], reveals: [], rings: [], twists: [],
-            lamps: [], acts: [], chat: [], pagers: [],
+            lamps: [], acts: [], chat: [], pagers: [], leads: [],
             clearedAt: new Array(n).fill(Infinity), clearOrder: [],
             roles: shuffled(ROLE_NAMES).slice(0, n),
             recap: { t0: sched.recap, t1: sched.showdown },
@@ -1605,6 +1710,12 @@
             for (let k = 0; k < Math.min(text.length, 70); k += 6) ev(t + k / TYPE_RATE, { sound: 'type' });
         };
         const cam = (t, mode, extra = {}) => game.camKeys.push({ t, mode, ...extra });
+        // The case log in the notebook, stamped with the in-story clock the HUD shows.
+        const clock = t => {
+            const m = 7 + Math.round((185 * t) / sched.end);
+            return `${3 + Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+        };
+        const log = (t, icon, text, tone) => ev(t, { mark: { type: 'log', entry: { when: clock(t), icon, text, tone } } });
         const chat = (t, from, text, hue) => {
             game.chat.push({ t, from, text, hue });
             ev(t, { sound: 'chat' });
@@ -1663,6 +1774,7 @@
         say(3.3, 'The Incident Report is sealed: one suspect, one location, one piece of kit.');
         ev(3.3, { sound: 'cards' });
         say(4.9, 'The Inspector takes the case.');
+        log(0.5, '🚨', 'PROD-01 went down. Case INC-0307 opened.', 'key');
         ev(4.9, { sound: 'start' });
 
         // Two or three plot twists, on different turns.
@@ -1793,6 +1905,9 @@
                 say(t0, pending);
                 say(stampAt, result);
             }
+            const reveal = game.reveals.at(-1);
+            log(reveal.stampAt, reveal.good ? '✅' : '❌', `Lead ${k + 1}: ${reveal.result}`, reveal.good ? 'good' : 'bad');
+            game.leads.push({ t0: T, t1: reveal.stampAt, kind: reveal.good ? (group ? 'group' : 'clear') : 'fake', count: turn.suspects.length });
             if (turn.kind === 'clear') {
                 const clearAt = game.reveals.at(-1).stampAt;
                 ev(clearAt, { sound: 'alibi', mark: { type: 'clear', who: turn.suspects } });
@@ -1836,6 +1951,8 @@
         say(S + 3.0, 'The needles scratch. The spotlight swings…');
         [3.1, 3.8, 4.5].forEach(d => ev(S + d, { sound: 'heartbeat' }));
         ev(S + 5.2, { sound: 'lie' });
+        log(S + 5.2, '⚖️', `Head-to-head: the needle jumped for ${nameOf(c)}. ${nameOf(loser)} told the truth.`, 'key');
+        game.leads.push({ t0: S, t1: S + 5.5, kind: 'showdown' });
         say(S + 5.2, `The needle jumps for ${nameOf(c)}. ${nameOf(loser)}'s story checks out.`);
         ev(S + 5.5, { sound: 'alibi', mark: { type: 'clear', who: [loser] } });
         game.clearedAt[loser] = S + 5.5;
@@ -1854,6 +1971,8 @@
         ev(A + 2.3, { sound: 'reveal', mark: { type: 'room', index: plan.room } });
         ev(A + 2.9, { sound: 'reveal', mark: { type: 'weapon', index: plan.weapon } });
         say(A + 2.9, `It was ${nameOf(c)}, in the ${ROOM_NAMES[plan.room]}, with the ${WEAPON_NAMES[plan.weapon]}!`);
+        log(A + 2.9, '🔎', `Verdict: ${nameOf(c)}, in the ${ROOM_NAMES[plan.room]}, with the ${WEAPON_NAMES[plan.weapon]}.`, 'key');
+        game.leads.push({ t0: A, t1: A + 2.9, kind: 'verdict' });
 
         // Pause points: just after each reveal has shown its result.
         game.pauses = game.reveals.map(r => r.stampAt + 0.8).sort((a, b) => a - b);
@@ -1917,9 +2036,9 @@
         // The story plays in browser fullscreen; this has to be asked for during the click itself.
         let fullscreen = false;
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-            const request = gameArea.requestFullscreen || gameArea.webkitRequestFullscreen;
+            const request = gameView.requestFullscreen || gameView.webkitRequestFullscreen;
             try {
-                const p = request && request.call(gameArea);
+                const p = request && request.call(gameView);
                 fullscreen = Boolean(request);
                 if (p && p.catch) p.catch(() => { if (story) story.fullscreen = false; });
             } catch { fullscreen = false; }
@@ -1939,12 +2058,14 @@
         const game = run;
         if (game.paused) return;
         let target = Math.min(game.end, game.t + dt);
-        if (pauseOnClues && !game.skipped) {
+        if (pauseMode !== 'off' && !game.skipped) {
             while (game.nextPause < game.pauses.length && game.pauses[game.nextPause] < game.t) game.nextPause++;
             const p = game.pauses[game.nextPause];
             if (p !== undefined && target >= p) {
                 target = p;
                 game.paused = true;
+                game.pausedAt = performance.now();
+                game.held = pauseMode !== 'auto';
                 game.nextPause++;
             }
         }
@@ -1955,7 +2076,9 @@
             if (e.mark) applyMark(e.mark);
         }
         if (game.paused) {
-            resumeBtn.hidden = false;
+            resumeRow.hidden = false;
+            holdBtn.hidden = game.held;
+            resumeBtn.textContent = game.held ? '▶ Resume' : `▶ Continuing in ${AUTO_CONTINUE}…`;
             resumeBtn.focus({ preventScroll: true });
         }
         if (game.t >= game.end) finishGame(game);
@@ -1964,7 +2087,50 @@
     function resumeRun() {
         if (!run || !run.paused) return;
         run.paused = false;
-        resumeBtn.hidden = true;
+        resumeRow.hidden = true;
+    }
+
+    // Stop an auto-continue countdown and wait for Resume instead.
+    function holdRun() {
+        if (!run || !run.paused || run.held) return;
+        run.held = true;
+        holdBtn.hidden = true;
+        resumeBtn.textContent = '▶ Resume';
+        resumeBtn.focus({ preventScroll: true });
+    }
+
+    // Called every frame: counts down an auto-continue pause.
+    function tickPause(now) {
+        if (!run || !run.paused || run.held) return;
+        const left = AUTO_CONTINUE - (now - run.pausedAt) / 1000;
+        if (left <= 0) resumeRun();
+        else resumeBtn.textContent = `▶ Continuing in ${Math.ceil(left)}…`;
+    }
+
+    const PAUSE_LABELS = { on: 'Pauses: on', auto: `Pauses: auto ${AUTO_CONTINUE}s`, off: 'Pauses: off' };
+    function cyclePauses() {
+        pauseMode = { on: 'auto', auto: 'off', off: 'on' }[pauseMode];
+        pauseBtn.textContent = PAUSE_LABELS[pauseMode];
+        if (run && run.paused) {
+            if (pauseMode === 'off') resumeRun();
+            else if (pauseMode === 'on') holdRun();
+            else {
+                run.held = false;
+                run.pausedAt = performance.now();
+                holdBtn.hidden = false;
+            }
+        }
+    }
+
+    function setDrawer(open) {
+        gameView.classList.toggle('drawer-open', open);
+        notebookBtn.setAttribute('aria-expanded', String(open));
+    }
+
+    function toggleTheatre() {
+        const on = document.body.classList.toggle('theatre');
+        theatreBtn.setAttribute('aria-pressed', String(on));
+        setDrawer(false);
     }
 
     function finishGame(game) {
@@ -2060,7 +2226,7 @@
         }
         if (!playing()) return;
         run.paused = false;
-        resumeBtn.hidden = true;
+        resumeRow.hidden = true;
         run.skipped = true;
         run.t = run.end;
         advanceRun(0);
@@ -2068,18 +2234,21 @@
 
     startBtn.addEventListener('click', startGame);
     resumeBtn.addEventListener('click', resumeRun);
-    canvas.addEventListener('click', resumeRun);
-    pauseBtn.addEventListener('click', () => {
-        pauseOnClues = !pauseOnClues;
-        pauseBtn.setAttribute('aria-pressed', String(pauseOnClues));
-        pauseBtn.textContent = `Pause on clues: ${pauseOnClues ? 'on' : 'off'}`;
-        if (!pauseOnClues) resumeRun();
+    holdBtn.addEventListener('click', holdRun);
+    // Clicking the board opens the curtain, or carries on from a pause.
+    canvas.addEventListener('click', () => {
+        if (!run && !story) startGame();
+        else resumeRun();
     });
+    pauseBtn.addEventListener('click', cyclePauses);
+    theatreBtn.addEventListener('click', toggleTheatre);
+    notebookBtn.addEventListener('click', () => setDrawer(!gameView.classList.contains('drawer-open')));
     playAgainBtn.addEventListener('click', startGame);
     skipBtn.addEventListener('click', skipToVerdict);
     copyBtn.addEventListener('click', copyVerdict);
     editBtn.addEventListener('click', () => {
         verdictOverlay.hidden = true;
+        setDrawer(true);
         nameInput.focus();
     });
 
@@ -2096,6 +2265,12 @@
             else startGame();
         } else if (key === 's') {
             skipToVerdict();
+        } else if (key === 'h') {
+            holdRun();
+        } else if (key === 't') {
+            toggleTheatre();
+        } else if (key === 'n') {
+            setDrawer(!gameView.classList.contains('drawer-open'));
         } else if (key === 'm') {
             setMuted(!muted);
         } else if (key === 'f') {
@@ -3084,7 +3259,7 @@
         const n = participants.length;
         textLine(n ? `${n} suspect${n > 1 ? 's' : ''} on file` : 'No suspects on file yet', W / 2, 390,
             { font: `bold 20px ${UI_FONT}`, color: '#f4d8a0', align: 'center' });
-        const prompt = n >= 2 ? '▶  Press Start Investigation' : 'Add at least two suspects to begin';
+        const prompt = n >= 2 ? '▶  Click to open the case' : 'Add at least two suspects to begin';
         ctx.globalAlpha *= n >= 2 ? 0.6 + 0.4 * Math.sin(time * 4) : 0.8;
         textLine(prompt, W / 2, 450, { font: `bold 22px ${UI_FONT}`, color: '#ffffff', align: 'center' });
         ctx.restore();
@@ -3147,14 +3322,23 @@
         const wasFull = story.fullscreen;
         story = null;
         stopRain();
-        if (wasFull && (document.fullscreenElement || document.webkitFullscreenElement)) {
-            const exit = document.exitFullscreen || document.webkitExitFullscreen;
-            try {
-                const p = exit.call(document);
-                if (p && p.catch) p.catch(() => {});
-            } catch { /* already out of fullscreen */ }
+        if (wasFull) {
+            // Entering fullscreen is asynchronous: if the story was skipped before it took
+            // effect, leave as soon as it does.
+            if (document.fullscreenElement || document.webkitFullscreenElement) leaveFullscreen();
+            else leaveFullscreenWhenReady = true;
         }
         updateList();
+    }
+
+    let leaveFullscreenWhenReady = false;
+    function leaveFullscreen() {
+        leaveFullscreenWhenReady = false;
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        try {
+            const p = exit.call(document);
+            if (p && p.catch) p.catch(() => {});
+        } catch { /* already out of fullscreen */ }
     }
 
     function sceneAt(t) {
@@ -4996,13 +5180,52 @@
         const clock = `${3 + Math.floor(mins / 60)}:${String(mins % 60).padStart(2, '0')} am`;
         textLine(`INC-0307 · SEV-${sev} · ${clock}`, 28, 15.5, { font: `bold 11px ${UI_FONT}`, color: sev === 1 ? '#ff3b3b' : '#ff6b6b' });
         if (total) textLine(`NO ALIBI: ${left} / ${total}`, W - 16, 15.5, { font: `bold 11px ${UI_FONT}`, color: '#36d6c6', align: 'right' });
+        const stripEnd = game ? drawProgress(game, t, time) : W / 2;
         if (game && game.paused) {
-            textLine('⏸ PAUSED · press Space or Resume', W / 2, 13, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+            textLine('⏸ PAUSED', stripEnd + 12, 13.5, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b' });
         } else if (speed > 1) {
-            textLine(`▶▶ ${speed}×`, W / 2, 13, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b', align: 'center' });
+            textLine(`▶▶ ${speed}×`, stripEnd + 12, 13.5, { font: `bold 11px ${UI_FONT}`, color: '#ffb43b' });
         }
         textLine(typedText + (cursor ? '▌' : ''), W / 2, 37, { font: `bold 17px ${UI_FONT}`, color: '#f4e8c8', align: 'center', max: W - 60 });
         ctx.restore();
+    }
+
+    // The progress strip: one segment per lead, then the head-to-head and the verdict.
+    // Returns where it ends, so the HUD can put the pause/speed badge after it.
+    const LEAD_MARKS = { clear: '✓', group: '✓', fake: '✗', showdown: '⚖', verdict: '?' };
+    function drawProgress(game, t, time) {
+        const leads = game.leads;
+        const gap = 3, seg = Math.min(30, (330 - gap * (leads.length - 1)) / leads.length);
+        const total = leads.length * seg + (leads.length - 1) * gap;
+        let x = W / 2 - total / 2;
+        ctx.save();
+        leads.forEach(lead => {
+            const done = t >= lead.t1, current = !done && t >= lead.t0;
+            const color = lead.kind === 'fake' ? '#ff5a5a' : lead.kind === 'showdown' ? '#b48cff' : lead.kind === 'verdict' ? '#ffb43b' : '#2fbf5a';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            roundRect(ctx, x, 6, seg, 15, 4);
+            ctx.fill();
+            if (done || current) {
+                ctx.save();
+                roundRect(ctx, x, 6, seg, 15, 4);
+                ctx.clip();
+                ctx.fillStyle = color;
+                ctx.globalAlpha = done ? 0.9 : 0.45;
+                ctx.fillRect(x, 6, seg * (done ? 1 : phase(t, lead.t0, lead.t1)), 15);
+                ctx.restore();
+            }
+            ctx.strokeStyle = current ? `rgba(255, 180, 59, ${0.6 + 0.4 * Math.sin(time * 6)})` : done ? color : 'rgba(255, 255, 255, 0.18)';
+            ctx.lineWidth = current ? 2 : 1;
+            roundRect(ctx, x, 6, seg, 15, 4);
+            ctx.stroke();
+            if (done && seg >= 12) {
+                const mark = lead.kind === 'group' ? `✓${lead.count}` : LEAD_MARKS[lead.kind];
+                textLine(mark, x + seg / 2, 14, { font: `bold 10px ${UI_FONT}`, color: '#0b0f17', align: 'center' });
+            }
+            x += seg + gap;
+        });
+        ctx.restore();
+        return x;
     }
 
     // --- Frame ---
@@ -5010,7 +5233,7 @@
 
     function idleStatus() {
         if (participants.length < 2) return 'Add at least two suspects to open the case.';
-        return 'Press Start Investigation (or Space) to open the case.';
+        return 'Click the curtain, press Space, or press Start Investigation to open the case.';
     }
 
     // Everything on the floor plan, drawn through the camera into the world layer.
@@ -5201,6 +5424,7 @@
     function frame(now) {
         const dt = lastNow === null ? 0 : Math.min(0.05, (now - lastNow) / 1000);
         lastNow = now;
+        tickPause(now);
         if (story) advanceStory(dt * speed);
         else if (playing()) advanceRun(dt * speed);
         draw(now / 1000);
