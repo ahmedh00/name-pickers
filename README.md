@@ -45,6 +45,7 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 | `bail-out.html` | [Try it](https://ahmedh00.github.io/name-pickers/bail-out.html) | Inspired by 80s skate contests - downhill heats then a vert final, highest judges' score wins |
 | `cluedo.html` | [Try it](https://ahmedh00.github.io/name-pickers/cluedo.html) | Inspired by Cluedo - PROD-01 is down and the Inspector clears suspects round the data centre until one is left: whoever took down prod |
 | `neon-volley-knockout.html` | [Try it](https://ahmedh00.github.io/name-pickers/neon-volley-knockout.html) | Inspired by 80s beach volleyball - last player standing wins as a Legend of the Beach |
+| `swashbuckle.html` | [Try it](https://ahmedh00.github.io/name-pickers/swashbuckle.html) | Inspired by 90s point-and-click pirate adventures - tech-insult sword duels in a knockout tournament, the last pirate standing runs standup |
 
 
 ### Board & Arcade games
