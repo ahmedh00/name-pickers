@@ -69,6 +69,9 @@ Then just double-click any `.html` file, or open it via `File > Open` in your br
 |-----|-----------|-------------|
 | `mosquito.html` | [Try it](https://ahmedh00.github.io/name-pickers/mosquito.html) | Avoid getting swatted to win |
 | `faithful-or-traitor.html` | [Try it](https://ahmedh00.github.io/name-pickers/faithful-or-traitor.html) | Who is Faithful and who is a Traitor? The Traitor is selected |
+| `last-blob-home.html` | [Try it](https://ahmedh00.github.io/name-pickers/last-blob-homehtml) | Inspired by Fall Guys, a frantic race to the finish line, last blob is the chosen one |
+| `name-grand-prix.html` | [Try it](https://ahmedh00.github.io/name-pickers/name-grand-prix.html) | A 3D Mario Kart style racing game in split screen, the last player to cross the finish line is the chosen one |
+
 
 ## Contributing
 
